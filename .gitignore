@@ -1,0 +1,16 @@
+build*/
+.vscode/
+*.pyc
+*.swp
+testing/
+.vs/
+CMakeSettings.json
+out/
+kar/passwd.json
+*.clashResolve
+*.indexClash
+*.IO
+*.simple
+*.elf
+debug_output/
+*.dot

@@ -1,0 +1,1 @@
+target_sources(AtlasPasses PRIVATE Trace.cpp TraceIO.cpp TraceMem.cpp TraceMemIO.cpp)

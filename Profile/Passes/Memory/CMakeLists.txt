@@ -1,0 +1,1 @@
+target_sources(AtlasPasses PRIVATE Instance.cpp LastWriter.cpp Memory.cpp MemProfile.cpp)
