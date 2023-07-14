@@ -71,7 +71,7 @@ $(SOURCE).bc : $(SOURCE)$(SUFFIX) $(ADDSOURCE)
 	$(C) $(LDFLAGS) $(OPFLAG) $(DEBUG) $(INCLUDE) $(CFLAGS) $(LIBRARIES) $^ -o $@
 endif
 
-# TraceAtlas pipeline rules
+# Cyclebite pipeline rules
 $(SOURCE).markov.bc: $(SOURCE).bc
 	$(OPT) -load $(TRACEATLAS_ROOT)lib/AtlasPasses.so -Markov $< -o $@
 

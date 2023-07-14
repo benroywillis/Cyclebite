@@ -2,7 +2,7 @@
 #include "ImaginaryNode.h"
 #include "ControlNode.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using namespace std;
 
 ImaginaryEdge::ImaginaryEdge(const shared_ptr<ImaginaryNode>& sou, const shared_ptr<ControlNode>& sin) : GraphEdge(sou, sin) {}

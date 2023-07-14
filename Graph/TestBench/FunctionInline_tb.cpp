@@ -1,6 +1,6 @@
-#include "AtlasUtil/Exceptions.h"
-#include "AtlasUtil/Format.h"
-#include "AtlasUtil/IO.h"
+#include "Util/Exceptions.h"
+#include "Util/Format.h"
+#include "Util/IO.h"
 #include "Graph.h"
 #include "IO.h"
 #include "Transforms.h"
@@ -24,7 +24,7 @@
  * 
  */
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using namespace std;
 using namespace llvm;
 

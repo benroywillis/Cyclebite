@@ -2,7 +2,7 @@
 
 using namespace std;
 
-namespace TraceAtlas::Profile::Backend
+namespace Cyclebite::Profile::Backend
 {
     // size method is private to prevent races between it and pop()
     bool ThreadSafeQueue::empty() const
@@ -26,4 +26,4 @@ namespace TraceAtlas::Profile::Backend
     {
         return _queue.push(newTask, block);
     }
-} // namespace TraceAtlas::Profile::Backend
+} // namespace Cyclebite::Profile::Backend

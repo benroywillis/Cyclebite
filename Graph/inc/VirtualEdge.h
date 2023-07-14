@@ -2,7 +2,7 @@
 #include "ConditionalEdge.h"
 #include <set>
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class VirtualEdge : public ConditionalEdge
     {
@@ -17,4 +17,4 @@ namespace TraceAtlas::Graph
     private:
         std::set<std::shared_ptr<UnconditionalEdge>, GECompare> edges;
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

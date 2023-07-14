@@ -2,7 +2,7 @@
 #include <memory>
 #include "GraphEdge.h"
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class GraphNode;
     class ControlNode;
@@ -23,4 +23,4 @@ namespace TraceAtlas::Graph
         std::shared_ptr<ControlNode> weightedSnk;
         uint64_t freq;
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

@@ -2,7 +2,7 @@
 #include <string>
 #include <memory>
 
-namespace TraceAtlas::Grammar
+namespace Cyclebite::Grammar
 {
     class Symbol 
     {
@@ -35,4 +35,4 @@ namespace TraceAtlas::Grammar
             return lhs < rhs->getID();
         }
     };
-} // namespace TraceAtlas::Grammar
+} // namespace Cyclebite::Grammar

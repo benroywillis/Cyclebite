@@ -24,7 +24,7 @@ set_target_properties(
     OUTPUT_NAME AtlasBackend
 )
 
-target_link_libraries(AtlasBackend ${llvm_libs} AtlasUtil ZLIB::ZLIB nlohmann_json nlohmann_json::nlohmann_json)
+target_link_libraries(AtlasBackend ${llvm_libs} Util ZLIB::ZLIB nlohmann_json nlohmann_json::nlohmann_json)
 target_compile_definitions(AtlasPasses PRIVATE ${LLVM_DEFINITIONS})
 target_include_directories(AtlasBackend PUBLIC ${HASH_INC} ${MARKOV_INC} ${MEMORY_INC} ${PRECISION_INC} ${UTILITIES_INC} ${THREADSAFE_INC})
 if(WIN32)

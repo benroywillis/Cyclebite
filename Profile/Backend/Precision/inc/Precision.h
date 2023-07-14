@@ -1,5 +1,5 @@
 #pragma once
-#include "AtlasUtil/Exceptions.h"
+#include "Util/Exceptions.h"
 #include "Epoch.h"
 #include <ctime>
 #include <cstdint>
@@ -11,7 +11,7 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/DerivedTypes.h>
 
-namespace TraceAtlas::Profile::Backend::Precision
+namespace Cyclebite::Profile::Backend::Precision
 {
     /// @brief Encodes a load or store when intercepting the value of a memory transaction
     enum class PrecisionMemOp
@@ -71,7 +71,7 @@ namespace TraceAtlas::Profile::Backend::Precision
     /// On/off switch for the profiler
     extern bool precisionActive;
     /// Holds all values found in a pass
-    extern std::map<std::shared_ptr<TraceAtlas::Profile::Backend::Memory::Epoch>, ValueHistogram, TraceAtlas::Profile::Backend::Memory::UIDCompare> hist;
+    extern std::map<std::shared_ptr<Cyclebite::Profile::Backend::Memory::Epoch>, ValueHistogram, Cyclebite::Profile::Backend::Memory::UIDCompare> hist;
 ;
     /// Converts from llvm type to PrecisionType
     inline PrecisionType LLVMTy2PrecisionTy(llvm::Type* ty)
@@ -227,4 +227,4 @@ namespace TraceAtlas::Profile::Backend::Precision
                 */
         }
     }
-} // namespace TraceAtlas::Memory::Backend::Precision
+} // namespace Cyclebite::Memory::Backend::Precision

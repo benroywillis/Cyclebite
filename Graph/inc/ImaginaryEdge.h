@@ -1,7 +1,7 @@
 #pragma once
 #include "UnconditionalEdge.h"
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class ImaginaryNode;
     class ControlNode;
@@ -21,4 +21,4 @@ namespace TraceAtlas::Graph
         /// If the sink node is a nullptr, this is an exit
         bool isExit() const;
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

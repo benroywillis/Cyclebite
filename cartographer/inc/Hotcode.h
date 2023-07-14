@@ -4,13 +4,13 @@
 #include "MLCycle.h"
 #include "llvm/IR/BasicBlock.h"
 
-namespace TraceAtlas::Cartographer
+namespace Cyclebite::Cartographer
 {
     struct StaticLoop
     {
         int id;
         std::set<int64_t> blocks;
-        std::set<std::shared_ptr<TraceAtlas::Graph::ControlNode>, TraceAtlas::Graph::p_GNCompare> nodes;
+        std::set<std::shared_ptr<Cyclebite::Graph::ControlNode>, Cyclebite::Graph::p_GNCompare> nodes;
     };
 
     struct StaticLoopCompare
@@ -21,6 +21,6 @@ namespace TraceAtlas::Cartographer
         }
     };
 
-    std::set<std::shared_ptr<TraceAtlas::Graph::MLCycle>, TraceAtlas::Graph::KCompare> DetectHotCode(const std::set<std::shared_ptr<TraceAtlas::Graph::ControlNode>, TraceAtlas::Graph::p_GNCompare> &nodes, float hotTreshold);
-    std::set<std::shared_ptr<TraceAtlas::Graph::MLCycle>, TraceAtlas::Graph::KCompare> DetectHotLoops(const std::set<std::shared_ptr<Graph::MLCycle>, Graph::KCompare> &hotKernels, const Graph::Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const std::string &loopfilename);
-} // namespace TraceAtlas::Cartographer
+    std::set<std::shared_ptr<Cyclebite::Graph::MLCycle>, Cyclebite::Graph::KCompare> DetectHotCode(const std::set<std::shared_ptr<Cyclebite::Graph::ControlNode>, Cyclebite::Graph::p_GNCompare> &nodes, float hotTreshold);
+    std::set<std::shared_ptr<Cyclebite::Graph::MLCycle>, Cyclebite::Graph::KCompare> DetectHotLoops(const std::set<std::shared_ptr<Graph::MLCycle>, Graph::KCompare> &hotKernels, const Graph::Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const std::string &loopfilename);
+} // namespace Cyclebite::Cartographer

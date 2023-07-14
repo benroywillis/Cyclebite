@@ -2,12 +2,12 @@
 #include "IO.h"
 #include <llvm/IR/Instructions.h>
 #include <spdlog/spdlog.h>
-#include "AtlasUtil/Exceptions.h"
-#include "AtlasUtil/Annotate.h"
-#include "AtlasUtil/Print.h"
+#include "Util/Exceptions.h"
+#include "Util/Annotate.h"
+#include "Util/Print.h"
 
-using namespace TraceAtlas::Grammar;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Grammar;
+using namespace Cyclebite::Graph;
 using namespace std;
 
 const llvm::BranchInst* Cycle::getIteratorInst() const
@@ -57,7 +57,7 @@ void Cycle::addParent( const shared_ptr<Cycle>& p)
     parents.insert(p);
 }
 
-set<shared_ptr<Cycle>> TraceAtlas::Grammar::ConstructCycles(const nlohmann::json& instanceJson, 
+set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json& instanceJson, 
                                                             const nlohmann::json& kernelJson, 
                                                             const map<int64_t, llvm::BasicBlock*>& IDToBlock,
                                                             set<shared_ptr<Cycle>>& taskCycles)

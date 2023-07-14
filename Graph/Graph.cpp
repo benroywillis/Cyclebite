@@ -1,8 +1,8 @@
 #include "Graph.h"
-#include "AtlasUtil/Exceptions.h"
+#include "Util/Exceptions.h"
 #include "ImaginaryEdge.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using namespace std;
 
 Graph::Graph() = default;

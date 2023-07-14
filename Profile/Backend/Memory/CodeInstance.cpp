@@ -1,7 +1,7 @@
 #include "CodeInstance.h"
 
 using namespace std;
-using namespace TraceAtlas::Profile::Backend::Memory;
+using namespace Cyclebite::Profile::Backend::Memory;
 
 CodeInstance::CodeInstance() : UniqueID() {}
 

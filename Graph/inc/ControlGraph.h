@@ -2,7 +2,7 @@
 #include "ControlNode.h"
 #include "Graph.h"
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class ControlGraph : public Graph
     {
@@ -25,4 +25,4 @@ namespace TraceAtlas::Graph
         // node that was observed to terminate the program
         std::shared_ptr<ControlNode> programTerminator;
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

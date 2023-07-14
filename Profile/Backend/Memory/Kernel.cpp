@@ -1,7 +1,7 @@
 #include "Kernel.h"
 #include "Epoch.h"
 
-using namespace TraceAtlas::Profile::Backend::Memory;
+using namespace Cyclebite::Profile::Backend::Memory;
 using namespace std;
 
 Kernel::Kernel(set<int64_t> b, map<int64_t, set<int64_t>> ent, map<int64_t, set<int64_t>> ex) : CodeSection(b, ent, ex) {}

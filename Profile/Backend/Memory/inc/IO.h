@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     void ReadKernelFile();
     std::string GenerateInstanceDot();
@@ -9,4 +9,4 @@ namespace TraceAtlas::Profile::Backend::Memory
     void GenerateTaskOnlyTaskGraph();
     void OutputKernelInstances();
 
-} // namespace TraceAtlas::Profile::Backend::Memory
+} // namespace Cyclebite::Profile::Backend::Memory

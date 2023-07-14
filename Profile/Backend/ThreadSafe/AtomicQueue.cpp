@@ -1,7 +1,7 @@
 #include "AtomicQueue.h"
 #include <unistd.h>
 
-using namespace TraceAtlas::Profile::Backend;
+using namespace Cyclebite::Profile::Backend;
 using namespace std;
 
 uint64_t Task::nextID = 0;

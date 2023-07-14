@@ -1,6 +1,6 @@
 #include "CallEdge.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 CallEdge::CallEdge() : ConditionalEdge() {}
 

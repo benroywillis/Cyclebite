@@ -2,9 +2,9 @@
 #include "Reduction.h"
 
 using namespace std;
-using namespace TraceAtlas::Grammar;
+using namespace Cyclebite::Grammar;
 
-Expression::Expression( const vector<shared_ptr<Symbol>>& s, const vector<TraceAtlas::Graph::Operation>& o ) : Symbol("expr"), ops(o), symbols(s) {}
+Expression::Expression( const vector<shared_ptr<Symbol>>& s, const vector<Cyclebite::Graph::Operation>& o ) : Symbol("expr"), ops(o), symbols(s) {}
 
 string Expression::dump() const
 {
@@ -17,7 +17,7 @@ string Expression::dump() const
         b = next(b);
         while( b != symbols.end() )
         {
-            expr += " "+string(TraceAtlas::Graph::OperationToString.at(*o))+" "+(*b)->dump();
+            expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+(*b)->dump();
             b = next(b);
             o = next(o);
         }

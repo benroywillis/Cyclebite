@@ -2,7 +2,7 @@
 #include "GraphNode.h"
 #include "llvm/IR/Function.h"
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class CallGraphEdge;
     class CallGraphNode : public GraphNode
@@ -36,4 +36,4 @@ namespace TraceAtlas::Graph
             return lhs->getFunction() < f;
         }
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

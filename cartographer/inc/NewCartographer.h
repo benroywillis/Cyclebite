@@ -3,17 +3,17 @@
 #include <set>
 #include <vector>
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class ControlNode;
     class VKNode;
     struct p_GNCompare;
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph
 
-namespace TraceAtlas::Cartographer
+namespace Cyclebite::Cartographer
 {
-    void AddNode(std::set<TraceAtlas::Graph::ControlNode *, TraceAtlas::Graph::p_GNCompare> &nodes, const TraceAtlas::Graph::ControlNode &newNode);
-    void AddNode(std::set<TraceAtlas::Graph::ControlNode *, TraceAtlas::Graph::p_GNCompare> &nodes, const TraceAtlas::Graph::VKNode &newNode);
-    void RemoveNode(std::set<TraceAtlas::Graph::ControlNode *, TraceAtlas::Graph::p_GNCompare> &CFG, TraceAtlas::Graph::ControlNode *removeNode);
-    void RemoveNode(std::set<TraceAtlas::Graph::ControlNode *, TraceAtlas::Graph::p_GNCompare> &CFG, const TraceAtlas::Graph::ControlNode &removeNode);
-} // namespace TraceAtlas::Cartographer
+    void AddNode(std::set<Cyclebite::Graph::ControlNode *, Cyclebite::Graph::p_GNCompare> &nodes, const Cyclebite::Graph::ControlNode &newNode);
+    void AddNode(std::set<Cyclebite::Graph::ControlNode *, Cyclebite::Graph::p_GNCompare> &nodes, const Cyclebite::Graph::VKNode &newNode);
+    void RemoveNode(std::set<Cyclebite::Graph::ControlNode *, Cyclebite::Graph::p_GNCompare> &CFG, Cyclebite::Graph::ControlNode *removeNode);
+    void RemoveNode(std::set<Cyclebite::Graph::ControlNode *, Cyclebite::Graph::p_GNCompare> &CFG, const Cyclebite::Graph::ControlNode &removeNode);
+} // namespace Cyclebite::Cartographer

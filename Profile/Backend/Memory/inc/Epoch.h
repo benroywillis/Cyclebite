@@ -4,7 +4,7 @@
 #include <set>
 #include <map>
 
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     class Kernel;
     /// Holds all information we care about in an epoch

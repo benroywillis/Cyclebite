@@ -1,4 +1,4 @@
-#include "AtlasUtil/IO.h"
+#include "Util/IO.h"
 #include "CallGraph.h"
 #include "ControlGraph.h"
 #include "Dijkstra.h"
@@ -22,8 +22,8 @@
 
 using namespace llvm;
 using namespace std;
-using namespace TraceAtlas::Cartographer;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Cartographer;
+using namespace Cyclebite::Graph;
 using json = nlohmann::json;
 
 cl::opt<string> ProfileFileName("i", cl::desc("Specify bin file"), cl::value_desc(".bin filename"), cl::Required);
@@ -70,7 +70,7 @@ int main(int argc, char **argv)
     InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
     // construct program control graph and call graph
     ControlGraph cg;
-    TraceAtlas::Graph::CallGraph dynamicCG;
+    Cyclebite::Graph::CallGraph dynamicCG;
     getDynamicInformation(cg, dynamicCG, ProfileFileName, SourceBitcode, staticCG, blockCallers, threadStarts, IDToBlock, HotCodeDetection );
 #ifdef DEBUG
     FindAllRecursiveFunctions(staticCG, cg, IDToBlock);

@@ -1,7 +1,7 @@
 #include "AtomicQueue.h"
 #include <unistd.h>
 
-namespace TraceAtlas::Profile::Backend
+namespace Cyclebite::Profile::Backend
 {
     class ThreadSafeQueue
     {
@@ -17,4 +17,4 @@ namespace TraceAtlas::Profile::Backend
         bool empty() const;
         bool full() const;
     };
-} // namespace TraceAtlas::Profile::Backend
+} // namespace Cyclebite::Profile::Backend

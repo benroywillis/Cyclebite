@@ -106,12 +106,12 @@ inline int PrintFile(llvm::Module *M, const std::string &file, bool ASCIIFormat,
     return EXIT_SUCCESS;
 }
 
-inline void PrintGraph(const std::set<TraceAtlas::Graph::ControlNode *, TraceAtlas::Graph::p_GNCompare> &nodes)
+inline void PrintGraph(const std::set<Cyclebite::Graph::ControlNode *, Cyclebite::Graph::p_GNCompare> &nodes)
 {
     for (const auto &node : nodes)
     {
         spdlog::info("Examining node " + std::to_string(node->NID));
-        if (auto VKN = dynamic_cast<TraceAtlas::Graph::MLCycle *>(node))
+        if (auto VKN = dynamic_cast<Cyclebite::Graph::MLCycle *>(node))
         {
             spdlog::info("This node is a virtual kernel pointing to ID " + std::to_string(VKN->KID));
         }

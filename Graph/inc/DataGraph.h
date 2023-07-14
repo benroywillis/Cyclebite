@@ -2,7 +2,7 @@
 #include "DataNode.h"
 #include "Graph.h"
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class UnconditionalEdge;
     class DataGraph : public Graph
@@ -12,4 +12,4 @@ namespace TraceAtlas::Graph
         DataGraph(const std::set<std::shared_ptr<DataNode>, p_GNCompare> &nodeSet, const std::set<std::shared_ptr<UnconditionalEdge>, GECompare> &edgeSet);
         const std::set<std::shared_ptr<DataNode>, p_GNCompare> getDataNodes() const;
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

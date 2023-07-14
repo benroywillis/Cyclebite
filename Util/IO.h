@@ -1,6 +1,6 @@
 #pragma once
-#include "AtlasUtil/Format.h"
-#include "AtlasUtil/Print.h"
+#include "Util/Format.h"
+#include "Util/Print.h"
 #include "llvm/Analysis/CallGraph.h"
 #include <cmath>
 #include <ctime>

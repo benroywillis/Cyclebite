@@ -1,7 +1,7 @@
 #include "ControlBlock.h"
 #include "DataNode.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 ControlBlock::ControlBlock(std::shared_ptr<ControlNode> node, std::set<std::shared_ptr<DataNode>, p_GNCompare> inst) : ControlNode(*node)
 {

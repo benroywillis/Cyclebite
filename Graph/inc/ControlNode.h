@@ -1,7 +1,7 @@
 #pragma once
 #include "GraphNode.h"
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class UnconditionalEdge;
     class ControlNode : public GraphNode
@@ -28,4 +28,4 @@ namespace TraceAtlas::Graph
         /// Merges the blocks and originalBlocks of a successor node
         bool mergeSuccessor(const ControlNode &succ);
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

@@ -1,7 +1,7 @@
 #include "CallGraph.h"
-#include "AtlasUtil/Exceptions.h"
+#include "Util/Exceptions.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using namespace std;
 
 CallGraph::CallGraph() : Graph() {}

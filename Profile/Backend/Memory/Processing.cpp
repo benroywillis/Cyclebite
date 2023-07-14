@@ -6,7 +6,7 @@
 
 using namespace std;
 
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     void FindEpochBoundaries()
     {
@@ -258,4 +258,4 @@ namespace TraceAtlas::Profile::Backend::Memory
         }
         return taskCommunication;
     }
-} // namespace TraceAtlas::Profile::Backend::Memory
+} // namespace Cyclebite::Profile::Backend::Memory

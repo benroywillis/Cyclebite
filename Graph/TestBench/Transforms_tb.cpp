@@ -1,8 +1,8 @@
-#include "AtlasUtil/Exceptions.h"
+#include "Util/Exceptions.h"
 #include "ControlGraph.h"
 #include "Dijkstra.h"
 #include "IO.h"
-#include "AtlasUtil/IO.h"
+#include "Util/IO.h"
 #include "VirtualEdge.h"
 #include "MLCycle.h"
 #include "Transforms.h"
@@ -17,7 +17,7 @@
 #endif
 
 /**
- * Implements elementary test cases for the four transforms used in the PaMul program segmentation algorithm
+ * Implements elementary test cases for the four transforms used in the Cyclebite program segmentation algorithm
  * 1. Serial merge: merge serial chains of nodes into the source node
  * 2. Branch->Select: merge subgraphs of nodes in which all nodes between a source and sink node that have the source node as their only predecessor and the sink node as their only successor
  * 3. Fanin-Fanout: merge subgraphs of nodes in which the only entrance to the subgraph is the source node and the only exit from the subgraph is the sink node
@@ -32,7 +32,7 @@
  * 
  */
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using namespace std;
 using namespace llvm;
 
@@ -1180,7 +1180,7 @@ uint8_t RunTest(ControlGraph (*testprep)(void), string name)
     LastTransform.close();
     try
     {
-        ApplyCFGTransforms(transformed, TraceAtlas::Graph::CallGraph(), false);
+        ApplyCFGTransforms(transformed, Cyclebite::Graph::CallGraph(), false);
         Checks(original, transformed, name);
         if( name == "Test1" )
         {

@@ -1,6 +1,6 @@
 #include "Symbol.h"
 
-using namespace TraceAtlas::Grammar;
+using namespace Cyclebite::Grammar;
 using namespace std;
 
 Symbol::Symbol(string n) : UID(getNextUID()) 

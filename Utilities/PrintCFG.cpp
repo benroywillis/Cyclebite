@@ -1,5 +1,5 @@
-#include "AtlasUtil/Format.h"
-#include "AtlasUtil/IO.h"
+#include "Util/Format.h"
+#include "Util/IO.h"
 #include "ControlGraph.h"
 #include "Graph.h"
 #include "IO.h"
@@ -13,7 +13,7 @@
 
 using namespace std;
 using namespace llvm;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using json = nlohmann::json;
 
 cl::opt<string> BitcodeFileName("b", cl::desc("Specify input bitcode filename"), cl::value_desc("bitcode filename"));

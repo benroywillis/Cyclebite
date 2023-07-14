@@ -1,6 +1,6 @@
 #include "Transforms.h"
-#include "AtlasUtil/Annotate.h"
-#include "AtlasUtil/IO.h"
+#include "Util/Annotate.h"
+#include "Util/IO.h"
 #include "CallEdge.h"
 #include "ImaginaryNode.h"
 #include "ImaginaryEdge.h"
@@ -14,7 +14,7 @@
 #include <spdlog/spdlog.h>
 
 using namespace std;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 /// Maximum size for a bottleneck subgraph transform
 constexpr uint32_t MAX_BOTTLENECK_SIZE = 200;
@@ -25,11 +25,11 @@ constexpr uint32_t MIN_CHILD_KERNEL_EXCEPTION = 5;
 map<shared_ptr<ControlNode>, set<shared_ptr<VirtualNode>, p_GNCompare>, p_GNCompare> NodeToVN;
 map<shared_ptr<UnconditionalEdge>, set<shared_ptr<VirtualEdge>, GECompare>, GECompare> EdgeToVE;
 /// Keeps track of basic blocks that are dead
-set<const llvm::BasicBlock *> TraceAtlas::Graph::deadCode;
+set<const llvm::BasicBlock *> Cyclebite::Graph::deadCode;
 /// This function returns null when the input basic block could not be found in the NIDMap
 /// The NID Map is created when reading in the original dynamic profile, and represents all blocks that were observed during that profile
 /// So if a basic block cannot be found in it, it means that basic block was not in the dynamic profile ie it is dead code
-shared_ptr<GraphNode> TraceAtlas::Graph::BlockToNode(const Graph &graph, const llvm::BasicBlock *block, const std::map<vector<uint32_t>, uint64_t> &NIDMap)
+shared_ptr<GraphNode> Cyclebite::Graph::BlockToNode(const Graph &graph, const llvm::BasicBlock *block, const std::map<vector<uint32_t>, uint64_t> &NIDMap)
 {
     vector<uint32_t> bbID;
     bbID.push_back((uint32_t)GetBlockID(llvm::cast<llvm::BasicBlock>(block)));
@@ -96,7 +96,7 @@ shared_ptr<GraphNode> TraceAtlas::Graph::BlockToNode(const Graph &graph, const l
 /// If markovOrder > 1, nodes map to [markovOrder] blocks
 /// In order to map a node with subgraphs to 1 basic block, we take the node that has an edge that exits the subgraph
 /// If multiple edges are found to exit the subgraph, and exception is thrown
-llvm::BasicBlock *TraceAtlas::Graph::NodeToBlock(const std::shared_ptr<ControlNode> &node, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+llvm::BasicBlock *Cyclebite::Graph::NodeToBlock(const std::shared_ptr<ControlNode> &node, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
 {
     shared_ptr<ControlNode> targetNode = nullptr;
     if (auto VN = dynamic_pointer_cast<VirtualNode>(node))
@@ -152,7 +152,7 @@ llvm::BasicBlock *TraceAtlas::Graph::NodeToBlock(const std::shared_ptr<ControlNo
     }
 }
 
-void TraceAtlas::Graph::SumToOne(const std::set<std::shared_ptr<GraphNode>, p_GNCompare> &nodes)
+void Cyclebite::Graph::SumToOne(const std::set<std::shared_ptr<GraphNode>, p_GNCompare> &nodes)
 {
     for (const auto &node : nodes)
     {
@@ -186,7 +186,7 @@ void TraceAtlas::Graph::SumToOne(const std::set<std::shared_ptr<GraphNode>, p_GN
 /// 3. Starting from the first node in the graph, every node is reachable
 /// 4. Starting from the last node in the graph, every node is reverse-reachable
 /// 5. For a given node, all outgoing edge probabilities sum to one
-void TraceAtlas::Graph::Checks(const ControlGraph &transformed, string step, bool segmentation)
+void Cyclebite::Graph::Checks(const ControlGraph &transformed, string step, bool segmentation)
 {
     // 1.
     if (transformed.empty())
@@ -684,7 +684,7 @@ ControlGraph IndirectRecursionFunctionBFS(const std::shared_ptr<CallEdge> &entra
     return SubgraphBFS(entrance->getWeightedSnk(), indirectExits);
 }
 
-void TraceAtlas::Graph::VirtualizeSubgraph(Graph &graph, std::shared_ptr<VirtualNode> &VN, const ControlGraph &subgraph)
+void Cyclebite::Graph::VirtualizeSubgraph(Graph &graph, std::shared_ptr<VirtualNode> &VN, const ControlGraph &subgraph)
 {
     if( subgraph.getNodes().empty() || subgraph.getEdges().empty() )
     {
@@ -1001,7 +1001,7 @@ set<std::shared_ptr<VirtualEdge>, GECompare> VirtualizeFunctionSubgraph(Graph &g
     return addEdge;
 }
 
-void TraceAtlas::Graph::reverseTransform(Graph &graph)
+void Cyclebite::Graph::reverseTransform(Graph &graph)
 {
     // algorithm runs until no virtual nodes are left
     bool virt = true;
@@ -1084,7 +1084,7 @@ void TraceAtlas::Graph::reverseTransform(Graph &graph)
                             // do nothing, the edge has no underlyings and already points to the correct nodes
                         }
                     }
-                    graph.addNodes(TraceAtlas::Graph::NodeConvert(VN->getSubgraph()));
+                    graph.addNodes(Cyclebite::Graph::NodeConvert(VN->getSubgraph()));
                     graph.removeNode(VN);
                 }
             }
@@ -1092,7 +1092,7 @@ void TraceAtlas::Graph::reverseTransform(Graph &graph)
     }
 }
 
-ControlGraph TraceAtlas::Graph::reverseTransform_MLCycle(const ControlGraph& graph)
+ControlGraph Cyclebite::Graph::reverseTransform_MLCycle(const ControlGraph& graph)
 {
     auto newGraph = graph;
     // transform the graph until all parent-most-level mlcycles are exposed
@@ -1158,8 +1158,8 @@ ControlGraph TraceAtlas::Graph::reverseTransform_MLCycle(const ControlGraph& gra
                                 // do nothing, the edge has no underlyings and already points to the correct nodes
                             }
                         }
-                        newGraph.addNodes(TraceAtlas::Graph::NodeConvert(VN->getSubgraph()));
-                        newGraph.addEdges(TraceAtlas::Graph::EdgeConvert(VN->getSubgraphEdges()));
+                        newGraph.addNodes(Cyclebite::Graph::NodeConvert(VN->getSubgraph()));
+                        newGraph.addEdges(Cyclebite::Graph::EdgeConvert(VN->getSubgraphEdges()));
                         newGraph.removeNode(VN);
                     }
                 }
@@ -1169,7 +1169,7 @@ ControlGraph TraceAtlas::Graph::reverseTransform_MLCycle(const ControlGraph& gra
     return newGraph;
 }
 
-ControlGraph TraceAtlas::Graph::TrivialTransforms(const std::shared_ptr<ControlNode> &sourceNode)
+ControlGraph Cyclebite::Graph::TrivialTransforms(const std::shared_ptr<ControlNode> &sourceNode)
 {
     ControlGraph subgraph;
     auto source = sourceNode;
@@ -1209,7 +1209,7 @@ ControlGraph TraceAtlas::Graph::TrivialTransforms(const std::shared_ptr<ControlN
     return subgraph;
 }
 
-ControlGraph TraceAtlas::Graph::BranchToSelectTransforms(const ControlGraph &graph, const shared_ptr<ControlNode> &source)
+ControlGraph Cyclebite::Graph::BranchToSelectTransforms(const ControlGraph &graph, const shared_ptr<ControlNode> &source)
 {
     ControlGraph subgraph;
     // Vocabulary
@@ -1472,7 +1472,7 @@ ControlGraph TraceAtlas::Graph::BranchToSelectTransforms(const ControlGraph &gra
 /// @param source   The intended source node of the subgraph. A source node of the subgraph should have all its predecessors outside the subgraph and all its successors within the subgraph
 /// @param sink     The intended sink node of the subgraph. A sink node of the subgraph should have all its predecessors within the subgraph and all its successors outside
 /// @retval         True if the input subgraph can only be entered into through source and only exited through sink
-bool TraceAtlas::Graph::FanInFanOutTransform(ControlGraph &subgraph, const std::shared_ptr<ControlNode> &source, const std::shared_ptr<ControlNode> &sink)
+bool Cyclebite::Graph::FanInFanOutTransform(ControlGraph &subgraph, const std::shared_ptr<ControlNode> &source, const std::shared_ptr<ControlNode> &sink)
 {
     // Checks
     // 1. the subgraph is more than just source and sink node
@@ -1561,7 +1561,7 @@ bool TraceAtlas::Graph::FanInFanOutTransform(ControlGraph &subgraph, const std::
 }
 
 /// Detects recursion, either direct or indirect
-bool TraceAtlas::Graph::hasDirectRecursion(const llvm::CallGraphNode *node)
+bool Cyclebite::Graph::hasDirectRecursion(const llvm::CallGraphNode *node)
 {
     for (auto f = node->begin(); f != node->end(); f++)
     {
@@ -1587,7 +1587,7 @@ bool hasDirectRecursion(const std::shared_ptr<ControlNode> &node, const std::map
     }
 }
 
-bool TraceAtlas::Graph::hasIndirectRecursion(const TraceAtlas::Graph::CallGraph &graph, const shared_ptr<TraceAtlas::Graph::CallGraphNode> &node)
+bool Cyclebite::Graph::hasIndirectRecursion(const Cyclebite::Graph::CallGraph &graph, const shared_ptr<Cyclebite::Graph::CallGraphNode> &node)
 {
     auto cycle = Dijkstras(graph, node->NID, node->NID);
     if (cycle.size() > 1)
@@ -1619,7 +1619,7 @@ bool TraceAtlas::Graph::hasIndirectRecursion(const TraceAtlas::Graph::CallGraph 
 }
 
 /// Returns true if this function has direct recursion and false otherwise. If the input function is indirect and direct recursive, the return value will be true
-bool TraceAtlas::Graph::hasDirectRecursion(const TraceAtlas::Graph::CallGraph &graph, const shared_ptr<TraceAtlas::Graph::CallGraphNode> &src)
+bool Cyclebite::Graph::hasDirectRecursion(const Cyclebite::Graph::CallGraph &graph, const shared_ptr<Cyclebite::Graph::CallGraphNode> &src)
 {
     auto cycle = Dijkstras(graph, src->NID, src->NID);
     if (cycle.size() == 1)
@@ -1633,7 +1633,7 @@ bool TraceAtlas::Graph::hasDirectRecursion(const TraceAtlas::Graph::CallGraph &g
 }
 
 /// Carries out a depth-first search of the callgraph
-bool TraceAtlas::Graph::hasIndirectRecursion(const llvm::CallGraphNode *node)
+bool Cyclebite::Graph::hasIndirectRecursion(const llvm::CallGraphNode *node)
 {
     set<const llvm::CallGraphNode *> visited;
     deque<const llvm::CallGraphNode *> Q;
@@ -1686,7 +1686,7 @@ bool hasIndirectRecursion(const std::shared_ptr<ControlNode> &node, const std::m
     }
 }
 
-set<shared_ptr<CallGraphNode>, p_GNCompare> getIndirectRecursionCycle(const TraceAtlas::Graph::CallGraph &graph, const shared_ptr<TraceAtlas::Graph::CallGraphNode> &CGN)
+set<shared_ptr<CallGraphNode>, p_GNCompare> getIndirectRecursionCycle(const Cyclebite::Graph::CallGraph &graph, const shared_ptr<Cyclebite::Graph::CallGraphNode> &CGN)
 {
     /* john 6/29/22
      * the analysis should have to make it back to the original parent, so put a check in the cycles involved in a new child 
@@ -1707,8 +1707,8 @@ set<shared_ptr<CallGraphNode>, p_GNCompare> getIndirectRecursionCycle(const Trac
     // if Dijkstra returns a cycle keep the node
     // else its not part of "the" cycle
     set<shared_ptr<CallEdge>, GECompare> embeddedFunctions;
-    set<shared_ptr<TraceAtlas::Graph::CallGraphNode>> covered;
-    deque<shared_ptr<TraceAtlas::Graph::CallGraphNode>> Q;
+    set<shared_ptr<Cyclebite::Graph::CallGraphNode>> covered;
+    deque<shared_ptr<Cyclebite::Graph::CallGraphNode>> Q;
     Q.push_front(CGN);
     // this copy has direct recursion edges removed from it as the analysis progresses
     // this prevents the case where a function that is both direct and indirect recursive is erroneously categorized by Dijkstra as direct recursive only
@@ -1758,7 +1758,7 @@ set<shared_ptr<CallGraphNode>, p_GNCompare> getIndirectRecursionCycle(const Trac
 /// @param graph    Callgraph that contains CGN
 /// @param CGN      CallGraphNode in question. This node should be part of a cycle in the callgraph. This method assumes this parameter is already known to be part of a cycle
 /// @retval         All edges that can enter the cycle but are not themselves part of the cycle
-set<shared_ptr<CallGraphEdge>, GECompare> getIndirectRecursionEntrances(const TraceAtlas::Graph::CallGraph &graph, const shared_ptr<TraceAtlas::Graph::CallGraphNode> &CGN)
+set<shared_ptr<CallGraphEdge>, GECompare> getIndirectRecursionEntrances(const Cyclebite::Graph::CallGraph &graph, const shared_ptr<Cyclebite::Graph::CallGraphNode> &CGN)
 {
     set<shared_ptr<CallGraphEdge>, GECompare> entrances;
     auto cycle = getIndirectRecursionCycle(graph, CGN);
@@ -1776,7 +1776,7 @@ set<shared_ptr<CallGraphEdge>, GECompare> getIndirectRecursionEntrances(const Tr
     return entrances;
 }
 
-set<shared_ptr<CallGraphEdge>, GECompare> getDirectRecursionEntrances(const shared_ptr<TraceAtlas::Graph::CallGraphNode> &CGN)
+set<shared_ptr<CallGraphEdge>, GECompare> getDirectRecursionEntrances(const shared_ptr<Cyclebite::Graph::CallGraphNode> &CGN)
 {
     set<shared_ptr<CallGraphEdge>, GECompare> entrances;
     // we are looking for calledges to this node that do not form a cycle
@@ -1790,7 +1790,7 @@ set<shared_ptr<CallGraphEdge>, GECompare> getDirectRecursionEntrances(const shar
     return entrances;
 }
 
-set<shared_ptr<CallGraphEdge>, GECompare> FindEmbeddedFunctions(const TraceAtlas::Graph::CallGraph &dynamicCG, const shared_ptr<TraceAtlas::Graph::CallGraphNode> &CGN)
+set<shared_ptr<CallGraphEdge>, GECompare> FindEmbeddedFunctions(const Cyclebite::Graph::CallGraph &dynamicCG, const shared_ptr<Cyclebite::Graph::CallGraphNode> &CGN)
 {
     set<shared_ptr<CallGraphEdge>, GECompare> embeddedFunctions;
     // there are two cases here
@@ -1802,8 +1802,8 @@ set<shared_ptr<CallGraphEdge>, GECompare> FindEmbeddedFunctions(const TraceAtlas
         for (const auto &node : idrCycle)
         {
             // bfs the function and add any children not in the cycle
-            set<shared_ptr<TraceAtlas::Graph::CallGraphNode>> covered;
-            deque<shared_ptr<TraceAtlas::Graph::CallGraphNode>> Q;
+            set<shared_ptr<Cyclebite::Graph::CallGraphNode>> covered;
+            deque<shared_ptr<Cyclebite::Graph::CallGraphNode>> Q;
             Q.push_front(node);
             while (!Q.empty())
             {
@@ -1829,8 +1829,8 @@ set<shared_ptr<CallGraphEdge>, GECompare> FindEmbeddedFunctions(const TraceAtlas
     }
     else
     {
-        set<shared_ptr<TraceAtlas::Graph::CallGraphNode>> covered;
-        deque<shared_ptr<TraceAtlas::Graph::CallGraphNode>> Q;
+        set<shared_ptr<Cyclebite::Graph::CallGraphNode>> covered;
+        deque<shared_ptr<Cyclebite::Graph::CallGraphNode>> Q;
         Q.push_front(CGN);
         while (!Q.empty())
         {
@@ -1865,7 +1865,7 @@ set<shared_ptr<CallGraphEdge>, GECompare> FindEmbeddedFunctions(const TraceAtlas
     return embeddedFunctions;
 }
 
-deque<set<shared_ptr<CallGraphEdge>, GECompare>> ScheduleInlineTransforms(const TraceAtlas::Graph::CallGraph &dynamicCG, const map<shared_ptr<TraceAtlas::Graph::CallGraphNode>, set<shared_ptr<CallGraphEdge>, GECompare>, p_GNCompare> &embFunctions, const map<shared_ptr<TraceAtlas::Graph::CallGraphNode>, set<shared_ptr<TraceAtlas::Graph::CallGraphEdge>, GECompare>, p_GNCompare> &InlineCalls)
+deque<set<shared_ptr<CallGraphEdge>, GECompare>> ScheduleInlineTransforms(const Cyclebite::Graph::CallGraph &dynamicCG, const map<shared_ptr<Cyclebite::Graph::CallGraphNode>, set<shared_ptr<CallGraphEdge>, GECompare>, p_GNCompare> &embFunctions, const map<shared_ptr<Cyclebite::Graph::CallGraphNode>, set<shared_ptr<Cyclebite::Graph::CallGraphEdge>, GECompare>, p_GNCompare> &InlineCalls)
 {
     /*
      * John 6/29/22
@@ -2019,16 +2019,16 @@ deque<set<shared_ptr<CallGraphEdge>, GECompare>> ScheduleInlineTransforms(const 
     return InlineTransformQ;
 }
 
-void TraceAtlas::Graph::VirtualizeSharedFunctions(ControlGraph &graph, const TraceAtlas::Graph::CallGraph &dynamicCG)
+void Cyclebite::Graph::VirtualizeSharedFunctions(ControlGraph &graph, const Cyclebite::Graph::CallGraph &dynamicCG)
 {
-    map<shared_ptr<TraceAtlas::Graph::CallGraphNode>, set<shared_ptr<CallGraphEdge>, GECompare>, p_GNCompare> embFunctions;
+    map<shared_ptr<Cyclebite::Graph::CallGraphNode>, set<shared_ptr<CallGraphEdge>, GECompare>, p_GNCompare> embFunctions;
     // set of nodes that are virtualized during the function inlining process
     // these nodes are removed after all function inlining is done
     set<shared_ptr<VirtualEdge>, GECompare> virtualizedEdges;
     // order transforms such that we do indirect recursion, then direct recursion, then ascending order of embedded function call count
     map<int, set<ControlNode *>> orderScore;
     // for some unknown reason, if this data structure uses shared pointers in its template, it breaks the c++ debugger
-    map<shared_ptr<TraceAtlas::Graph::CallGraphNode>, set<shared_ptr<TraceAtlas::Graph::CallGraphEdge>, GECompare>, p_GNCompare> InlineCalls;
+    map<shared_ptr<Cyclebite::Graph::CallGraphNode>, set<shared_ptr<Cyclebite::Graph::CallGraphEdge>, GECompare>, p_GNCompare> InlineCalls;
 
     // for each function (a node in the dynamic callgraph is a function known to have been exercised by the program)
     for (const auto &node : dynamicCG.getCallNodes())
@@ -2178,7 +2178,7 @@ void TraceAtlas::Graph::VirtualizeSharedFunctions(ControlGraph &graph, const Tra
 #endif
 }
 
-std::vector<shared_ptr<MLCycle>> TraceAtlas::Graph::VirtualizeKernels(std::set<shared_ptr<MLCycle>, KCompare> &newKernels, ControlGraph &graph)
+std::vector<shared_ptr<MLCycle>> Cyclebite::Graph::VirtualizeKernels(std::set<shared_ptr<MLCycle>, KCompare> &newKernels, ControlGraph &graph)
 {
     vector<shared_ptr<MLCycle>> newPointers;
     for (const auto &kernel : newKernels)
@@ -2303,12 +2303,12 @@ const std::shared_ptr<ControlNode> GreenEdgeDFS(const set<shared_ptr<Uncondition
         }
     }
 
-    subgraph.addNodes(TraceAtlas::Graph::NodeConvert(subgraphNodes));
-    subgraph.addEdges(TraceAtlas::Graph::EdgeConvert(greens));
+    subgraph.addNodes(Cyclebite::Graph::NodeConvert(subgraphNodes));
+    subgraph.addEdges(Cyclebite::Graph::EdgeConvert(greens));
     return (*exitNodes.begin());
 }
 
-const std::shared_ptr<ControlNode> TraceAtlas::Graph::FindNewSubgraph(ControlGraph &subgraph, const shared_ptr<ControlNode> &source)
+const std::shared_ptr<ControlNode> Cyclebite::Graph::FindNewSubgraph(ControlGraph &subgraph, const shared_ptr<ControlNode> &source)
 {
     /// This algorithm builds the subgraph starting from source and ending in a sink node that encapsulates a subgraph fit for transforming
     /// Possible transforms that come from this algorithm are
@@ -2680,7 +2680,7 @@ bool KCLTransform(ControlGraph& graph)
     return didChange;
 }
 
-void TraceAtlas::Graph::ApplyCFGTransforms(ControlGraph &graph, const TraceAtlas::Graph::CallGraph &dynamicCG, bool segmentations)
+void Cyclebite::Graph::ApplyCFGTransforms(ControlGraph &graph, const Cyclebite::Graph::CallGraph &dynamicCG, bool segmentations)
 {
     if(!segmentations)
     {
@@ -3088,8 +3088,8 @@ void reverse_cycle_transform(ControlGraph& graph, const set<shared_ptr<MLCycle>,
                         // do nothing, the edge has no underlyings and already points to the correct nodes
                     }
                 }
-                newGraph.addNodes(TraceAtlas::Graph::NodeConvert(foundML->getSubgraph()));
-                newGraph.addEdges(TraceAtlas::Graph::EdgeConvert(foundML->getSubgraphEdges()));
+                newGraph.addNodes(Cyclebite::Graph::NodeConvert(foundML->getSubgraph()));
+                newGraph.addEdges(Cyclebite::Graph::EdgeConvert(foundML->getSubgraphEdges()));
                 newGraph.removeNode(foundML);
             }
         }
@@ -3097,7 +3097,7 @@ void reverse_cycle_transform(ControlGraph& graph, const set<shared_ptr<MLCycle>,
     graph = newGraph;
 }
 
-set<shared_ptr<MLCycle>, KCompare> TraceAtlas::Graph::FindMLCycles(ControlGraph &graph, const TraceAtlas::Graph::CallGraph &dynamicCG, bool applyTransforms)
+set<shared_ptr<MLCycle>, KCompare> Cyclebite::Graph::FindMLCycles(ControlGraph &graph, const Cyclebite::Graph::CallGraph &dynamicCG, bool applyTransforms)
 {
     // master set of kernels, holds all valid kernels parsed from the CFG
     // each kernel in here is represented in the call graph by a virtual kernel node
@@ -3361,7 +3361,7 @@ set<shared_ptr<MLCycle>, KCompare> TraceAtlas::Graph::FindMLCycles(ControlGraph 
     return kernels;
 }
 
-void TraceAtlas::Graph::FindAllRecursiveFunctions(const llvm::CallGraph &CG, const Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void Cyclebite::Graph::FindAllRecursiveFunctions(const llvm::CallGraph &CG, const Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
 {
     uint32_t CGsize = 0;
     uint32_t totalFunctions = 0;
@@ -3425,7 +3425,7 @@ void TraceAtlas::Graph::FindAllRecursiveFunctions(const llvm::CallGraph &CG, con
     spdlog::info("DIRECT RECURSION FUNCTIONS: " + to_string(DR));
 }
 
-void TraceAtlas::Graph::FindAllRecursiveFunctions(const TraceAtlas::Graph::CallGraph &CG, const Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void Cyclebite::Graph::FindAllRecursiveFunctions(const Cyclebite::Graph::CallGraph &CG, const Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
 {
     uint32_t CGsize = 0;
     uint32_t totalFunctions = 0;
@@ -3476,7 +3476,7 @@ void TraceAtlas::Graph::FindAllRecursiveFunctions(const TraceAtlas::Graph::CallG
 // But now we are saying... no, cycles are good enough. we can write down the possible structures within a C program, and finding the cycles is good enough to structure
 
 /* Moving this function to the new edge classes is hard because it is destroying edges... the work to be done is to build new edges as the algorithm progresses
-std::set<std::shared_ptr<ControlNode> , p_GNCompare> TraceAtlas::Graph::ReduceMO(Graph& graph, int inputOrder, int desiredOrder)
+std::set<std::shared_ptr<ControlNode> , p_GNCompare> Cyclebite::Graph::ReduceMO(Graph& graph, int inputOrder, int desiredOrder)
 {
     // first step, transform the input nodes into markov order 1 nodes
     // Markov Order Reduction Algorithm:

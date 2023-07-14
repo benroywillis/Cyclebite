@@ -1,8 +1,8 @@
 
 #include "MarkovIO.h"
 #include "Annotate.h"
-#include "AtlasUtil/Annotate.h"
-#include "AtlasUtil/Format.h"
+#include "Util/Annotate.h"
+#include "Util/Format.h"
 #include "CommandArgs.h"
 #include "Functions.h"
 #include <llvm/IR/Function.h>

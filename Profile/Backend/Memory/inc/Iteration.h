@@ -1,7 +1,7 @@
 #pragma once
 #include "MemoryTuple.hpp"
 
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     class Iteration
     {

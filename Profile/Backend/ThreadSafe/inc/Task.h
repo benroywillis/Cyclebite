@@ -5,7 +5,7 @@
 
 typedef struct HashTable __TA_HashTable;
 
-namespace TraceAtlas::Profile::Backend
+namespace Cyclebite::Profile::Backend
 {
     // most general event that can take place during a dynamic profile
     class Event
@@ -101,4 +101,4 @@ namespace TraceAtlas::Profile::Backend
             return nextID++;
         }
     };
-} // namespace TraceAtlas::Profile::Backend
+} // namespace Cyclebite::Profile::Backend

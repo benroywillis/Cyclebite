@@ -1,7 +1,7 @@
 #pragma once
 #include "Symbol.h"
 
-namespace TraceAtlas::Grammar
+namespace Cyclebite::Grammar
 {
     enum class ConstantType
     {
@@ -27,4 +27,4 @@ namespace TraceAtlas::Grammar
     private:
         int64_t bits;
     };
-} // namespace TraceAtlas::Grammar
+} // namespace Cyclebite::Grammar

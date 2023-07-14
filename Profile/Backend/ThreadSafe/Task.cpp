@@ -3,7 +3,7 @@
 #include <iostream>
 
 using namespace std;
-using namespace TraceAtlas::Profile::Backend;
+using namespace Cyclebite::Profile::Backend;
 
 Task::Task(bool valid)
 {

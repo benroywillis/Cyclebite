@@ -1,5 +1,5 @@
-#include "AtlasUtil/Exceptions.h"
-#include "AtlasUtil/IO.h"
+#include "Util/Exceptions.h"
+#include "Util/IO.h"
 #include "Precision.h"
 #include "Epoch.h"
 #include "CodeSection.h"
@@ -11,21 +11,21 @@ using namespace std;
 using json = nlohmann::json;
 using namespace llvm;
 
-namespace TraceAtlas::Profile::Backend::Precision
+namespace Cyclebite::Profile::Backend::Precision
 {
     /// Timing information
     struct timespec start, end;
     /// Records all values observed during execution
-    map<shared_ptr<TraceAtlas::Profile::Backend::Memory::Epoch>, ValueHistogram, TraceAtlas::Profile::Backend::Memory::UIDCompare> hist;
+    map<shared_ptr<Cyclebite::Profile::Backend::Memory::Epoch>, ValueHistogram, Cyclebite::Profile::Backend::Memory::UIDCompare> hist;
     /// On/off switch for the profiler
     bool precisionActive = false;
     /// Tracks the last block that was seen
     int64_t lastBlock;
 
     /// Holds the current kernel instance(s)
-    shared_ptr<TraceAtlas::Profile::Backend::Memory::Epoch> currentEpoch;
+    shared_ptr<Cyclebite::Profile::Backend::Memory::Epoch> currentEpoch;
     /// holds all epochs that have been observed
-    set<shared_ptr<TraceAtlas::Profile::Backend::Memory::Epoch>, TraceAtlas::Profile::Backend::Memory::UIDCompare> epochs;
+    set<shared_ptr<Cyclebite::Profile::Backend::Memory::Epoch>, Cyclebite::Profile::Backend::Memory::UIDCompare> epochs;
     uint16_t getExponent(uint64_t val, const PrecisionValue& v)
     {
         switch(v.t)
@@ -178,7 +178,7 @@ namespace TraceAtlas::Profile::Backend::Precision
 
     extern "C"
     {
-        void __TraceAtlas__Profile__Backend__PrecisionDestroy()
+        void __Cyclebite__Profile__Backend__PrecisionDestroy()
         {
             while( clock_gettime(CLOCK_MONOTONIC, &end) ) {}
             spdlog::info( "PRECISIONPROFILETIME: "+to_string(CalculateTime(&start, &end))+"s");
@@ -187,7 +187,7 @@ namespace TraceAtlas::Profile::Backend::Precision
             PrintTaskHistograms();
             precisionActive = false;
         }
-        void __TraceAtlas__Profile__Backend__PrecisionIncrement(uint64_t a)
+        void __Cyclebite__Profile__Backend__PrecisionIncrement(uint64_t a)
         {
             // if the profile is not active, we return
             if (!precisionActive)
@@ -196,11 +196,11 @@ namespace TraceAtlas::Profile::Backend::Precision
             }
             auto crossedEdge = pair(lastBlock, (int64_t)a);
             // exiting sections
-            if (TraceAtlas::Profile::Backend::Memory::epochBoundaries.find(crossedEdge) != TraceAtlas::Profile::Backend::Memory::epochBoundaries.end())
+            if (Cyclebite::Profile::Backend::Memory::epochBoundaries.find(crossedEdge) != Cyclebite::Profile::Backend::Memory::epochBoundaries.end())
             {
                 currentEpoch->exits[lastBlock].insert((int64_t)a);
                 epochs.insert(currentEpoch);
-                currentEpoch = make_shared<TraceAtlas::Profile::Backend::Memory::Epoch>();
+                currentEpoch = make_shared<Cyclebite::Profile::Backend::Memory::Epoch>();
                 currentEpoch->updateBlocks((int64_t)a);
                 currentEpoch->entrances[lastBlock].insert((int64_t)a);
                 hist[currentEpoch] = ValueHistogram();
@@ -214,7 +214,7 @@ namespace TraceAtlas::Profile::Backend::Precision
 #endif
             lastBlock = (int64_t)a;
         }
-        void __TraceAtlas__Profile__Backend__PrecisionStore(uint64_t value, uint64_t bbID, uint32_t instructionID, uint8_t type)
+        void __Cyclebite__Profile__Backend__PrecisionStore(uint64_t value, uint64_t bbID, uint32_t instructionID, uint8_t type)
         {
             if( !precisionActive )
             {
@@ -228,7 +228,7 @@ namespace TraceAtlas::Profile::Backend::Precision
             v.exp = getExponent(value, v); // some function that can find the exponent of any value
             hist.at(currentEpoch).inc(v.exp);
         }
-        void __TraceAtlas__Profile__Backend__PrecisionLoad(uint64_t value, uint64_t bbID, uint32_t instructionID, uint8_t type)
+        void __Cyclebite__Profile__Backend__PrecisionLoad(uint64_t value, uint64_t bbID, uint32_t instructionID, uint8_t type)
         {
             if( !precisionActive )
             {
@@ -242,19 +242,19 @@ namespace TraceAtlas::Profile::Backend::Precision
             v.exp = getExponent(value, v); // some function that can find the exponent of any value
             hist.at(currentEpoch).inc(v.exp);
         }
-        void __TraceAtlas__Profile__Backend__PrecisionInit(uint64_t a)
+        void __Cyclebite__Profile__Backend__PrecisionInit(uint64_t a)
         {
-            TraceAtlas::Profile::Backend::Memory::ReadKernelFile();
+            Cyclebite::Profile::Backend::Memory::ReadKernelFile();
             try
             {
-                TraceAtlas::Profile::Backend::Memory::FindEpochBoundaries();
+                Cyclebite::Profile::Backend::Memory::FindEpochBoundaries();
             }
             catch (AtlasException &e)
             {
                 spdlog::critical(e.what());
                 exit(EXIT_FAILURE);
             }
-            currentEpoch = make_shared<TraceAtlas::Profile::Backend::Memory::Epoch>();
+            currentEpoch = make_shared<Cyclebite::Profile::Backend::Memory::Epoch>();
             currentEpoch->updateBlocks((int64_t)a);
             currentEpoch->entrances[(int64_t)a].insert((int64_t)a);
             hist[currentEpoch] = ValueHistogram();
@@ -264,4 +264,4 @@ namespace TraceAtlas::Profile::Backend::Precision
             lastBlock = (int64_t)a;
         }
     }
-} // namespace TraceAtlas::Backend::Precision
+} // namespace Cyclebite::Backend::Precision

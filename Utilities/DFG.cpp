@@ -1,5 +1,5 @@
-#include "AtlasUtil/Format.h"
-#include "AtlasUtil/IO.h"
+#include "Util/Format.h"
+#include "Util/IO.h"
 #include "ControlGraph.h"
 #include "DataGraph.h"
 #include "CallGraph.h"
@@ -13,7 +13,7 @@
 
 using namespace std;
 using namespace llvm;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using json = nlohmann::json;
 
 cl::opt<string> KernelFileName("k", cl::desc("Specify input kernel json filename"), cl::value_desc("kernel filename"));
@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
     llvm::CallGraph staticCG(*SourceBitcode);
     // construct program control graph and call graph
     ControlGraph cg;
-    TraceAtlas::Graph::CallGraph dynamicCG;
+    Cyclebite::Graph::CallGraph dynamicCG;
     getDynamicInformation(cg, dynamicCG, ProfileFileName, SourceBitcode, staticCG, blockCallers, threadStarts, IDToBlock, false );
 
     // construct block ID to node ID mapping

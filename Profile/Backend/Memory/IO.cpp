@@ -2,7 +2,7 @@
 #include "Memory.h"
 #include <cstdlib>
 #include <fstream>
-#include "AtlasUtil/Exceptions.h"
+#include "Util/Exceptions.h"
 #include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
 #include "Epoch.h"
@@ -14,7 +14,7 @@
 using namespace std;
 using json = nlohmann::json;
 
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     void ReadKernelFile()
     {
@@ -524,4 +524,4 @@ namespace TraceAtlas::Profile::Backend::Memory
         oStream << setw(4) << output;
         oStream.close();
     }
-} // namespace TraceAtlas::Profile::Backend::Memory
+} // namespace Cyclebite::Profile::Backend::Memory

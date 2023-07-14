@@ -1,6 +1,6 @@
 #include "IO.h"
-#include "AtlasUtil/Annotate.h"
-#include "AtlasUtil/Print.h"
+#include "Util/Annotate.h"
+#include "Util/Print.h"
 #include "CallEdge.h"
 #include "CallGraph.h"
 #include "CallNode.h"
@@ -24,18 +24,18 @@
 
 using namespace std;
 using namespace llvm;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 /// Cutoff threshold for number of edges in an unabridged highlighted graph
 constexpr uint64_t MAX_EDGE_UNABRIDGED = 2000;
 
 uint32_t markovOrder;
 /// Maps a vector of basic block IDs to a node ID
-map<vector<uint32_t>, uint64_t> TraceAtlas::Graph::NIDMap;
+map<vector<uint32_t>, uint64_t> Cyclebite::Graph::NIDMap;
 /// Maps each unique instruction to its datanode
-map<const llvm::Instruction *, const shared_ptr<DataNode>> TraceAtlas::Graph::DNIDMap;
+map<const llvm::Instruction *, const shared_ptr<DataNode>> Cyclebite::Graph::DNIDMap;
 /// Maps each basic block to its ControlBlock
-std::map<const llvm::BasicBlock*, const std::shared_ptr<ControlBlock>> TraceAtlas::Graph::BBCBMap;
+std::map<const llvm::BasicBlock*, const std::shared_ptr<ControlBlock>> Cyclebite::Graph::BBCBMap;
 
 /// Sets the number of decimal places in a float-to-string conversion
 std::string to_string_float(float f, int precision = 3)
@@ -47,10 +47,10 @@ std::string to_string_float(float f, int precision = 3)
 
 /// @brief Reads an input profile
 ///
-/// @param graph    Structure that will hold the raw profile input. Raw profile input only has control edges and Conditional/Unconditional nodes. This profile may not pass all checks in TraceAtlas::Graph::Checks because of function pointers.
+/// @param graph    Structure that will hold the raw profile input. Raw profile input only has control edges and Conditional/Unconditional nodes. This profile may not pass all checks in Cyclebite::Graph::Checks because of function pointers.
 /// @param filename Profile filename
 /// @param HotCodeDetection     Flag enabling hotcode detection checks on the profile. Right now there is only one check: the input profile must have markov order 1
-int TraceAtlas::Graph::BuildCFG(Graph &graph, const std::string &filename, bool HotCodeDetection)
+int Cyclebite::Graph::BuildCFG(Graph &graph, const std::string &filename, bool HotCodeDetection)
 {
     // first initialize the graph to all the blocks in the
     FILE *f = fopen(filename.data(), "rb");
@@ -428,7 +428,7 @@ shared_ptr<ControlNode> AddImaginaryEdges(llvm::Module* sourceBitcode, Graph& gr
 /// @brief This function reads through all edges in the dynamic profile and upgrade UnconditionalEdges to conditional edges, call/return edges, etc
 ///
 /// @param sourceBitcode    The formatted bitcode that was the source LLVM IR for the profile
-/// @param graph            A raw profile that has been turned into a graph. By the end of this method, graph will pass all checks in TraceAtlas::Graph::Checks
+/// @param graph            A raw profile that has been turned into a graph. By the end of this method, graph will pass all checks in Cyclebite::Graph::Checks
 /// @param blockCallers     A map connecting caller basic blocks to their callees
 /// @param IDToBlock        A map connecting basic block IDs to an llvm::BasicBlock pointer
 void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
@@ -1005,7 +1005,7 @@ void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::ma
 /// This method looks through all live functions in the bitcode and repairs their incoming edges to call edges, because these call edges will be invisible when evaluating the incoming LLVM bitcode
 /// @param dynamicCG    Dynamic callgraph generated from getDynamicCallGraph(). This argument will have all information discovered injected into itself, thus the argument is not const
 /// @param graph        Dynamic controlgraph imported from the input profile. This argument may have edges upgraded, thus the argument is not const
-void PatchFunctionEdges(const llvm::CallGraph &staticCG, TraceAtlas::Graph::Graph &graph, const std::map<int64_t, vector<int64_t>> &blockCallers, const map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void PatchFunctionEdges(const llvm::CallGraph &staticCG, Cyclebite::Graph::Graph &graph, const std::map<int64_t, vector<int64_t>> &blockCallers, const map<int64_t, llvm::BasicBlock *> &IDToBlock)
 {
     for (auto node = staticCG.begin(); node != staticCG.end(); node++)
     {
@@ -1151,7 +1151,7 @@ void PatchFunctionEdges(const llvm::CallGraph &staticCG, TraceAtlas::Graph::Grap
 /// When said dead function calls said live function multiple times in a row without returning, it appears to the profiler as though the function is calling itself, tail-to-head
 /// These edges need to be removed because they will propogate through the analysis and screw something up later on
 /// In the future, these edges may be replaced by imaginary edges that try to model what actually happened in the code, but for now they are just getting deleted
-void RemoveTailHeadCalls( TraceAtlas::Graph::ControlGraph& cg, const TraceAtlas::Graph::CallGraph& dynamicCG, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock )
+void RemoveTailHeadCalls( Cyclebite::Graph::ControlGraph& cg, const Cyclebite::Graph::CallGraph& dynamicCG, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock )
 {
     // set of edges that should be removed from the input control graph (because they are caused by blind spots in the dynamic profile)
     set<shared_ptr<CallEdge>, GECompare> toRemove;
@@ -1224,7 +1224,7 @@ void RemoveTailHeadCalls( TraceAtlas::Graph::ControlGraph& cg, const TraceAtlas:
     }
 }
 
-void TraceAtlas::Graph::getDynamicInformation(TraceAtlas::Graph::ControlGraph& cg, TraceAtlas::Graph::CallGraph& dynamicCG, const std::string& filePath, const unique_ptr<llvm::Module>& SourceBitcode, const llvm::CallGraph& staticCG, const map<int64_t, vector<int64_t>>& blockCallers, const set<int64_t>& threadStarts, const map<int64_t, BasicBlock*>& IDToBlock, bool HotCodeDetection)
+void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg, Cyclebite::Graph::CallGraph& dynamicCG, const std::string& filePath, const unique_ptr<llvm::Module>& SourceBitcode, const llvm::CallGraph& staticCG, const map<int64_t, vector<int64_t>>& blockCallers, const set<int64_t>& threadStarts, const map<int64_t, BasicBlock*>& IDToBlock, bool HotCodeDetection)
 {
     Graph graph;
     // node that was observed to exit the program
@@ -1270,14 +1270,14 @@ void TraceAtlas::Graph::getDynamicInformation(TraceAtlas::Graph::ControlGraph& c
 #endif
 }
 
-const TraceAtlas::Graph::CallGraph TraceAtlas::Graph::getDynamicCallGraph(llvm::Module *mod, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Module *mod, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
 {
-    TraceAtlas::Graph::CallGraph dynamicCG;
+    Cyclebite::Graph::CallGraph dynamicCG;
     for (auto f = mod->begin(); f != mod->end(); f++)
     {
         const llvm::Function *F = cast<Function>(f);
         // create node in the dynamic CG, if this function was ever used in the profile
-        shared_ptr<TraceAtlas::Graph::CallGraphNode> newNode = nullptr;
+        shared_ptr<Cyclebite::Graph::CallGraphNode> newNode = nullptr;
         if (!F->empty())
         {
             auto firstBlock = cast<BasicBlock>(F->begin());
@@ -1286,7 +1286,7 @@ const TraceAtlas::Graph::CallGraph TraceAtlas::Graph::getDynamicCallGraph(llvm::
                 if (!dynamicCG.find(F))
                 {
                     // this function is live
-                    newNode = make_shared<TraceAtlas::Graph::CallGraphNode>(F);
+                    newNode = make_shared<Cyclebite::Graph::CallGraphNode>(F);
                     dynamicCG.addNode(newNode);
                 }
                 else
@@ -1332,14 +1332,14 @@ const TraceAtlas::Graph::CallGraph TraceAtlas::Graph::getDynamicCallGraph(llvm::
                     }
                     for (const auto child : children)
                     {
-                        shared_ptr<TraceAtlas::Graph::CallGraphNode> childNode = nullptr;
+                        shared_ptr<Cyclebite::Graph::CallGraphNode> childNode = nullptr;
                         if (dynamicCG.find(child))
                         {
                             childNode = dynamicCG[child];
                         }
                         else
                         {
-                            childNode = make_shared<TraceAtlas::Graph::CallGraphNode>(child);
+                            childNode = make_shared<Cyclebite::Graph::CallGraphNode>(child);
                             dynamicCG.addNode(childNode);
                         }
                         // this is a check to see if the edge from the call instruction to the callee function is live
@@ -1432,7 +1432,7 @@ const TraceAtlas::Graph::CallGraph TraceAtlas::Graph::getDynamicCallGraph(llvm::
                     }
                     else
                     {
-                        parent = make_shared<TraceAtlas::Graph::CallGraphNode>(callerBlock->getParent());
+                        parent = make_shared<Cyclebite::Graph::CallGraphNode>(callerBlock->getParent());
                         dynamicCG.addNode(parent);
                     }
                     if (!parent)
@@ -1475,7 +1475,7 @@ const TraceAtlas::Graph::CallGraph TraceAtlas::Graph::getDynamicCallGraph(llvm::
     return dynamicCG;
 }
 
-void TraceAtlas::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const TraceAtlas::Graph::CallGraph &DCG, const Graph &dynamicGraph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void Cyclebite::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebite::Graph::CallGraph &DCG, const Graph &dynamicGraph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
 {
     // do the dynamicGraph calledges and the DCG edges agree?
     for (const auto &edge : DCG.edges())
@@ -1610,11 +1610,11 @@ void TraceAtlas::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const TraceA
     // who is empty in the static callgraph? Do they have edges to non-empty functions? Have we accounted for them all in the dynamic graph?
 }
 
-shared_ptr<DataNode> ConstructCallNode( const shared_ptr<DataNode>& newNode, const llvm::CallBase* call, const TraceAtlas::Graph::CallGraph& dynamicCG, const map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, const set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock )
+shared_ptr<DataNode> ConstructCallNode( const shared_ptr<DataNode>& newNode, const llvm::CallBase* call, const Cyclebite::Graph::CallGraph& dynamicCG, const map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, const set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock )
 {
     // upgrade to a CallNode
     // the llvm::CallBase instruction may contain missing information ie a function pointer
-    // to fill in this information, we have to create a mapping between llvm::CallBase and TraceAtlas::Graph::CallEdge
+    // to fill in this information, we have to create a mapping between llvm::CallBase and Cyclebite::Graph::CallEdge
     // right now this mapping doesn't exist apriori, so we have to do it manually
     
     // vector of destinations for this call edge
@@ -1624,7 +1624,7 @@ shared_ptr<DataNode> ConstructCallNode( const shared_ptr<DataNode>& newNode, con
         if( !call->getCalledFunction()->empty() )
         {
             // if the function call is statically resolvable and the callee is non-empty, we don't need to map anything
-            // just get the destination block of the call instruction and map it to a TraceAtlas::Graph::ControlBlock (by finding an existing one or making one)
+            // just get the destination block of the call instruction and map it to a Cyclebite::Graph::ControlBlock (by finding an existing one or making one)
             auto firstBlock = cast<llvm::BasicBlock>(call->getCalledFunction()->begin());
             shared_ptr<ControlBlock> dest = nullptr;
             auto blockID = GetBlockID(firstBlock);
@@ -1672,26 +1672,26 @@ shared_ptr<DataNode> ConstructCallNode( const shared_ptr<DataNode>& newNode, con
     else
     {
         // we are dealing with a function pointer
-        // in order to get the information from the dynamic call graph to resolve this function pointer, we need to map this llvm::CallBase to a TraceAtlas::Graph::CallEdge
+        // in order to get the information from the dynamic call graph to resolve this function pointer, we need to map this llvm::CallBase to a Cyclebite::Graph::CallEdge
         // we do this using the dynamic call graph, which contains all information that was included at compile time about the call graph (thus, all function pointers that point to live functions are resolved)
-        // specifically we compare nodes on the src side of all possible TraceAtlas::Graph::CallEdge's that could be representing the llvm::CallBase "call" (there is an ID mapping between llvm::BasicBlock* and TraceAtlas::Graph::ControlNode*)
-        // since our bitcode format pass (AtlasUtil/include/Format.h) allows only one call instruction per basic block, we can be guaranteed that any TraceAtlas::Graph::CallEdge originating from our src node represents "call"
+        // specifically we compare nodes on the src side of all possible Cyclebite::Graph::CallEdge's that could be representing the llvm::CallBase "call" (there is an ID mapping between llvm::BasicBlock* and Cyclebite::Graph::ControlNode*)
+        // since our bitcode format pass (Util/include/Format.h) allows only one call instruction per basic block, we can be guaranteed that any Cyclebite::Graph::CallEdge originating from our src node represents "call"
         // everything that is dead will be discovered here as unresolvable, so the fail conditions will be caused by dead functions
 
-        // we find the function that the llvm::Instruction "call" belongs to in the TraceAtlas::Graph::CallGraph (which contains all dynamic information)
+        // we find the function that the llvm::Instruction "call" belongs to in the Cyclebite::Graph::CallGraph (which contains all dynamic information)
         if( dynamicCG.find(call->getParent()->getParent()) )
         {
-            // first we must locate the TraceAtlas::Graph::CallGraphNode that corresponds to the parent function of the llvm::CallBase "call"
+            // first we must locate the Cyclebite::Graph::CallGraphNode that corresponds to the parent function of the llvm::CallBase "call"
             // this will get us all function call edges that lead from call's parent to its children, and zero or one or more of those edges may represent "call"
             // (if "call" points to a dead function, we won't find a representing edge for it. If "call" pointed to one or more functions during execution, we will get all those functions)
 
-            // set of all TraceAtlas::Graph::CallEdge's that could represent the llvm::CallBase "call"
+            // set of all Cyclebite::Graph::CallEdge's that could represent the llvm::CallBase "call"
             set<shared_ptr<CallEdge>, GECompare> representatives;
             for( const auto& child : dynamicCG[call->getParent()->getParent()]->getChildren() )
             {
-                // we search through the TraceAtlas::Graph::CallEdge's of this TraceAtlas::Graph::CallGraphEdge to find a matchup between a TraceAtlas::Graph::CallEdge and the llvm::CallInstruction ie "call"
-                // since we only allow for one call instruction in a given basic block (via AtlasUtil/Format.h), we can be sure that all TraceAtlas::Graph::CallEdge that have our basic block as src are representing "call"
-                shared_ptr<TraceAtlas::Graph::CallEdge> found = nullptr;
+                // we search through the Cyclebite::Graph::CallEdge's of this Cyclebite::Graph::CallGraphEdge to find a matchup between a Cyclebite::Graph::CallEdge and the llvm::CallInstruction ie "call"
+                // since we only allow for one call instruction in a given basic block (via Util/Format.h), we can be sure that all Cyclebite::Graph::CallEdge that have our basic block as src are representing "call"
+                shared_ptr<Cyclebite::Graph::CallEdge> found = nullptr;
                 for( auto ce : child->getCallEdges() )
                 {
                     auto src = ce->getWeightedSrc();
@@ -1741,10 +1741,10 @@ shared_ptr<DataNode> ConstructCallNode( const shared_ptr<DataNode>& newNode, con
         }
     }
     // do the upgrading
-    return make_shared<TraceAtlas::Graph::CallNode>(newNode.get(), dests);
+    return make_shared<Cyclebite::Graph::CallNode>(newNode.get(), dests);
 }
 
-int TraceAtlas::Graph::BuildDFG(llvm::Module *SourceBitcode, const TraceAtlas::Graph::CallGraph& dynamicCG, map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, DataGraph &graph, std::map<std::string, set<int64_t>> &specialInstructions, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock)
+int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Graph::CallGraph& dynamicCG, map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, DataGraph &graph, std::map<std::string, set<int64_t>> &specialInstructions, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock)
 {
     set<int64_t> inductionVariables;
     set<int64_t> basePointers;
@@ -1925,8 +1925,8 @@ int TraceAtlas::Graph::BuildDFG(llvm::Module *SourceBitcode, const TraceAtlas::G
                     }
                 }
             }
-            // there is a one-to-one mapping between llvm::BasicBlock and TraceAtlas::Graph::ControlBlock
-            shared_ptr<TraceAtlas::Graph::ControlBlock> newBBsub = nullptr;
+            // there is a one-to-one mapping between llvm::BasicBlock and Cyclebite::Graph::ControlBlock
+            shared_ptr<Cyclebite::Graph::ControlBlock> newBBsub = nullptr;
             if( programFlow.find(blockToNode[blockID]) != programFlow.end() )
             {
                 // this condition means a call instruction pointed to this block before this ControlBlock's instructions were ready
@@ -2010,7 +2010,7 @@ void ProfileBlock(BasicBlock *BB, map<int64_t, map<string, uint64_t>> &rMap, map
     }
 }
 
-map<string, map<string, map<string, int>>> TraceAtlas::Graph::ProfileKernels(const std::map<string, std::set<int64_t>> &kernels, Module *M, const std::map<int64_t, uint64_t> &blockCounts)
+map<string, map<string, map<string, int>>> Cyclebite::Graph::ProfileKernels(const std::map<string, std::set<int64_t>> &kernels, Module *M, const std::map<int64_t, uint64_t> &blockCounts)
 {
     map<int64_t, map<string, uint64_t>> rMap;  //dictionary which keeps track of the actual information per block
     map<int64_t, map<string, uint64_t>> cpMap; //dictionary which keeps track of the cross product information per block
@@ -2081,7 +2081,7 @@ map<string, map<string, map<string, int>>> TraceAtlas::Graph::ProfileKernels(con
     return fin;
 }
 
-string TraceAtlas::Graph::GenerateDot(const Graph &graph, bool original)
+string Cyclebite::Graph::GenerateDot(const Graph &graph, bool original)
 {
     string dotString = "digraph{\n";
     // label imaginary nodes and kernels
@@ -2187,7 +2187,7 @@ string TraceAtlas::Graph::GenerateDot(const Graph &graph, bool original)
     return dotString;
 }
 
-string TraceAtlas::Graph::GenerateCoverageDot(const set<std::shared_ptr<ControlNode>, p_GNCompare> &coveredNodes, const set<std::shared_ptr<ControlNode>, p_GNCompare> &uncoveredNodes)
+string Cyclebite::Graph::GenerateCoverageDot(const set<std::shared_ptr<ControlNode>, p_GNCompare> &coveredNodes, const set<std::shared_ptr<ControlNode>, p_GNCompare> &uncoveredNodes)
 {
     string dotString = "digraph{\n";
     // label nodes based on their original blocks and color them based on whether they are covered or uncovered
@@ -2266,7 +2266,7 @@ void BuildSubgraph(std::shared_ptr<MLCycle> toBuild, const set<std::shared_ptr<M
     dotString += tabString + "}\n";
 }
 
-string TraceAtlas::Graph::GenerateTransformedSegmentedDot(const set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes, const set<std::shared_ptr<MLCycle>, KCompare> &kernels, int markovOrder)
+string Cyclebite::Graph::GenerateTransformedSegmentedDot(const set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes, const set<std::shared_ptr<MLCycle>, KCompare> &kernels, int markovOrder)
 {
     // create a node to block mapping
     map<uint64_t, uint64_t> BlockToNode;
@@ -2326,7 +2326,7 @@ string TraceAtlas::Graph::GenerateTransformedSegmentedDot(const set<std::shared_
     return dotString;
 }
 
-double TraceAtlas::Graph::EntropyCalculation(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes)
+double Cyclebite::Graph::EntropyCalculation(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes)
 {
     /// Ben 5/17/22 This is wrong and needs to be refactored
     /// To calculate the stationary distribution correctly, we need to solve the following equation for x
@@ -2375,7 +2375,7 @@ double TraceAtlas::Graph::EntropyCalculation(const std::set<std::shared_ptr<Cont
     return entropyRate;
 }
 
-double TraceAtlas::Graph::TotalEntropy(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes)
+double Cyclebite::Graph::TotalEntropy(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes)
 {
     double accumulatedEntropy = 0.0;
     for (const auto &node : nodes)
@@ -2504,7 +2504,7 @@ const shared_ptr<UnconditionalEdge>& FindUnderlyingEdge(const shared_ptr<GraphNo
     }
 }
 
-set<pair<int64_t, int64_t>> TraceAtlas::Graph::findOriginalBlockIDs(const shared_ptr<UnconditionalEdge>& edge)
+set<pair<int64_t, int64_t>> Cyclebite::Graph::findOriginalBlockIDs(const shared_ptr<UnconditionalEdge>& edge)
 {
     struct EdgeSort
     {
@@ -2653,7 +2653,7 @@ set<int64_t> findOriginalBlockIDs(const shared_ptr<ControlNode>& ent)
     return originalBlocks;
 }
 
-void TraceAtlas::Graph::WriteKernelFile(const ControlGraph &graph, const set<std::shared_ptr<MLCycle>, KCompare> &kernels, const map<int64_t, llvm::BasicBlock *> &IDToBlock, const map<int64_t, std::vector<int64_t>> &blockCallers, const EntropyInfo &info, const string &OutputFileName, bool hotCode)
+void Cyclebite::Graph::WriteKernelFile(const ControlGraph &graph, const set<std::shared_ptr<MLCycle>, KCompare> &kernels, const map<int64_t, llvm::BasicBlock *> &IDToBlock, const map<int64_t, std::vector<int64_t>> &blockCallers, const EntropyInfo &info, const string &OutputFileName, bool hotCode)
 {
     // write kernel file
     json outputJson;
@@ -2931,7 +2931,7 @@ void TraceAtlas::Graph::WriteKernelFile(const ControlGraph &graph, const set<std
                     bool cycleFound = false;
                     for( auto ent : kern->getEntrances() )
                     {
-                        auto cycle = TraceAtlas::Graph::Dijkstras(graph, Q.front()->NID, ent->getSnk()->NID);
+                        auto cycle = Cyclebite::Graph::Dijkstras(graph, Q.front()->NID, ent->getSnk()->NID);
                         if( !cycle.empty() )
                         {
                             cycleFound = true;
@@ -3003,7 +3003,7 @@ void TraceAtlas::Graph::WriteKernelFile(const ControlGraph &graph, const set<std
 }
 
 /// TODO: add function calls to this graph, right now it completely skips them
-ControlGraph TraceAtlas::Graph::GenerateStaticCFG(llvm::Module *M)
+ControlGraph Cyclebite::Graph::GenerateStaticCFG(llvm::Module *M)
 {
     ControlGraph staticGraph;
     for (auto f = M->begin(); f != M->end(); f++)
@@ -3081,7 +3081,7 @@ ControlGraph TraceAtlas::Graph::GenerateStaticCFG(llvm::Module *M)
     return staticGraph;
 }
 
-void TraceAtlas::Graph::GenerateDynamicCoverage(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &dynamicNodes, const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &staticNodes)
+void Cyclebite::Graph::GenerateDynamicCoverage(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &dynamicNodes, const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &staticNodes)
 {
     // we need a static to dynamic node mapping
     map<std::shared_ptr<ControlNode>, set<std::shared_ptr<ControlNode>, p_GNCompare>> StaticToDynamic;
@@ -3122,7 +3122,7 @@ void TraceAtlas::Graph::GenerateDynamicCoverage(const std::set<std::shared_ptr<C
 }
 
 // Data graph operations
-string TraceAtlas::Graph::GenerateDataDot(const set<std::shared_ptr<DataNode>, p_GNCompare> &nodes)
+string Cyclebite::Graph::GenerateDataDot(const set<std::shared_ptr<DataNode>, p_GNCompare> &nodes)
 {
     string dotString = "digraph{\n";
     // label nodes based on their operations
@@ -3143,7 +3143,7 @@ string TraceAtlas::Graph::GenerateDataDot(const set<std::shared_ptr<DataNode>, p
     return dotString;
 }
 
-string TraceAtlas::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<ControlBlock>, p_GNCompare> &BBs)
+string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<ControlBlock>, p_GNCompare> &BBs)
 {
     string dotString = "digraph{\n\tcompound=true;\n";
     // basic block clusters
@@ -3221,7 +3221,7 @@ string TraceAtlas::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Contro
     return dotString;
 }
 
-string TraceAtlas::Graph::GenerateHighlightedSubgraph(const Graph &graph, const Graph &subgraph)
+string Cyclebite::Graph::GenerateHighlightedSubgraph(const Graph &graph, const Graph &subgraph)
 {
     bool abridged = graph.edge_count() > MAX_EDGE_UNABRIDGED;
     string dotString = "digraph {\n";
@@ -3299,7 +3299,7 @@ string TraceAtlas::Graph::GenerateHighlightedSubgraph(const Graph &graph, const 
     return dotString;
 }
 
-string TraceAtlas::Graph::GenerateCallGraph(const llvm::CallGraph &CG)
+string Cyclebite::Graph::GenerateCallGraph(const llvm::CallGraph &CG)
 {
     // assigns a unique idendifier to each node
     map<llvm::CallGraphNode *, uint32_t> IDs;
@@ -3349,7 +3349,7 @@ string TraceAtlas::Graph::GenerateCallGraph(const llvm::CallGraph &CG)
     return dotString;
 }
 
-string TraceAtlas::Graph::GenerateCallGraph(const TraceAtlas::Graph::CallGraph &CG)
+string Cyclebite::Graph::GenerateCallGraph(const Cyclebite::Graph::CallGraph &CG)
 {
     string dotString = "digraph {\n";
     // label function nodes
@@ -3366,7 +3366,7 @@ string TraceAtlas::Graph::GenerateCallGraph(const TraceAtlas::Graph::CallGraph &
     return dotString;
 }
 
-string TraceAtlas::Graph::GenerateFunctionSubgraph(const Graph &funcGraph, const shared_ptr<CallEdge> &entrance)
+string Cyclebite::Graph::GenerateFunctionSubgraph(const Graph &funcGraph, const shared_ptr<CallEdge> &entrance)
 {
     string dotString = "digraph {\n";
     dotString += "\t" + to_string(entrance->getSnk()->NID) + " [label=ENTRANCE];\n";

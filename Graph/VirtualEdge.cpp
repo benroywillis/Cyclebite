@@ -4,7 +4,7 @@
 #include "ControlNode.h"
 #include <deque>
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using namespace std;
 
 VirtualEdge::VirtualEdge() : ConditionalEdge()

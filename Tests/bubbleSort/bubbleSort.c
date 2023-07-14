@@ -33,13 +33,13 @@ int main(int argc, char *argv[])
         SIZE = 1000;
     }
     printf("\nSIZE = %d", SIZE);
-    TraceAtlasMarkovKernelEnter("randInit");
+    CyclebiteMarkovKernelEnter("randInit");
     int *in = get_input(SIZE);
-    TraceAtlasMarkovKernelExit("randInit");
+    CyclebiteMarkovKernelExit("randInit");
 
     // bubble sort
     int swap;
-    TraceAtlasMarkovKernelEnter("Bubblesort");
+    CyclebiteMarkovKernelEnter("Bubblesort");
     for (int i = 0; i < 512; i++)
     {
         for (int j = i; j < 512; j++)
@@ -52,7 +52,7 @@ int main(int argc, char *argv[])
             }
         }
     }
-    TraceAtlasMarkovKernelExit("Bubblesort");
+    CyclebiteMarkovKernelExit("Bubblesort");
     printf("\nSorting Done");
     free(in);
     return 0;

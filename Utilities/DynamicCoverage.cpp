@@ -1,5 +1,5 @@
-#include "AtlasUtil/Format.h"
-#include "AtlasUtil/IO.h"
+#include "Util/Format.h"
+#include "Util/IO.h"
 #include "CallGraph.h"
 #include "ControlGraph.h"
 #include "IO.h"
@@ -12,7 +12,7 @@
 
 using namespace llvm;
 using namespace std;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using json = nlohmann::json;
 
 cl::opt<string> InputFilename("p", cl::desc("Specify profile file"), cl::value_desc(".bin filename"), cl::Required);
@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
     map<BasicBlock *, Function *> BlockToFPtr;
     auto CG = getDynamicCallGraph(SourceBitcode.get(), graph, blockCallers, IDToBlock);
 
-    /*auto transformedGraph = TraceAtlas::Graph::ReduceMO(graph.nodes, (int)markovOrder, 1);
+    /*auto transformedGraph = Cyclebite::Graph::ReduceMO(graph.nodes, (int)markovOrder, 1);
     try
     {
         TrivialTransforms(transformedGraph);

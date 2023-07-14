@@ -3,7 +3,7 @@
 #include "InductionVariable.h"
 #include "Symbol.h"
 
-namespace TraceAtlas::Grammar
+namespace Cyclebite::Grammar
 {
     class Collection : public Symbol
     {
@@ -36,4 +36,4 @@ namespace TraceAtlas::Grammar
             return lhs < rhs->getBP();
         }
     };*/
-} // namespace TraceAtlas::Grammar
+} // namespace Cyclebite::Grammar

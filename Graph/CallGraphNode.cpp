@@ -1,7 +1,7 @@
 #include "CallGraphNode.h"
 #include "CallGraphEdge.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using namespace std;
 
 CallGraphNode::CallGraphNode(const llvm::Function *F) : GraphNode(), f(F) {}

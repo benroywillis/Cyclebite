@@ -6,7 +6,7 @@
 #include <set>
 #include <string>
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class ControlNode;
     class DataNode;
@@ -42,11 +42,11 @@ namespace TraceAtlas::Graph
     };
     double TotalEntropy(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes);
     double EntropyCalculation(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes);
-    void getDynamicInformation(TraceAtlas::Graph::ControlGraph& cg, TraceAtlas::Graph::CallGraph& dynamicCG, const std::string& filePath, const std::unique_ptr<llvm::Module>& SourceBitcode, const llvm::CallGraph& staticCG, const std::map<int64_t, std::vector<int64_t>>& blockCallers, const std::set<int64_t>& threadStarts, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock, bool HotCodeDetection);
+    void getDynamicInformation(Cyclebite::Graph::ControlGraph& cg, Cyclebite::Graph::CallGraph& dynamicCG, const std::string& filePath, const std::unique_ptr<llvm::Module>& SourceBitcode, const llvm::CallGraph& staticCG, const std::map<int64_t, std::vector<int64_t>>& blockCallers, const std::set<int64_t>& threadStarts, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock, bool HotCodeDetection);
     int BuildCFG(Graph &graph, const std::string &filename, bool HotCodeDetection);
-    const TraceAtlas::Graph::CallGraph getDynamicCallGraph(llvm::Module *mod, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock);
-    void CallGraphChecks(const llvm::CallGraph &SCG, const TraceAtlas::Graph::CallGraph &DCG, const Graph &dynamicGraph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock);
-    int BuildDFG(llvm::Module *SourceBitcode, const TraceAtlas::Graph::CallGraph& dynamicCG, std::map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, std::set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, DataGraph &graph, std::map<std::string, std::set<int64_t>> &specialInstructions, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock);
+    const Cyclebite::Graph::CallGraph getDynamicCallGraph(llvm::Module *mod, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock);
+    void CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebite::Graph::CallGraph &DCG, const Graph &dynamicGraph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock);
+    int BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Graph::CallGraph& dynamicCG, std::map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, std::set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, DataGraph &graph, std::map<std::string, std::set<int64_t>> &specialInstructions, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock);
     std::map<std::string, std::map<std::string, std::map<std::string, int>>> ProfileKernels(const std::map<std::string, std::set<int64_t>> &kernels, llvm::Module *M, const std::map<int64_t, uint64_t> &blockCounts);
     std::set<std::pair<int64_t, int64_t>> findOriginalBlockIDs(const std::shared_ptr<UnconditionalEdge>& edge);
     void WriteKernelFile(const ControlGraph &graph, const std::set<std::shared_ptr<MLCycle>, KCompare> &kernels, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const EntropyInfo &info, const std::string &OutputFileName, bool hotCode = false);
@@ -60,5 +60,5 @@ namespace TraceAtlas::Graph
     std::string GenerateHighlightedSubgraph(const Graph &graph, const Graph &subgraph);
     std::string GenerateFunctionSubgraph(const Graph &funcGraph, const std::shared_ptr<CallEdge> &entrance);
     std::string GenerateCallGraph(const llvm::CallGraph &CG);
-    std::string GenerateCallGraph(const TraceAtlas::Graph::CallGraph &CG);
-} // namespace TraceAtlas::Graph
+    std::string GenerateCallGraph(const Cyclebite::Graph::CallGraph &CG);
+} // namespace Cyclebite::Graph

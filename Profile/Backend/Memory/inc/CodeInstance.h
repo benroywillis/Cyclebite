@@ -3,7 +3,7 @@
 #include "Iteration.h"
 #include <vector>
 
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     class CodeInstance : public UniqueID
     {
@@ -17,4 +17,4 @@ namespace TraceAtlas::Profile::Backend::Memory
         /// List of iteration structures that are executed by this code
         Iteration memoryData;
     };
-} // namespace TraceAtlas::Profile::Backend
+} // namespace Cyclebite::Profile::Backend

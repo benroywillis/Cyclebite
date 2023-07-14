@@ -1,5 +1,5 @@
 #include "ImaginaryNode.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 ImaginaryNode::ImaginaryNode() : GraphNode() {}

@@ -1,4 +1,4 @@
-#include "AtlasUtil/Exceptions.h"
+#include "Util/Exceptions.h"
 #include "Kernel.h"
 #include "KernelInstance.h"
 #include "NonKernel.h"
@@ -32,7 +32,7 @@ using json = nlohmann::json;
  * Lessons from LL: a lot of the memory stuff is in the LLVM bitcode spec... so we just have to build annotators for those things
  */
 
-namespace TraceAtlas::Backend::BackendInstance
+namespace Cyclebite::Backend::BackendInstance
 {
     /// Holds all CodeSection instances (each member is polymorphic to either kernels or nonkernels)
     set<CodeSection *, p_UIDCompare> codeSections;
@@ -595,4 +595,4 @@ namespace TraceAtlas::Backend::BackendInstance
             InstanceIncrement(a);
         }
     }
-} // namespace TraceAtlas::Backend::BackendInstance
+} // namespace Cyclebite::Backend::BackendInstance

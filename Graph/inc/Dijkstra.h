@@ -4,7 +4,7 @@
 #include <set>
 #include <vector>
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class Graph;
     class GraphNode;
@@ -44,4 +44,4 @@ namespace TraceAtlas::Graph
     };
 
     std::set<uint64_t> Dijkstras(const Graph &graph, uint64_t source, uint64_t sink);
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

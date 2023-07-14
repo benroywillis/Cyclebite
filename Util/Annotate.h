@@ -1,5 +1,5 @@
 #pragma once
-#include "AtlasUtil/Exceptions.h"
+#include "Util/Exceptions.h"
 #include <filesystem>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DIBuilder.h>
@@ -153,15 +153,15 @@ inline void Annotate(llvm::Function *F, uint64_t &startingIndex, uint64_t &valIn
     }
 }
 
-inline uint64_t TraceAtlasIndex = 0;
-inline uint64_t TraceAtlasValueIndex = 0;
+inline uint64_t CyclebiteIndex = 0;
+inline uint64_t CyclebiteValueIndex = 0;
 
 inline void Annotate(llvm::Module *M)
 {
     for (auto mi = M->begin(); mi != M->end(); mi++)
     {
         llvm::Function *F = llvm::cast<llvm::Function>(mi);
-        Annotate(F, TraceAtlasIndex, TraceAtlasValueIndex);
+        Annotate(F, CyclebiteIndex, CyclebiteValueIndex);
     }
 }
 

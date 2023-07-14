@@ -1,6 +1,6 @@
 #include "Epoch.h"
 
-using namespace TraceAtlas::Profile::Backend::Memory;
+using namespace Cyclebite::Profile::Backend::Memory;
 
 Epoch::Epoch() : UniqueID(), kernel(nullptr) {}
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.13)
-project(TraceAtlas VERSION 1.1.0)
+project(Cyclebite VERSION 1.1.0)
 
 SET(CMAKE_CXX_STANDARD 17)
 SET(CMAKE_C_STANDARD 11)
@@ -71,7 +71,7 @@ elseif(${CMAKE_BUILD_TYPE} STREQUAL "RELWITHDEBINFO")
 	add_compile_definitions(DEBUG)
 endif()
 
-add_subdirectory("AtlasUtil")
+add_subdirectory("Util")
 add_subdirectory("Graph")
 add_subdirectory("cartographer")
 add_subdirectory("Profile")

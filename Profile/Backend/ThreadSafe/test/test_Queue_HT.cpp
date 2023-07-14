@@ -13,7 +13,7 @@
 #define READERS 1
 
 using namespace std;
-using namespace TraceAtlas::Profile::Backend;
+using namespace Cyclebite::Profile::Backend;
 
 // map used to confirm all tasks are written exactly once into the queue
 map<uint64_t, uint32_t> pushedMap;

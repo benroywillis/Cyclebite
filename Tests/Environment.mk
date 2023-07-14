@@ -1,10 +1,10 @@
 LLVM_INSTALL=/mnt/heorot-10/bwilli46/LLVM9/install-release/
 #LLVM_INSTALL=/mnt/heorot-10/bwilli46/LLVM12/install-release/
-#TRACEATLAS_ROOT=/home/bwilli46/Install/TraceAtlas_dev/
-TRACEATLAS_ROOT=/home/bwilli46/TraceAtlas/build/
-#TRACEATLAS_ROOT=/home/bwilli46/TraceAtlas/build_RelWithDebInfo/
-#TRACEATLAS_ROOT=/home/bwilli46/TraceAtlas/build_Release/
-TRACEATLAS_HC_ROOT=/home/bwilli46/Install/TraceAtlas_hotCode/
+#TRACEATLAS_ROOT=/home/bwilli46/Install/Cyclebite_dev/
+TRACEATLAS_ROOT=/home/bwilli46/Cyclebite/build/
+#TRACEATLAS_ROOT=/home/bwilli46/Cyclebite/build_RelWithDebInfo/
+#TRACEATLAS_ROOT=/home/bwilli46/Cyclebite/build_Release/
+TRACEATLAS_HC_ROOT=/home/bwilli46/Install/Cyclebite_hotCode/
 
 # Halide install
 #HALIDE_INSTALL_PREFIX=/mnt/heorot-10/bwilli46/Halide-install-release/

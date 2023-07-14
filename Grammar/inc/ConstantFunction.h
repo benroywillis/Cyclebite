@@ -2,7 +2,7 @@
 #include "Symbol.h"
 #include <llvm/IR/Function.h>
 
-namespace TraceAtlas::Grammar
+namespace Cyclebite::Grammar
 {
     class ConstantFunction : public Symbol
     {
@@ -13,4 +13,4 @@ namespace TraceAtlas::Grammar
     private:
         const llvm::Function* f;
     };
-} // namespace TraceAtlas::Grammar
+} // namespace Cyclebite::Grammar

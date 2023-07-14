@@ -2,7 +2,7 @@
 #include "GraphNode.h"
 #include <algorithm>
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class Graph
     {
@@ -92,7 +92,7 @@ namespace TraceAtlas::Graph
         std::transform(derived.begin(), derived.end(), std::inserter(converted, converted.begin()), [](const std::shared_ptr<GraphNode> &down) { return std::static_pointer_cast<N>(down); });
         return converted;
     }
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph
 
 // John 3/11/22
 // to fix the memory management problem, use references

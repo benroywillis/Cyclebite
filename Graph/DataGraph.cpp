@@ -1,7 +1,7 @@
 #include "DataGraph.h"
 #include "UnconditionalEdge.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using namespace std;
 
 DataGraph::DataGraph() : Graph() {}

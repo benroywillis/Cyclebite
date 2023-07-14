@@ -1,6 +1,6 @@
 #include "Timing.h"
 #include "Annotate.h"
-#include "AtlasUtil/Annotate.h"
+#include "Util/Annotate.h"
 #include "CommandArgs.h"
 #include "Functions.h"
 #include "MarkovIO.h"

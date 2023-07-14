@@ -4,7 +4,7 @@
 #include "llvm/IR/Function.h"
 #include <set>
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     /// Contains information about a CallEdge return edge (which is implicit to the function call convention in C/C++ but not present in the state transition tables)
     struct Returns
@@ -33,4 +33,4 @@ namespace TraceAtlas::Graph
         CallEdge(const UnconditionalEdge &copy);
         CallEdge(uint64_t freq, std::shared_ptr<ControlNode> sou, std::shared_ptr<ControlNode> sin);
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

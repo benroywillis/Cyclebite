@@ -1,7 +1,7 @@
 #include "ConstantFunction.h"
 
 using namespace std;
-using namespace TraceAtlas::Grammar;
+using namespace Cyclebite::Grammar;
 
 string ConstantFunction::dump() const
 {

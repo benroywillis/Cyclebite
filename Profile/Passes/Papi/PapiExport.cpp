@@ -1,6 +1,6 @@
 #include "PapiExport.h"
 #include "Annotate.h"
-#include "AtlasUtil/Annotate.h"
+#include "Util/Annotate.h"
 #include "CommandArgs.h"
 #include "PapiIO.h"
 #include <fstream>

@@ -5,7 +5,7 @@
 #include <memory>
 
 using namespace std;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 uint32_t MLCycle::nextKID = 0;
 

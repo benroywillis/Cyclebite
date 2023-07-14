@@ -8,7 +8,7 @@ set_target_properties(
     OUTPUT_NAME Grammar
 )
 
-target_link_libraries(Grammar ${LLVM} AtlasUtil nlohmann_json nlohmann_json::nlohmann_json)
+target_link_libraries(Grammar ${LLVM} Util nlohmann_json nlohmann_json::nlohmann_json)
 target_include_directories(Grammar PUBLIC "inc/")
 if(WIN32)
     target_compile_options(Grammar PRIVATE -W3 -Wextra -Wconversion)
@@ -27,7 +27,7 @@ install (FILES ${GR} DESTINATION "include/Grammar")
 
 # driver
 add_executable(KernelGrammar Grammar.cpp)
-target_link_libraries(KernelGrammar Grammar Graph nlohmann_json nlohmann_json::nlohmann_json AtlasUtil)
+target_link_libraries(KernelGrammar Grammar Graph nlohmann_json nlohmann_json::nlohmann_json Util)
 target_include_directories(KernelGrammar PRIVATE ${GRAPH_INC} "inc/")
 target_include_directories(KernelGrammar PRIVATE ${GRAMMAR_INC} "inc/")
 set_target_properties(KernelGrammar

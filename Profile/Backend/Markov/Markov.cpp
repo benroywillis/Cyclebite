@@ -16,7 +16,7 @@
 using namespace std;
 using json = nlohmann::json;
 
-namespace TraceAtlas::Markov
+namespace Cyclebite::Markov
 {
 
     constexpr uint32_t BIN_SIZE = 0xfff;
@@ -25,9 +25,9 @@ namespace TraceAtlas::Markov
     ///
     struct TaskBin
     {
-        TraceAtlas::Profile::Backend::EdgeInc*    edgeArray;
-        TraceAtlas::Profile::Backend::CallInc*    callArray;
-        TraceAtlas::Profile::Backend::LabelEvent* labelArray;
+        Cyclebite::Profile::Backend::EdgeInc*    edgeArray;
+        Cyclebite::Profile::Backend::CallInc*    callArray;
+        Cyclebite::Profile::Backend::LabelEvent* labelArray;
         // the next location to be allocated to a writer (to the ThreadSafeQueue)
         atomic<uint32_t> edge_write;
         // the next location to be freed by a reader (of the ThreadSafeQueue)
@@ -38,9 +38,9 @@ namespace TraceAtlas::Markov
         atomic<uint32_t> label_read;
         TaskBin()
         {
-            edgeArray  = (TraceAtlas::Profile::Backend::EdgeInc*)malloc( (BIN_SIZE+1)*sizeof(TraceAtlas::Profile::Backend::EdgeInc) );
-            callArray  = (TraceAtlas::Profile::Backend::CallInc*)malloc( (BIN_SIZE+1)*sizeof(TraceAtlas::Profile::Backend::CallInc) );
-            labelArray = (TraceAtlas::Profile::Backend::LabelEvent*)malloc( (BIN_SIZE+1)*sizeof(TraceAtlas::Profile::Backend::LabelEvent) );
+            edgeArray  = (Cyclebite::Profile::Backend::EdgeInc*)malloc( (BIN_SIZE+1)*sizeof(Cyclebite::Profile::Backend::EdgeInc) );
+            callArray  = (Cyclebite::Profile::Backend::CallInc*)malloc( (BIN_SIZE+1)*sizeof(Cyclebite::Profile::Backend::CallInc) );
+            labelArray = (Cyclebite::Profile::Backend::LabelEvent*)malloc( (BIN_SIZE+1)*sizeof(Cyclebite::Profile::Backend::LabelEvent) );
             edge_read = 0;
             edge_write = 0;
             call_read = 0;
@@ -54,19 +54,19 @@ namespace TraceAtlas::Markov
             free(callArray);
             free(labelArray);
         }
-        TraceAtlas::Profile::Backend::EdgeInc* getPtr(const TraceAtlas::Profile::Backend::EdgeInc& inc)
+        Cyclebite::Profile::Backend::EdgeInc* getPtr(const Cyclebite::Profile::Backend::EdgeInc& inc)
         {
             auto w = edge_write++;
             edgeArray[w & BIN_SIZE] = inc;
             return &edgeArray[w & BIN_SIZE];
         }
-        TraceAtlas::Profile::Backend::CallInc* getPtr(const TraceAtlas::Profile::Backend::CallInc& call)
+        Cyclebite::Profile::Backend::CallInc* getPtr(const Cyclebite::Profile::Backend::CallInc& call)
         {
             auto w = call_write++;
             callArray[w & BIN_SIZE] = call;
             return &callArray[w & BIN_SIZE];
         }
-        TraceAtlas::Profile::Backend::LabelEvent* getPtr(const TraceAtlas::Profile::Backend::LabelEvent& inc)
+        Cyclebite::Profile::Backend::LabelEvent* getPtr(const Cyclebite::Profile::Backend::LabelEvent& inc)
         {
             auto w = label_write++;
             labelArray[w & BIN_SIZE] = inc;
@@ -114,17 +114,17 @@ namespace TraceAtlas::Markov
     struct timespec __TA_stopwatch_end;
 
     // multithreaded components
-    TraceAtlas::Markov::TaskBin TB;
-    TraceAtlas::Profile::Backend::ThreadSafeQueue Q;
+    Cyclebite::Markov::TaskBin TB;
+    Cyclebite::Profile::Backend::ThreadSafeQueue Q;
     std::thread* reader;
     // task builder, assigned to each thread 
-    std::map<std::thread::id, TraceAtlas::Profile::Backend::Task> taskBuffer;
+    std::map<std::thread::id, Cyclebite::Profile::Backend::Task> taskBuffer;
     // holds new markov events
-    std::map<std::thread::id, TraceAtlas::Profile::Backend::EdgeInc> edgeInc;
+    std::map<std::thread::id, Cyclebite::Profile::Backend::EdgeInc> edgeInc;
     // holds new label events
-    std::map<std::thread::id, TraceAtlas::Profile::Backend::LabelEvent> labelInc;
+    std::map<std::thread::id, Cyclebite::Profile::Backend::LabelEvent> labelInc;
     // holds new caller-callee events
-    std::map<std::thread::id, TraceAtlas::Profile::Backend::CallInc> callInc;
+    std::map<std::thread::id, Cyclebite::Profile::Backend::CallInc> callInc;
     // container for all basic blocks that spawn threads
     std::set<uint64_t> launchers;
     // sets the last block known to launch a thread
@@ -205,13 +205,13 @@ namespace TraceAtlas::Markov
         file << setw(4) << blockInfo;
         file.close();
     }
-} // namespace TraceAtlas::Markov
+} // namespace Cyclebite::Markov
 
 extern "C"
 {
-    void MarkovPush(TraceAtlas::Profile::Backend::ThreadSafeQueue* Q, HashTable* edge, HashTable* call, HashTable* label)
+    void MarkovPush(Cyclebite::Profile::Backend::ThreadSafeQueue* Q, HashTable* edge, HashTable* call, HashTable* label)
     {
-        while( TraceAtlas::Markov::markovActive || Q->members() )
+        while( Cyclebite::Markov::markovActive || Q->members() )
         {
             auto t = Q->pop(true);
             if( t.ID() == __LONG_MAX__ )
@@ -239,49 +239,49 @@ extern "C"
     }
     void MarkovInit(uint64_t blockCount, uint64_t ID)
     {
-        TraceAtlas::Markov::taskBuffer[std::this_thread::get_id()] = TraceAtlas::Profile::Backend::Task();
+        Cyclebite::Markov::taskBuffer[std::this_thread::get_id()] = Cyclebite::Profile::Backend::Task();
         // circular buffer initializations
-        TraceAtlas::Markov::edgeInc[std::this_thread::get_id()].snk = ID;
-        TraceAtlas::Markov::callInc[std::this_thread::get_id()] = TraceAtlas::Profile::Backend::CallInc();
-        TraceAtlas::Markov::labelInc[std::this_thread::get_id()] = TraceAtlas::Profile::Backend::LabelEvent();        
+        Cyclebite::Markov::edgeInc[std::this_thread::get_id()].snk = ID;
+        Cyclebite::Markov::callInc[std::this_thread::get_id()] = Cyclebite::Profile::Backend::CallInc();
+        Cyclebite::Markov::labelInc[std::this_thread::get_id()] = Cyclebite::Profile::Backend::LabelEvent();        
         // edge hash table
-        TraceAtlas::Markov::edgeHashTable = (__TA_HashTable *)malloc(sizeof(__TA_HashTable));
-        TraceAtlas::Markov::edgeHashTable->size = (uint32_t)(ceil(log((double)blockCount) / log(2.0)));
-        TraceAtlas::Markov::edgeHashTable->getFullSize = __TA_getFullSize;
-        TraceAtlas::Markov::edgeHashTable->array = (__TA_arrayElem *)calloc(TraceAtlas::Markov::edgeHashTable->getFullSize(TraceAtlas::Markov::edgeHashTable), sizeof(__TA_arrayElem));
-        TraceAtlas::Markov::edgeHashTable->miners = 0;
-        TraceAtlas::Markov::edgeHashTable->newMine = 0;
+        Cyclebite::Markov::edgeHashTable = (__TA_HashTable *)malloc(sizeof(__TA_HashTable));
+        Cyclebite::Markov::edgeHashTable->size = (uint32_t)(ceil(log((double)blockCount) / log(2.0)));
+        Cyclebite::Markov::edgeHashTable->getFullSize = __TA_getFullSize;
+        Cyclebite::Markov::edgeHashTable->array = (__TA_arrayElem *)calloc(Cyclebite::Markov::edgeHashTable->getFullSize(Cyclebite::Markov::edgeHashTable), sizeof(__TA_arrayElem));
+        Cyclebite::Markov::edgeHashTable->miners = 0;
+        Cyclebite::Markov::edgeHashTable->newMine = 0;
         // label hash table
-        TraceAtlas::Markov::labelHashTable = (__TA_HashTable *)malloc(sizeof(__TA_HashTable));
-        TraceAtlas::Markov::labelHashTable->size = (uint32_t)(ceil(log((double)blockCount) / log(2.0)));
-        TraceAtlas::Markov::labelHashTable->getFullSize = __TA_getFullSize;
-        TraceAtlas::Markov::labelHashTable->array = (__TA_arrayElem *)calloc(TraceAtlas::Markov::labelHashTable->getFullSize(TraceAtlas::Markov::labelHashTable), sizeof(__TA_arrayElem));
-        TraceAtlas::Markov::labelHashTable->miners = 0;
-        TraceAtlas::Markov::labelHashTable->newMine = 0;
+        Cyclebite::Markov::labelHashTable = (__TA_HashTable *)malloc(sizeof(__TA_HashTable));
+        Cyclebite::Markov::labelHashTable->size = (uint32_t)(ceil(log((double)blockCount) / log(2.0)));
+        Cyclebite::Markov::labelHashTable->getFullSize = __TA_getFullSize;
+        Cyclebite::Markov::labelHashTable->array = (__TA_arrayElem *)calloc(Cyclebite::Markov::labelHashTable->getFullSize(Cyclebite::Markov::labelHashTable), sizeof(__TA_arrayElem));
+        Cyclebite::Markov::labelHashTable->miners = 0;
+        Cyclebite::Markov::labelHashTable->newMine = 0;
         // caller hash table
-        TraceAtlas::Markov::callerHashTable = (__TA_HashTable *)malloc(sizeof(__TA_HashTable));
-        TraceAtlas::Markov::callerHashTable->size = (uint32_t)(ceil(log((double)blockCount) / log(2.0)));
-        TraceAtlas::Markov::callerHashTable->getFullSize = __TA_getFullSize;
-        TraceAtlas::Markov::callerHashTable->array = (__TA_arrayElem *)calloc(TraceAtlas::Markov::callerHashTable->getFullSize(TraceAtlas::Markov::callerHashTable), sizeof(__TA_arrayElem));
-        TraceAtlas::Markov::callerHashTable->miners = 0;
-        TraceAtlas::Markov::callerHashTable->newMine = 0;
+        Cyclebite::Markov::callerHashTable = (__TA_HashTable *)malloc(sizeof(__TA_HashTable));
+        Cyclebite::Markov::callerHashTable->size = (uint32_t)(ceil(log((double)blockCount) / log(2.0)));
+        Cyclebite::Markov::callerHashTable->getFullSize = __TA_getFullSize;
+        Cyclebite::Markov::callerHashTable->array = (__TA_arrayElem *)calloc(Cyclebite::Markov::callerHashTable->getFullSize(Cyclebite::Markov::callerHashTable), sizeof(__TA_arrayElem));
+        Cyclebite::Markov::callerHashTable->miners = 0;
+        Cyclebite::Markov::callerHashTable->newMine = 0;
 
-        TraceAtlas::Markov::totalBlocks = blockCount;
-        TraceAtlas::Markov::markovActive = true;
-        while (clock_gettime(CLOCK_MONOTONIC, &TraceAtlas::Markov::__TA_stopwatch_start))
+        Cyclebite::Markov::totalBlocks = blockCount;
+        Cyclebite::Markov::markovActive = true;
+        while (clock_gettime(CLOCK_MONOTONIC, &Cyclebite::Markov::__TA_stopwatch_start))
             ;
 
-        TraceAtlas::Markov::reader = new std::thread(MarkovPush, &TraceAtlas::Markov::Q, TraceAtlas::Markov::edgeHashTable, TraceAtlas::Markov::callerHashTable, TraceAtlas::Markov::labelHashTable);
+        Cyclebite::Markov::reader = new std::thread(MarkovPush, &Cyclebite::Markov::Q, Cyclebite::Markov::edgeHashTable, Cyclebite::Markov::callerHashTable, Cyclebite::Markov::labelHashTable);
     }
     void MarkovDestroy()
     {
         // push any remaining hash table entries
-        for( const auto& id : TraceAtlas::Markov::taskBuffer )
+        for( const auto& id : Cyclebite::Markov::taskBuffer )
         {
             if( id.second.tasks() )
             {
                 // we need to push the current task and add our event to a new task
-                if( !TraceAtlas::Markov::Q.push(id.second, true) )
+                if( !Cyclebite::Markov::Q.push(id.second, true) )
                 {
 #ifdef DEBUG
                     printf("Task queue push returned error code\n");
@@ -289,170 +289,170 @@ extern "C"
                 }
             }
         }
-        TraceAtlas::Markov::markovActive = false;
+        Cyclebite::Markov::markovActive = false;
         // stop the timer and print
-        while (clock_gettime(CLOCK_MONOTONIC, &TraceAtlas::Markov::__TA_stopwatch_end))
+        while (clock_gettime(CLOCK_MONOTONIC, &Cyclebite::Markov::__TA_stopwatch_end))
             ;
-        double secdiff = (double)(TraceAtlas::Markov::__TA_stopwatch_end.tv_sec - TraceAtlas::Markov::__TA_stopwatch_start.tv_sec);
-        double nsecdiff = ((double)(TraceAtlas::Markov::__TA_stopwatch_end.tv_nsec - TraceAtlas::Markov::__TA_stopwatch_start.tv_nsec)) * pow(10.0, -9.0);
+        double secdiff = (double)(Cyclebite::Markov::__TA_stopwatch_end.tv_sec - Cyclebite::Markov::__TA_stopwatch_start.tv_sec);
+        double nsecdiff = ((double)(Cyclebite::Markov::__TA_stopwatch_end.tv_nsec - Cyclebite::Markov::__TA_stopwatch_start.tv_nsec)) * pow(10.0, -9.0);
         double totalTime = secdiff + nsecdiff;
         printf("\nPROFILETIME: %f\n", totalTime);
 
         // wait for the reader to finish its work
-        TraceAtlas::Markov::reader->join();
-        delete TraceAtlas::Markov::reader;
+        Cyclebite::Markov::reader->join();
+        delete Cyclebite::Markov::reader;
 
         // print profile bin file
-        __TA_WriteEdgeHashTable(TraceAtlas::Markov::edgeHashTable, (uint32_t)TraceAtlas::Markov::totalBlocks);
+        __TA_WriteEdgeHashTable(Cyclebite::Markov::edgeHashTable, (uint32_t)Cyclebite::Markov::totalBlocks);
 
         // write json files
-        TraceAtlas::Markov::__TA_WriteJsonFiles(TraceAtlas::Markov::labelHashTable, TraceAtlas::Markov::callerHashTable, TraceAtlas::Markov::launchers, TraceAtlas::Markov::threadSpawns);
+        Cyclebite::Markov::__TA_WriteJsonFiles(Cyclebite::Markov::labelHashTable, Cyclebite::Markov::callerHashTable, Cyclebite::Markov::launchers, Cyclebite::Markov::threadSpawns);
 
         // free everything
-        free(TraceAtlas::Markov::edgeHashTable->array);
-        free(TraceAtlas::Markov::edgeHashTable);
-        free(TraceAtlas::Markov::labelHashTable->array);
-        free(TraceAtlas::Markov::labelHashTable);
-        free(TraceAtlas::Markov::callerHashTable->array);
-        free(TraceAtlas::Markov::callerHashTable);
+        free(Cyclebite::Markov::edgeHashTable->array);
+        free(Cyclebite::Markov::edgeHashTable);
+        free(Cyclebite::Markov::labelHashTable->array);
+        free(Cyclebite::Markov::labelHashTable);
+        free(Cyclebite::Markov::callerHashTable->array);
+        free(Cyclebite::Markov::callerHashTable);
     }
     void MarkovIncrement(uint64_t a, bool funcEntrance)
     {
-        if (!TraceAtlas::Markov::markovActive)
+        if (!Cyclebite::Markov::markovActive)
         {
             return;
         }
-        while( TraceAtlas::Markov::newThread )
+        while( Cyclebite::Markov::newThread )
         {
             // spin
         }
-        if( TraceAtlas::Markov::edgeInc.find(std::this_thread::get_id()) == TraceAtlas::Markov::edgeInc.end() )
+        if( Cyclebite::Markov::edgeInc.find(std::this_thread::get_id()) == Cyclebite::Markov::edgeInc.end() )
         {
-            std::cout << "Number of threads seen so far is " << TraceAtlas::Markov::threadSpawns.size() << std::endl;
+            std::cout << "Number of threads seen so far is " << Cyclebite::Markov::threadSpawns.size() << std::endl;
             tryAgain:
-            while( TraceAtlas::Markov::newThread )
+            while( Cyclebite::Markov::newThread )
             {
                 // spin
             }
-            TraceAtlas::Markov::newThread++;
-            if( TraceAtlas::Markov::newThread > 1 )
+            Cyclebite::Markov::newThread++;
+            if( Cyclebite::Markov::newThread > 1 )
             {
                 // somebody beat us to it
 #ifdef DEBUG
                 std::cout << "We just got beat to the punch..." << std::endl;
 #endif
                 // jump back to the spin lock and try again
-                TraceAtlas::Markov::newThread--;
+                Cyclebite::Markov::newThread--;
                 goto tryAgain;
             }
-            while( TraceAtlas::Markov::miners > 1 )
+            while( Cyclebite::Markov::miners > 1 )
             {
 #ifdef DEBUG
-                std::cout << "Miners in the backend is " << TraceAtlas::Markov::miners << std::endl;
+                std::cout << "Miners in the backend is " << Cyclebite::Markov::miners << std::endl;
 #endif
                 // spin
             }
             // we just forked from a parent thread, get the src node from that ID
-            TraceAtlas::Markov::threadSpawns.insert(a);
+            Cyclebite::Markov::threadSpawns.insert(a);
             // edgeinc update
-            TraceAtlas::Markov::taskBuffer[std::this_thread::get_id()] = TraceAtlas::Profile::Backend::Task();
-            TraceAtlas::Markov::edgeInc[std::this_thread::get_id()].src = TraceAtlas::Markov::lastLauncher;
-            TraceAtlas::Markov::edgeInc.at(std::this_thread::get_id()).snk = a;
+            Cyclebite::Markov::taskBuffer[std::this_thread::get_id()] = Cyclebite::Profile::Backend::Task();
+            Cyclebite::Markov::edgeInc[std::this_thread::get_id()].src = Cyclebite::Markov::lastLauncher;
+            Cyclebite::Markov::edgeInc.at(std::this_thread::get_id()).snk = a;
             // labelinc update
-            TraceAtlas::Markov::labelInc[std::this_thread::get_id()].snk = a;
+            Cyclebite::Markov::labelInc[std::this_thread::get_id()].snk = a;
             // callinc update
-            TraceAtlas::Markov::callInc[std::this_thread::get_id()].src = TraceAtlas::Markov::lastLauncher;
-            TraceAtlas::Markov::callInc.at(std::this_thread::get_id()).snk = a;
-            TraceAtlas::Markov::newThread--;
-            TraceAtlas::Markov::miners++;
+            Cyclebite::Markov::callInc[std::this_thread::get_id()].src = Cyclebite::Markov::lastLauncher;
+            Cyclebite::Markov::callInc.at(std::this_thread::get_id()).snk = a;
+            Cyclebite::Markov::newThread--;
+            Cyclebite::Markov::miners++;
         }
         else
         {
-            TraceAtlas::Markov::edgeInc.at(std::this_thread::get_id()).src = TraceAtlas::Markov::edgeInc.at(std::this_thread::get_id()).snk;
-            TraceAtlas::Markov::edgeInc.at(std::this_thread::get_id()).snk = a;
-            TraceAtlas::Markov::miners++;
+            Cyclebite::Markov::edgeInc.at(std::this_thread::get_id()).src = Cyclebite::Markov::edgeInc.at(std::this_thread::get_id()).snk;
+            Cyclebite::Markov::edgeInc.at(std::this_thread::get_id()).snk = a;
+            Cyclebite::Markov::miners++;
         }
 
         // edge hash table
-        auto t = TraceAtlas::Markov::TB.getPtr( TraceAtlas::Markov::edgeInc.at(std::this_thread::get_id()) );
-        if( !TraceAtlas::Markov::taskBuffer.at(std::this_thread::get_id()).addEvent( t ) )
+        auto t = Cyclebite::Markov::TB.getPtr( Cyclebite::Markov::edgeInc.at(std::this_thread::get_id()) );
+        if( !Cyclebite::Markov::taskBuffer.at(std::this_thread::get_id()).addEvent( t ) )
         {
             // we need to push the current task and add our event to a new task
-            if( !TraceAtlas::Markov::Q.push(TraceAtlas::Markov::taskBuffer.at(std::this_thread::get_id()), true) )
+            if( !Cyclebite::Markov::Q.push(Cyclebite::Markov::taskBuffer.at(std::this_thread::get_id()), true) )
             {
 #ifdef DEBUG
                 printf("Task queue push returned error code\n");
 #endif
             }
-            TraceAtlas::Markov::taskBuffer.at(std::this_thread::get_id()).reset();
-            TraceAtlas::Markov::taskBuffer.at(std::this_thread::get_id()).addEvent( t );
+            Cyclebite::Markov::taskBuffer.at(std::this_thread::get_id()).reset();
+            Cyclebite::Markov::taskBuffer.at(std::this_thread::get_id()).addEvent( t );
         }
 
         // label hash table
-        if (TraceAtlas::Markov::stackCount > 0)
+        if (Cyclebite::Markov::stackCount > 0)
         {
-            TraceAtlas::Markov::labelInc.at(std::this_thread::get_id()).label = TraceAtlas::Markov::readLabelStack();
-            TraceAtlas::Markov::labelInc.at(std::this_thread::get_id()).snk = a;
+            Cyclebite::Markov::labelInc.at(std::this_thread::get_id()).label = Cyclebite::Markov::readLabelStack();
+            Cyclebite::Markov::labelInc.at(std::this_thread::get_id()).snk = a;
             
-            auto t = TraceAtlas::Markov::TB.getPtr( TraceAtlas::Markov::labelInc.at(std::this_thread::get_id()) );
-            if( !TraceAtlas::Markov::taskBuffer.at(std::this_thread::get_id()).addEvent( t ) )
+            auto t = Cyclebite::Markov::TB.getPtr( Cyclebite::Markov::labelInc.at(std::this_thread::get_id()) );
+            if( !Cyclebite::Markov::taskBuffer.at(std::this_thread::get_id()).addEvent( t ) )
             {
                 // we need to push the current task and add our event to a new task
-                if( !TraceAtlas::Markov::Q.push(TraceAtlas::Markov::taskBuffer.at(std::this_thread::get_id()), true) )
+                if( !Cyclebite::Markov::Q.push(Cyclebite::Markov::taskBuffer.at(std::this_thread::get_id()), true) )
                 {
     #ifdef DEBUG
                     printf("Task queue push returned error code\n");
     #endif
                 }
-                TraceAtlas::Markov::taskBuffer.at(std::this_thread::get_id()).reset();
-                TraceAtlas::Markov::taskBuffer.at(std::this_thread::get_id()).addEvent( t );
+                Cyclebite::Markov::taskBuffer.at(std::this_thread::get_id()).reset();
+                Cyclebite::Markov::taskBuffer.at(std::this_thread::get_id()).addEvent( t );
             }
         }
 
         // caller hash table
         if (funcEntrance)
         {
-            TraceAtlas::Markov::callInc.at(std::this_thread::get_id()).position = 0;
-            if( TraceAtlas::Markov::threadSpawns.find(a) != TraceAtlas::Markov::threadSpawns.end() )
+            Cyclebite::Markov::callInc.at(std::this_thread::get_id()).position = 0;
+            if( Cyclebite::Markov::threadSpawns.find(a) != Cyclebite::Markov::threadSpawns.end() )
             {
                 // the src of this caller edge is the last launcher
-                TraceAtlas::Markov::callInc.at(std::this_thread::get_id()).src = TraceAtlas::Markov::lastLauncher;
+                Cyclebite::Markov::callInc.at(std::this_thread::get_id()).src = Cyclebite::Markov::lastLauncher;
             }
             else
             {
                 // the src of this caller edge is the edge src node
-                TraceAtlas::Markov::callInc.at(std::this_thread::get_id()).src = TraceAtlas::Markov::edgeInc.at(std::this_thread::get_id()).src;
+                Cyclebite::Markov::callInc.at(std::this_thread::get_id()).src = Cyclebite::Markov::edgeInc.at(std::this_thread::get_id()).src;
             }
-            TraceAtlas::Markov::callInc.at(std::this_thread::get_id()).snk = a;
+            Cyclebite::Markov::callInc.at(std::this_thread::get_id()).snk = a;
             
-            auto t = TraceAtlas::Markov::TB.getPtr( TraceAtlas::Markov::callInc.at(std::this_thread::get_id()) );
-            if( !TraceAtlas::Markov::taskBuffer.at(std::this_thread::get_id()).addEvent( t ) )
+            auto t = Cyclebite::Markov::TB.getPtr( Cyclebite::Markov::callInc.at(std::this_thread::get_id()) );
+            if( !Cyclebite::Markov::taskBuffer.at(std::this_thread::get_id()).addEvent( t ) )
             {
                 // we need to push the current task and add our event to a new task
-                if( !TraceAtlas::Markov::Q.push(TraceAtlas::Markov::taskBuffer.at(std::this_thread::get_id()), true) )
+                if( !Cyclebite::Markov::Q.push(Cyclebite::Markov::taskBuffer.at(std::this_thread::get_id()), true) )
                 {
     #ifdef DEBUG
                     printf("Task queue push returned error code\n");
     #endif
                 }
-                TraceAtlas::Markov::taskBuffer.at(std::this_thread::get_id()).reset();
-                TraceAtlas::Markov::taskBuffer.at(std::this_thread::get_id()).addEvent( t );
+                Cyclebite::Markov::taskBuffer.at(std::this_thread::get_id()).reset();
+                Cyclebite::Markov::taskBuffer.at(std::this_thread::get_id()).addEvent( t );
             }
         }
-        TraceAtlas::Markov::miners--;
+        Cyclebite::Markov::miners--;
     }
     void MarkovLaunch(uint64_t a)
     {
         // stores the block that is about to launch a thread
-        TraceAtlas::Markov::launchers.insert(a);
-        TraceAtlas::Markov::lastLauncher = a;
+        Cyclebite::Markov::launchers.insert(a);
+        Cyclebite::Markov::lastLauncher = a;
     }
-    void TraceAtlasMarkovKernelEnter(char *label)
+    void CyclebiteMarkovKernelEnter(char *label)
     {
-        TraceAtlas::Markov::pushLabelStack(label);
+        Cyclebite::Markov::pushLabelStack(label);
     }
-    void TraceAtlasMarkovKernelExit()
+    void CyclebiteMarkovKernelExit()
     {
-        TraceAtlas::Markov::popLabelStack();
+        Cyclebite::Markov::popLabelStack();
     }
 }

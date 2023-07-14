@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <memory>
 
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     class UniqueID
     {
@@ -35,4 +35,4 @@ namespace TraceAtlas::Profile::Backend::Memory
             return lhs < rhs->IID;
         }
     };
-} // namespace TraceAtlas::Profile::Backend
+} // namespace Cyclebite::Profile::Backend

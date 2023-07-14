@@ -1,10 +1,10 @@
 #include "UnconditionalEdge.h"
-#include "AtlasUtil/Exceptions.h"
+#include "Util/Exceptions.h"
 #include "ControlNode.h"
 #include <memory>
 
 using namespace std;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 UnconditionalEdge::UnconditionalEdge() : GraphEdge(), freq(0) {}
 

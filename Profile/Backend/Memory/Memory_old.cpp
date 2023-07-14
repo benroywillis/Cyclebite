@@ -1,5 +1,5 @@
-#include "AtlasUtil/Exceptions.h"
-#include "AtlasUtil/IO.h"
+#include "Util/Exceptions.h"
+#include "Util/IO.h"
 #include "Kernel.h"
 #include "KernelInstance.h"
 #include "NonKernel.h"
@@ -43,7 +43,7 @@ using namespace llvm;
  *   - heap (malloc, calloc, etc)
  * 
  */
-namespace TraceAtlas::Profile::Backend
+namespace Cyclebite::Profile::Backend
 {
     /// Thresholds
     /// Minimum offset a memory tuple must have (in bytes) to be considered for memory prod/cons graph 
@@ -1198,7 +1198,7 @@ namespace TraceAtlas::Profile::Backend
 
     extern "C"
     {
-        void __TraceAtlas__Profile__Backend__MemoryDestroy()
+        void __Cyclebite__Profile__Backend__MemoryDestroy()
         {
             memoryActive = false;
             // this is an implicit exit, so store the current iteration information to where it belongs
@@ -1216,7 +1216,7 @@ namespace TraceAtlas::Profile::Backend
             GenerateTimeSlotDependencies();
         }
 
-        void __TraceAtlas__Profile__Backend__MemoryIncrement(uint64_t a)
+        void __Cyclebite__Profile__Backend__MemoryIncrement(uint64_t a)
         {
             // if the profile is not active, we return
             if (!memoryActive)
@@ -1373,7 +1373,7 @@ namespace TraceAtlas::Profile::Backend
             lastBlock = (int64_t)a;
         }
 
-        void __TraceAtlas__Profile__Backend__MemoryStore(void *address, uint64_t bbID, uint32_t instructionID, uint64_t datasize)
+        void __Cyclebite__Profile__Backend__MemoryStore(void *address, uint64_t bbID, uint32_t instructionID, uint64_t datasize)
         {
             static MemTuple mt;
             mt.type = __TA_MemType::Writer;
@@ -1394,7 +1394,7 @@ namespace TraceAtlas::Profile::Backend
 #endif
         }
 
-        void __TraceAtlas__Profile__Backend__MemoryLoad(void *address, uint64_t bbID, uint32_t instructionID, uint64_t datasize)
+        void __Cyclebite__Profile__Backend__MemoryLoad(void *address, uint64_t bbID, uint32_t instructionID, uint64_t datasize)
         {
             static MemTuple mt;
             mt.type = __TA_MemType::Reader;
@@ -1415,7 +1415,7 @@ namespace TraceAtlas::Profile::Backend
 #endif
         }
 
-        void __TraceAtlas__Profile__Backend__MemoryInit(uint64_t a)
+        void __Cyclebite__Profile__Backend__MemoryInit(uint64_t a)
         {
             ReadKernelFile();
             try
@@ -1453,4 +1453,4 @@ namespace TraceAtlas::Profile::Backend
 #endif
         }
     }
-} // namespace TraceAtlas::Backend::BackendMemory
+} // namespace Cyclebite::Backend::BackendMemory

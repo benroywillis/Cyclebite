@@ -5,7 +5,7 @@
 
 #define TRAINING_WHEELS     false
 
-namespace TraceAtlas::Profile::Backend
+namespace Cyclebite::Profile::Backend
 {
     // size of the circular buffer 
     constexpr uint32_t QUEUE_SIZE = 256;
@@ -36,7 +36,7 @@ namespace TraceAtlas::Profile::Backend
         // queue, implemented as a circular buffer
         Task *array;
     };
-} // namespace TraceAtlas::Profile::Backend
+} // namespace Cyclebite::Profile::Backend
 
 // John: you should only have to lock in the wrap-around case (when the write pointer goes from the end of the queue array to the beginning)
 // John: danger in the queue -> when two readers do a read at the same time, they collide in the pointer increment, and thus they read the same place, which is a bug (fix: atomic increment)

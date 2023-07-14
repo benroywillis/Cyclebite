@@ -1,11 +1,11 @@
 #pragma once
 #include "GraphNode.h"
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class ImaginaryNode : public GraphNode
     {
     public:
         ImaginaryNode();
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

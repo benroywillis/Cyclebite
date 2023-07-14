@@ -1,8 +1,8 @@
 #include "VirtualNode.h"
-#include "AtlasUtil/Exceptions.h"
+#include "Util/Exceptions.h"
 #include "UnconditionalEdge.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using namespace std;
 
 VirtualNode::VirtualNode() : ControlNode()

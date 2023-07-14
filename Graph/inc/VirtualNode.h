@@ -1,7 +1,7 @@
 #pragma once
 #include "ControlNode.h"
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class UnconditionalEdge;
     class VirtualNode : public ControlNode
@@ -36,4 +36,4 @@ namespace TraceAtlas::Graph
         std::set<std::shared_ptr<ControlNode>, p_GNCompare> subgraph;
         std::set<std::shared_ptr<UnconditionalEdge>, GECompare> edges;
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

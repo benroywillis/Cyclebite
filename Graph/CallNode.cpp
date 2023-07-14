@@ -1,7 +1,7 @@
 #include "CallNode.h"
 
 using namespace std;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 CallNode::CallNode( const llvm::Instruction* inst, const set<shared_ptr<ControlBlock>, p_GNCompare>& dests ) : DataNode(inst)
 {

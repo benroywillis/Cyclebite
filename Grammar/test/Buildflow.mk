@@ -11,7 +11,7 @@ LLD=-fuse-ld=$(LLVM_INSTALL)bin/ld.lld -L$(CYCLEBITE_ROOT)build/lib/
 A_LINKS=$(SPDLOG_INSTALL)lib/libspdlog.a $(FMT_INSTALL)lib/libfmt.a $(LLVM_INSTALL)lib/*.a
 #D_LINKS=-lz -lpthread -l$(CYCLEBITE_ROOT)build/lib/libGraph.so -l$(CYCLEBITE_ROOT)build/lib/libGrammar.so
 D_LINKS=-lz -lpthread -lGraph -lGrammar
-INCLUDE=-I$(CYCLEBITE_ROOT)Graph/inc/ -I$(CYCLEBITE_ROOT)Grammar/inc/ -I$(CYCLEBITE_ROOT)AtlasUtil/include/ -I$(LLVM_INSTALL)include/ -I$(LLVM_INSTALL)include/llvm-c/ -I$(SPDLOG_INSTALL)include/ -I$(SPDLOG_INSTALL)../fmt_x64-linux/include/ -I$(NLOHMANNJSON_INSTALL)include/
+INCLUDE=-I$(CYCLEBITE_ROOT)Graph/inc/ -I$(CYCLEBITE_ROOT)Grammar/inc/ -I$(CYCLEBITE_ROOT)Util/include/ -I$(LLVM_INSTALL)include/ -I$(LLVM_INSTALL)include/llvm-c/ -I$(SPDLOG_INSTALL)include/ -I$(SPDLOG_INSTALL)../fmt_x64-linux/include/ -I$(NLOHMANNJSON_INSTALL)include/
 
 all : run
 

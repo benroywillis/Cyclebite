@@ -1,6 +1,6 @@
 #include "GraphNode.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 uint64_t GraphNode::nextNID = 0;
 

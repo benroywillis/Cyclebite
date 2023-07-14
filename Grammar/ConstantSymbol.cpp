@@ -1,6 +1,6 @@
 #include "ConstantSymbol.h"
 
-using namespace TraceAtlas::Grammar;
+using namespace Cyclebite::Grammar;
 using namespace std;
 
 string ConstantSymbol::dump() const

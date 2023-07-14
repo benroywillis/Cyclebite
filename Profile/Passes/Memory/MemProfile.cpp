@@ -1,6 +1,6 @@
 #include "MemProfile.h"
 #include "Annotate.h"
-#include "AtlasUtil/Annotate.h"
+#include "Util/Annotate.h"
 #include "CommandArgs.h"
 #include "Functions.h"
 #include "llvm/IR/DataLayout.h"

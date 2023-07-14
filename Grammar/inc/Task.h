@@ -1,7 +1,7 @@
 #pragma once
 #include "Cycle.h"
 
-namespace TraceAtlas::Grammar
+namespace Cyclebite::Grammar
 {
     std::set<std::shared_ptr<class Task>> getTasks(const nlohmann::json& instanceJson, 
                                                    const nlohmann::json& kernelJson, 
@@ -13,10 +13,10 @@ namespace TraceAtlas::Grammar
         const std::set<std::shared_ptr<Cycle>>& getCycles() const;
         const std::set<std::shared_ptr<Cycle>> getChildMostCycles() const;
         const std::set<std::shared_ptr<Cycle>> getParentMostCycles() const;
-        bool find(const std::shared_ptr<TraceAtlas::Graph::DataNode>& n) const;
-        bool find(const std::shared_ptr<TraceAtlas::Graph::ControlBlock>& b) const;
+        bool find(const std::shared_ptr<Cyclebite::Graph::DataNode>& n) const;
+        bool find(const std::shared_ptr<Cyclebite::Graph::ControlBlock>& b) const;
         bool find(const std::shared_ptr<Cycle>& c) const;
     private:
         std::set<std::shared_ptr<Cycle>> cycles;
     };
-} // namespace TraceAtlas::Grammar
+} // namespace Cyclebite::Grammar

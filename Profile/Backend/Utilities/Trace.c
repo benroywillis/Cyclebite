@@ -5,70 +5,70 @@
 #include <string.h>
 #include <zlib.h>
 
-FILE *TraceAtlasTraceFile;
+FILE *CyclebiteTraceFile;
 
 //trace functions
-z_stream TraceAtlasStrm;
+z_stream CyclebiteStrm;
 
-int TraceAtlasTraceCompressionLevel;
-char *TraceAtlasTraceFilename;
+int CyclebiteTraceCompressionLevel;
+char *CyclebiteTraceFilename;
 /// <summary>
 /// The maximum ammount of bytes to store in a buffer before flushing it.
 /// </summary>
 // 2^7 * 2^10
 #define TRACEATLASBUFSIZE 131072
-unsigned int TraceAtlasBufferIndex = 0;
-uint8_t TraceAtlasTempBuffer[TRACEATLASBUFSIZE];
-uint8_t TraceAtlasStoreBuffer[TRACEATLASBUFSIZE];
+unsigned int CyclebiteBufferIndex = 0;
+uint8_t CyclebiteTempBuffer[TRACEATLASBUFSIZE];
+uint8_t CyclebiteStoreBuffer[TRACEATLASBUFSIZE];
 
-bool TraceAtlasOpened = false;
-bool TraceAtlasClosed = false;
+bool CyclebiteOpened = false;
+bool CyclebiteClosed = false;
 
-bool TraceAtlasZlibInit = false;
+bool CyclebiteZlibInit = false;
 
-void TraceAtlasWriteStream(char *input)
+void CyclebiteWriteStream(char *input)
 {
     size_t size = strlen(input);
-    if (TraceAtlasBufferIndex + size >= TRACEATLASBUFSIZE)
+    if (CyclebiteBufferIndex + size >= TRACEATLASBUFSIZE)
     {
-        TraceAtlasBufferData();
+        CyclebiteBufferData();
     }
-    memcpy(TraceAtlasStoreBuffer + TraceAtlasBufferIndex, input, size);
-    TraceAtlasBufferIndex += size;
+    memcpy(CyclebiteStoreBuffer + CyclebiteBufferIndex, input, size);
+    CyclebiteBufferIndex += size;
 }
 
 ///Modified from https://stackoverflow.com/questions/4538586/how-to-compress-a-buffer-with-zlib
-void TraceAtlasBufferData()
+void CyclebiteBufferData()
 {
-    if (TraceAtlasTraceCompressionLevel != -2)
+    if (CyclebiteTraceCompressionLevel != -2)
     {
-        TraceAtlasStrm.next_in = TraceAtlasStoreBuffer;
-        TraceAtlasStrm.avail_in = TraceAtlasBufferIndex;
-        while (TraceAtlasStrm.avail_in != 0)
+        CyclebiteStrm.next_in = CyclebiteStoreBuffer;
+        CyclebiteStrm.avail_in = CyclebiteBufferIndex;
+        while (CyclebiteStrm.avail_in != 0)
         {
-            int defResult = deflate(&TraceAtlasStrm, Z_PARTIAL_FLUSH);
+            int defResult = deflate(&CyclebiteStrm, Z_PARTIAL_FLUSH);
             if (defResult != Z_OK)
             {
                 fprintf(stderr, "Zlib compression error");
                 exit(-1);
             }
-            if (TraceAtlasStrm.avail_out == 0)
+            if (CyclebiteStrm.avail_out == 0)
             {
-                fwrite(TraceAtlasTempBuffer, sizeof(Bytef), TRACEATLASBUFSIZE, TraceAtlasTraceFile);
-                TraceAtlasStrm.next_out = TraceAtlasTempBuffer;
-                TraceAtlasStrm.avail_out = TRACEATLASBUFSIZE;
+                fwrite(CyclebiteTempBuffer, sizeof(Bytef), TRACEATLASBUFSIZE, CyclebiteTraceFile);
+                CyclebiteStrm.next_out = CyclebiteTempBuffer;
+                CyclebiteStrm.avail_out = TRACEATLASBUFSIZE;
             }
         }
     }
     else
     {
 
-        fwrite(TraceAtlasStoreBuffer, sizeof(char), TraceAtlasBufferIndex, TraceAtlasTraceFile);
+        fwrite(CyclebiteStoreBuffer, sizeof(char), CyclebiteBufferIndex, CyclebiteTraceFile);
     }
-    TraceAtlasBufferIndex = 0;
+    CyclebiteBufferIndex = 0;
 }
 
-void TraceAtlasWrite(char *inst, int line, int block, uint64_t func)
+void CyclebiteWrite(char *inst, int line, int block, uint64_t func)
 {
     char suffix[128];
 #if defined _WIN32
@@ -80,10 +80,10 @@ void TraceAtlasWrite(char *inst, int line, int block, uint64_t func)
     char fin[size];
     strcpy(fin, inst);
     strncat(fin, suffix, 128);
-    TraceAtlasWriteStream(fin);
+    CyclebiteWriteStream(fin);
 }
 
-void TraceAtlasWriteAddress(char *inst, int line, int block, uint64_t func, char *address)
+void CyclebiteWriteAddress(char *inst, int line, int block, uint64_t func, char *address)
 {
     char suffix[128];
 #if defined _WIN32
@@ -96,32 +96,32 @@ void TraceAtlasWriteAddress(char *inst, int line, int block, uint64_t func, char
 
     strcpy(fin, inst);
     strncat(fin, suffix, 128);
-    TraceAtlasWriteStream(fin);
+    CyclebiteWriteStream(fin);
 }
 
-void TraceAtlasOpenFile()
+void CyclebiteOpenFile()
 {
-    if (!TraceAtlasOpened)
+    if (!CyclebiteOpened)
     {
         char *tcl = getenv("TRACE_COMPRESSION");
         if (tcl != NULL)
         {
             int l = atoi(tcl);
-            TraceAtlasTraceCompressionLevel = l;
+            CyclebiteTraceCompressionLevel = l;
         }
         else
         {
-            TraceAtlasTraceCompressionLevel = Z_DEFAULT_COMPRESSION;
+            CyclebiteTraceCompressionLevel = Z_DEFAULT_COMPRESSION;
         }
-        if (TraceAtlasTraceCompressionLevel != -2)
+        if (CyclebiteTraceCompressionLevel != -2)
         {
-            TraceAtlasStrm.zalloc = Z_NULL;
-            TraceAtlasStrm.zfree = Z_NULL;
-            TraceAtlasStrm.opaque = Z_NULL;
-            TraceAtlasStrm.next_out = TraceAtlasTempBuffer;
-            TraceAtlasStrm.avail_out = TRACEATLASBUFSIZE;
-            TraceAtlasZlibInit = true;
-            int defResult = deflateInit(&TraceAtlasStrm, TraceAtlasTraceCompressionLevel);
+            CyclebiteStrm.zalloc = Z_NULL;
+            CyclebiteStrm.zfree = Z_NULL;
+            CyclebiteStrm.opaque = Z_NULL;
+            CyclebiteStrm.next_out = CyclebiteTempBuffer;
+            CyclebiteStrm.avail_out = TRACEATLASBUFSIZE;
+            CyclebiteZlibInit = true;
+            int defResult = deflateInit(&CyclebiteStrm, CyclebiteTraceCompressionLevel);
             if (defResult != Z_OK)
             {
                 fprintf(stderr, "Zlib compression error");
@@ -131,37 +131,37 @@ void TraceAtlasOpenFile()
         char *tfn = getenv("TRACE_NAME");
         if (tfn != NULL)
         {
-            TraceAtlasTraceFilename = tfn;
+            CyclebiteTraceFilename = tfn;
         }
         else
         {
-            if (TraceAtlasTraceCompressionLevel != -2)
+            if (CyclebiteTraceCompressionLevel != -2)
             {
-                TraceAtlasTraceFilename = "raw.trc";
+                CyclebiteTraceFilename = "raw.trc";
             }
             else
             {
-                TraceAtlasTraceFilename = "raw.trace";
+                CyclebiteTraceFilename = "raw.trace";
             }
         }
 
-        TraceAtlasTraceFile = fopen(TraceAtlasTraceFilename, "w");
-        TraceAtlasWriteStream("TraceVersion:3\n");
-        TraceAtlasOpened = true;
+        CyclebiteTraceFile = fopen(CyclebiteTraceFilename, "w");
+        CyclebiteWriteStream("TraceVersion:3\n");
+        CyclebiteOpened = true;
     }
 }
 
-void TraceAtlasCloseFile()
+void CyclebiteCloseFile()
 {
-    if (!TraceAtlasClosed)
+    if (!CyclebiteClosed)
     {
-        if (TraceAtlasTraceCompressionLevel != -2)
+        if (CyclebiteTraceCompressionLevel != -2)
         {
-            TraceAtlasStrm.next_in = TraceAtlasStoreBuffer;
-            TraceAtlasStrm.avail_in = TraceAtlasBufferIndex;
+            CyclebiteStrm.next_in = CyclebiteStoreBuffer;
+            CyclebiteStrm.avail_in = CyclebiteBufferIndex;
             while (true)
             {
-                int defRes = deflate(&TraceAtlasStrm, Z_FINISH);
+                int defRes = deflate(&CyclebiteStrm, Z_FINISH);
                 if (defRes == Z_BUF_ERROR)
                 {
                     fprintf(stderr, "Zlib buffer error");
@@ -172,43 +172,43 @@ void TraceAtlasCloseFile()
                     fprintf(stderr, "Zlib stream error");
                     exit(-1);
                 }
-                if (TraceAtlasStrm.avail_out == 0)
+                if (CyclebiteStrm.avail_out == 0)
                 {
-                    fwrite(TraceAtlasTempBuffer, sizeof(Bytef), TRACEATLASBUFSIZE, TraceAtlasTraceFile);
-                    TraceAtlasStrm.next_out = TraceAtlasTempBuffer;
-                    TraceAtlasStrm.avail_out = TRACEATLASBUFSIZE;
+                    fwrite(CyclebiteTempBuffer, sizeof(Bytef), TRACEATLASBUFSIZE, CyclebiteTraceFile);
+                    CyclebiteStrm.next_out = CyclebiteTempBuffer;
+                    CyclebiteStrm.avail_out = TRACEATLASBUFSIZE;
                 }
                 if (defRes == Z_STREAM_END)
                 {
                     break;
                 }
             }
-            fwrite(TraceAtlasTempBuffer, sizeof(Bytef), TRACEATLASBUFSIZE - TraceAtlasStrm.avail_out, TraceAtlasTraceFile);
+            fwrite(CyclebiteTempBuffer, sizeof(Bytef), TRACEATLASBUFSIZE - CyclebiteStrm.avail_out, CyclebiteTraceFile);
 
-            deflateEnd(&TraceAtlasStrm);
+            deflateEnd(&CyclebiteStrm);
         }
         else
         {
-            fwrite(TraceAtlasStoreBuffer, sizeof(Bytef), TraceAtlasBufferIndex, TraceAtlasTraceFile);
+            fwrite(CyclebiteStoreBuffer, sizeof(Bytef), CyclebiteBufferIndex, CyclebiteTraceFile);
         }
 
-        TraceAtlasClosed = true;
+        CyclebiteClosed = true;
         //fclose(myfile); //breaks occasionally for some reason. Likely a glibc error.
     }
 }
 
-void TraceAtlasLoadDump(void *address)
+void CyclebiteLoadDump(void *address)
 {
     char fin[128];
     sprintf(fin, "LoadAddress:%#lX\n", (uint64_t)address);
-    TraceAtlasWriteStream(fin);
+    CyclebiteWriteStream(fin);
 }
-void TraceAtlasDumpLoadValue(void *MemValue, int size)
+void CyclebiteDumpLoadValue(void *MemValue, int size)
 {
     char fin[128];
     uint8_t *bitwisePrint = (uint8_t *)MemValue;
     sprintf(fin, "LoadValue:");
-    TraceAtlasWriteStream(fin);
+    CyclebiteWriteStream(fin);
     for (int i = 0; i < size; i++)
     {
         if (i == 0)
@@ -219,24 +219,24 @@ void TraceAtlasDumpLoadValue(void *MemValue, int size)
         {
             sprintf(fin, "%02X", bitwisePrint[i]);
         }
-        TraceAtlasWriteStream(fin);
+        CyclebiteWriteStream(fin);
     }
     sprintf(fin, "\n");
-    TraceAtlasWriteStream(fin);
+    CyclebiteWriteStream(fin);
 }
-void TraceAtlasStoreDump(void *address)
+void CyclebiteStoreDump(void *address)
 {
     char fin[128];
     sprintf(fin, "StoreAddress:%#lX\n", (uint64_t)address);
-    TraceAtlasWriteStream(fin);
+    CyclebiteWriteStream(fin);
 }
 
-void TraceAtlasDumpStoreValue(void *MemValue, int size)
+void CyclebiteDumpStoreValue(void *MemValue, int size)
 {
     char fin[128];
     uint8_t *bitwisePrint = (uint8_t *)MemValue;
     sprintf(fin, "StoreValue:");
-    TraceAtlasWriteStream(fin);
+    CyclebiteWriteStream(fin);
     for (int i = 0; i < size; i++)
     {
         if (i == 0)
@@ -247,13 +247,13 @@ void TraceAtlasDumpStoreValue(void *MemValue, int size)
         {
             sprintf(fin, "%02X", bitwisePrint[i]);
         }
-        TraceAtlasWriteStream(fin);
+        CyclebiteWriteStream(fin);
     }
     sprintf(fin, "\n");
-    TraceAtlasWriteStream(fin);
+    CyclebiteWriteStream(fin);
 }
 
-void TraceAtlasBB_ID_Dump(uint64_t block, bool enter)
+void CyclebiteBB_ID_Dump(uint64_t block, bool enter)
 {
     char fin[128];
     if (enter)
@@ -264,28 +264,28 @@ void TraceAtlasBB_ID_Dump(uint64_t block, bool enter)
     {
         sprintf(fin, "BBExit:%#lX\n", block);
     }
-    TraceAtlasWriteStream(fin);
+    CyclebiteWriteStream(fin);
 }
 
-void TraceAtlasKernelEnter(char *label)
+void CyclebiteKernelEnter(char *label)
 {
-    if (TraceAtlasZlibInit)
+    if (CyclebiteZlibInit)
     {
         char fin[128];
         strcpy(fin, "KernelEnter:");
         strcat(fin, label);
         strcat(fin, "\n");
-        TraceAtlasWriteStream(fin);
+        CyclebiteWriteStream(fin);
     }
 }
-void TraceAtlasKernelExit(char *label)
+void CyclebiteKernelExit(char *label)
 {
-    if (TraceAtlasZlibInit)
+    if (CyclebiteZlibInit)
     {
         char fin[128];
         strcpy(fin, "KernelExit:");
         strcat(fin, label);
         strcat(fin, "\n");
-        TraceAtlasWriteStream(fin);
+        CyclebiteWriteStream(fin);
     }
 }

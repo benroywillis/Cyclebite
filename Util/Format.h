@@ -1,6 +1,6 @@
 #pragma once
-#include "AtlasUtil/Annotate.h"
-#include "AtlasUtil/Split.h"
+#include "Util/Annotate.h"
+#include "Util/Split.h"
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils.h>
@@ -21,7 +21,7 @@ inline void Format(llvm::Module *M, bool clean = true)
         FPM.run(*f);
     }
     FPM.doFinalization();
-    // useful PaMul routines for denoising bitcode
+    // useful Cyclebite routines for denoising bitcode
     if( clean ) { CleanModule(M); }
     Split(M);
     // gives all values and blocks unique identifiers

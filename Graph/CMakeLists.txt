@@ -7,7 +7,7 @@ set_target_properties(
     OUTPUT_NAME Graph
 )
 
-target_link_libraries(Graph ${llvm_libs} AtlasUtil ZLIB::ZLIB nlohmann_json nlohmann_json::nlohmann_json)
+target_link_libraries(Graph ${llvm_libs} Util ZLIB::ZLIB nlohmann_json nlohmann_json::nlohmann_json)
 target_include_directories(Graph PUBLIC "inc/" ${TRACE_INC})
 if(WIN32)
     target_compile_options(Graph PRIVATE -W3 -Wextra -Wconversion)

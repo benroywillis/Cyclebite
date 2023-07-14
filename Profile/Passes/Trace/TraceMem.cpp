@@ -1,6 +1,6 @@
 #include "TraceMem.h"
 #include "Annotate.h"
-#include "AtlasUtil/Annotate.h"
+#include "Util/Annotate.h"
 #include "CommandArgs.h"
 #include "Functions.h"
 #include "TraceMemIO.h"
@@ -82,10 +82,10 @@ namespace DashTracer::Passes
 
     bool EncodedTraceMemory::doInitialization(Module &M)
     {
-        DumpLoadValue = cast<Function>(M.getOrInsertFunction("TraceAtlasDumpLoadValue", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt8Ty(M.getContext())).getCallee());
-        DumpStoreValue = cast<Function>(M.getOrInsertFunction("TraceAtlasDumpStoreValue", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt8Ty(M.getContext())).getCallee());
-        LoadDump = cast<Function>(M.getOrInsertFunction("TraceAtlasLoadDump", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8)).getCallee());
-        StoreDump = cast<Function>(M.getOrInsertFunction("TraceAtlasStoreDump", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8)).getCallee());
+        DumpLoadValue = cast<Function>(M.getOrInsertFunction("CyclebiteDumpLoadValue", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt8Ty(M.getContext())).getCallee());
+        DumpStoreValue = cast<Function>(M.getOrInsertFunction("CyclebiteDumpStoreValue", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt8Ty(M.getContext())).getCallee());
+        LoadDump = cast<Function>(M.getOrInsertFunction("CyclebiteLoadDump", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8)).getCallee());
+        StoreDump = cast<Function>(M.getOrInsertFunction("CyclebiteStoreDump", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8)).getCallee());
         kernelBlockValue.clear();
         nlohmann::json j;
         std::ifstream inputStream(KernelFilename);

@@ -2,7 +2,7 @@
 #include "CodeSection.h"
 #include <string>
 
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     class Epoch;
     class Kernel : public CodeSection
@@ -19,4 +19,4 @@ namespace TraceAtlas::Profile::Backend::Memory
         const std::vector<std::shared_ptr<Epoch>> getKIs() const;
         void addInstance(std::shared_ptr<Epoch> newInstance);
     };
-} // namespace TraceAtlas::Profile::Backend
+} // namespace Cyclebite::Profile::Backend

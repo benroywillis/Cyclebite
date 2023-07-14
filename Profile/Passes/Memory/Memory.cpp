@@ -1,6 +1,6 @@
 #include "Memory.h"
 #include "Annotate.h"
-#include "AtlasUtil/Annotate.h"
+#include "Util/Annotate.h"
 #include "CommandArgs.h"
 #include "Functions.h"
 #include "MarkovIO.h"
@@ -358,16 +358,16 @@ namespace DashTracer::Passes
 
     bool Memory::doInitialization(Module &M)
     {
-        MemoryLoad      = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__MemoryLoad", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
-        MemoryStore     = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__MemoryStore", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
-        MemoryInit      = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__MemoryInit", Type::getVoidTy(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
-        MemoryDestroy   = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__MemoryDestroy", Type::getVoidTy(M.getContext())).getCallee());
-        MemoryIncrement = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__MemoryIncrement", Type::getVoidTy(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
-        MemoryCpy       = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__MemoryCpy", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext())).getCallee());
-        MemoryMov       = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__MemoryMov", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext())).getCallee());
-        MemorySet       = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__MemorySet", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext())).getCallee());
-        MemoryMalloc    = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__MemoryMalloc", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext())).getCallee());
-        MemoryFree      = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__MemoryFree", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8)).getCallee());
+        MemoryLoad      = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryLoad", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
+        MemoryStore     = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryStore", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
+        MemoryInit      = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryInit", Type::getVoidTy(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
+        MemoryDestroy   = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryDestroy", Type::getVoidTy(M.getContext())).getCallee());
+        MemoryIncrement = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryIncrement", Type::getVoidTy(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
+        MemoryCpy       = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryCpy", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext())).getCallee());
+        MemoryMov       = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryMov", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext())).getCallee());
+        MemorySet       = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemorySet", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext())).getCallee());
+        MemoryMalloc    = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryMalloc", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext())).getCallee());
+        MemoryFree      = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryFree", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8)).getCallee());
         return false;
     }
 

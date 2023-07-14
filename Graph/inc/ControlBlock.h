@@ -1,7 +1,7 @@
 #pragma once
 #include "ControlNode.h"
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class DataNode;
     // structures for a basic block subgraph
@@ -13,4 +13,4 @@ namespace TraceAtlas::Graph
         std::set<std::shared_ptr<DataNode>, p_GNCompare> instructions;
         ControlBlock(std::shared_ptr<ControlNode> node, std::set<std::shared_ptr<DataNode>, p_GNCompare> inst);
     };
-}; // namespace TraceAtlas::Graph
+}; // namespace Cyclebite::Graph

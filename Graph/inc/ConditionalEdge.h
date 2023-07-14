@@ -1,7 +1,7 @@
 #pragma once
 #include "UnconditionalEdge.h"
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     /* A conditional edge describes a single edge from one state to another that is based on a condition
      * It has the same structure as UnconditionalEdge because we are only interested in structuring the edges we observe, not the instructions underneath the dynamic execution
@@ -17,4 +17,4 @@ namespace TraceAtlas::Graph
         void setWeight(uint64_t sum);
         float getWeight() const;
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

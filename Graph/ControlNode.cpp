@@ -2,7 +2,7 @@
 #include "UnconditionalEdge.h"
 #include <algorithm>
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 ControlNode::ControlNode() : GraphNode()
 {

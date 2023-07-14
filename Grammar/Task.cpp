@@ -2,7 +2,7 @@
 #include <deque>
 
 using namespace std;
-using namespace TraceAtlas::Grammar;
+using namespace Cyclebite::Grammar;
 
 const set<shared_ptr<Cycle>>& Task::getCycles() const
 {
@@ -35,7 +35,7 @@ const set<shared_ptr<Cycle>> Task::getParentMostCycles() const
     return parents;
 }
 
-bool Task::find(const shared_ptr<TraceAtlas::Graph::DataNode>& n) const
+bool Task::find(const shared_ptr<Cyclebite::Graph::DataNode>& n) const
 {
     for( const auto& c : cycles )
     {
@@ -47,7 +47,7 @@ bool Task::find(const shared_ptr<TraceAtlas::Graph::DataNode>& n) const
     return false;
 }
 
-bool Task::find(const shared_ptr<TraceAtlas::Graph::ControlBlock>& b) const
+bool Task::find(const shared_ptr<Cyclebite::Graph::ControlBlock>& b) const
 {
     for( const auto& c : cycles )
     {
@@ -64,7 +64,7 @@ bool Task::find(const shared_ptr<Cycle>& c) const
     return cycles.find(c) != cycles.end();
 }
 
-set<shared_ptr<Task>> TraceAtlas::Grammar::getTasks(const nlohmann::json& instanceJson, 
+set<shared_ptr<Task>> Cyclebite::Grammar::getTasks(const nlohmann::json& instanceJson, 
                                                     const nlohmann::json& kernelJson, 
                                                     const std::map<int64_t, llvm::BasicBlock*>& IDToBlock) {
     set<shared_ptr<Task>> tasks;

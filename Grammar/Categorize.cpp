@@ -1,10 +1,10 @@
 #include "Categorize.h"
 #include "Function.h"
 #include <deque>
-#include "AtlasUtil/IO.h"
-#include "AtlasUtil/Exceptions.h"
+#include "Util/IO.h"
+#include "Util/Exceptions.h"
 
-using namespace TraceAtlas::Grammar;
+using namespace Cyclebite::Grammar;
 using namespace std;
 
 /// @brief Finds the instructions that carry out the function of a kernel
@@ -14,7 +14,7 @@ using namespace std;
 /// Red: values that are stored and did not come from a load
 /// Blue: values that are loaded but do not get stored
 /// Red&&Blue: values that are both loaded and stored (this is the "function" of the kernel)
-set<int64_t> TraceAtlas::Grammar::findFunction(const map<string, set<llvm::BasicBlock *>> &kernelSets)
+set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicBlock *>> &kernelSets)
 {
     // colors for each instruction found during DFG investigation
     set<shared_ptr<NodeColor>, NCCompare> colors;
@@ -160,7 +160,7 @@ set<int64_t> TraceAtlas::Grammar::findFunction(const map<string, set<llvm::Basic
 /// Blue: state values that are stored
 /// Red&&Blue: values that are both used to determine the next state and are stored
 /// Any node that has a color belongs in the "state" box
-set<int64_t> TraceAtlas::Grammar::findState(const map<string, set<llvm::BasicBlock *>> &kernelSets)
+set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBlock *>> &kernelSets)
 {
     // colors for each instruction found during DFG investigation
     set<shared_ptr<NodeColor>, NCCompare> colors;
@@ -410,7 +410,7 @@ set<int64_t> TraceAtlas::Grammar::findState(const map<string, set<llvm::BasicBlo
 /// @brief Identifies all instructions that access memory or manipulate memory accesses
 ///
 /// First pass: for each memory instruction, walk the fan-in to their pointers and mark all those instructions blue
-set<int64_t> TraceAtlas::Grammar::findMemory(const map<string, set<llvm::BasicBlock *>> &kernelSets)
+set<int64_t> Cyclebite::Grammar::findMemory(const map<string, set<llvm::BasicBlock *>> &kernelSets)
 {
     // colors for each instruction found during DFG investigation
     set<shared_ptr<NodeColor>, NCCompare> colors;

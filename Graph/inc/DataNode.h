@@ -3,7 +3,7 @@
 #include <llvm/IR/Instruction.h>
 #include <map>
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     // all this stuff pertains to the llvm api and the operations we care about
     // LLVM op information can be found at https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/IR/Instruction.def
@@ -128,4 +128,4 @@ namespace TraceAtlas::Graph
         DNC type;
     };
 
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

@@ -17,7 +17,7 @@ LLD=-fuse-ld=$(COMPILER_INSTALL)bin/ld.lld
 LD_PATH=-L$(COMPILER_INSTALL)lib/
 A_LINKS=$(SPDLOG_INSTALL)lib/libspdlog.a $(FMT_INSTALL)lib/libfmt.a $(LLVM_INSTALL)lib/libLLVM*
 D_LINKS=-lz -lpthread -ltinfo
-INCLUDE=-I$(PAMUL_ROOT)cartographer/new/inc/ -I$(PAMUL_ROOT)AtlasUtil/include/ -I$(LLVM_INSTALL)include/ -I$(LLVM_INSTALL)include/llvm-c/ -I$(SPDLOG_INSTALL)include/ -I$(SPDLOG_INSTALL)../fmt_x64-linux/include/ -I$(NLOHMANNJSON_INSTALL)include/
+INCLUDE=-I$(PAMUL_ROOT)cartographer/new/inc/ -I$(PAMUL_ROOT)Util/include/ -I$(LLVM_INSTALL)include/ -I$(LLVM_INSTALL)include/llvm-c/ -I$(SPDLOG_INSTALL)include/ -I$(SPDLOG_INSTALL)../fmt_x64-linux/include/ -I$(NLOHMANNJSON_INSTALL)include/
 
 all : run
 

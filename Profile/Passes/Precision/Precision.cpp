@@ -1,8 +1,8 @@
 #include "Precision.h"
 #include "Backend/Precision/inc/Precision.h"
 #include "Annotate.h"
-#include "AtlasUtil/Annotate.h"
-#include "AtlasUtil/Print.h"
+#include "Util/Annotate.h"
+#include "Util/Print.h"
 #include "CommandArgs.h"
 #include "Functions.h"
 #include "MarkovIO.h"
@@ -81,7 +81,7 @@ namespace DashTracer::Passes
         Value *instructionID = ConstantInt::get(Type::getInt32Ty(fi->getContext()), idx);
         values.push_back(instructionID);
         // data type
-        Value *dataType = ConstantInt::get( Type::getInt8Ty(fi->getContext()), static_cast<uint8_t>( TraceAtlas::Profile::Backend::Precision::LLVMTy2PrecisionTy(val->getType()) ));
+        Value *dataType = ConstantInt::get( Type::getInt8Ty(fi->getContext()), static_cast<uint8_t>( Cyclebite::Profile::Backend::Precision::LLVMTy2PrecisionTy(val->getType()) ));
         values.push_back(dataType);
         auto call = builder.CreateCall(PrecisionLoad, values);
         call->setDebugLoc(NULL);
@@ -224,13 +224,13 @@ namespace DashTracer::Passes
 
     bool Precision::doInitialization(Module &M)
     {
-        PrecisionIncrement = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__PrecisionIncrement", Type::getVoidTy(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
-        //PrecisionLoad      = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__PrecisionLoad", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt8Ty(M.getContext())).getCallee());
-        //PrecisionStore     = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__PrecisionStore", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt8Ty(M.getContext())).getCallee());
-        PrecisionLoad      = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__PrecisionLoad", Type::getVoidTy(M.getContext()), Type::getInt64Ty(M.getContext()), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt8Ty(M.getContext())).getCallee());
-        PrecisionStore     = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__PrecisionStore", Type::getVoidTy(M.getContext()), Type::getInt64Ty(M.getContext()), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt8Ty(M.getContext())).getCallee());
-        PrecisionInit      = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__PrecisionInit", Type::getVoidTy(M.getContext())).getCallee());
-        PrecisionDestroy   = cast<Function>(M.getOrInsertFunction("__TraceAtlas__Profile__Backend__PrecisionDestroy", Type::getVoidTy(M.getContext())).getCallee());
+        PrecisionIncrement = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__PrecisionIncrement", Type::getVoidTy(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
+        //PrecisionLoad      = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__PrecisionLoad", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt8Ty(M.getContext())).getCallee());
+        //PrecisionStore     = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__PrecisionStore", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt8Ty(M.getContext())).getCallee());
+        PrecisionLoad      = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__PrecisionLoad", Type::getVoidTy(M.getContext()), Type::getInt64Ty(M.getContext()), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt8Ty(M.getContext())).getCallee());
+        PrecisionStore     = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__PrecisionStore", Type::getVoidTy(M.getContext()), Type::getInt64Ty(M.getContext()), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt8Ty(M.getContext())).getCallee());
+        PrecisionInit      = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__PrecisionInit", Type::getVoidTy(M.getContext())).getCallee());
+        PrecisionDestroy   = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__PrecisionDestroy", Type::getVoidTy(M.getContext())).getCallee());
         return false;
     }
 

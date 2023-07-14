@@ -1,10 +1,10 @@
 #include "DataNode.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
-std::map<Operation, const char *> TraceAtlas::Graph::OperationToString;
+std::map<Operation, const char *> Cyclebite::Graph::OperationToString;
 
-Operation TraceAtlas::Graph::GetOp(unsigned int op)
+Operation Cyclebite::Graph::GetOp(unsigned int op)
 {
     // this function maps an LLVM op into the Operation scoped enum
     // these opcodes are subject to change, at the time of this functions writing the llvm version was 13

@@ -1,6 +1,6 @@
 #include "Iteration.h"
 
-using namespace TraceAtlas::Profile::Backend::Memory;
+using namespace Cyclebite::Profile::Backend::Memory;
 using namespace std;
 
 Iteration::Iteration() = default;

@@ -1,6 +1,6 @@
 #include "UniqueID.h"
 
-using namespace TraceAtlas::Profile::Backend::Memory;
+using namespace Cyclebite::Profile::Backend::Memory;
 
 UniqueID::UniqueID() : IID(getNextIID()) {}
 

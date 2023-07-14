@@ -3,7 +3,7 @@
 #include <set>
 #include <spdlog/spdlog.h>
 
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     /// Describes the memory operation that took place
     enum class __TA_MemType

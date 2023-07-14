@@ -5,7 +5,7 @@
 #include <set>
 #include <vector>
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class GraphNode
     {
@@ -66,7 +66,7 @@ namespace TraceAtlas::Graph
             return lhs < rhs.NID;
         }
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph
 
 // John 3/2/22
 // The abstraction is now hurting

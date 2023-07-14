@@ -1,7 +1,7 @@
 #include "GraphEdge.h"
 #include "ControlNode.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 uint64_t GraphEdge::nextEID = 0;
 

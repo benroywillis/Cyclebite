@@ -1,7 +1,7 @@
 #include "Collection.h"
 
-using namespace TraceAtlas::Grammar;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Grammar;
+using namespace Cyclebite::Graph;
 using namespace std;
 
 uint32_t Collection::getNumDims() const

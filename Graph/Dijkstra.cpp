@@ -6,7 +6,7 @@
 #include <map>
 
 using namespace std;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 struct DijkstraCompare
 {
@@ -25,7 +25,7 @@ DijkstraNode::DijkstraNode(double d, uint64_t id, uint64_t p, NodeColor c)
     color = c;
 }
 
-set<uint64_t> TraceAtlas::Graph::Dijkstras(const Graph &graph, uint64_t source, uint64_t sink)
+set<uint64_t> Cyclebite::Graph::Dijkstras(const Graph &graph, uint64_t source, uint64_t sink)
 {
     // maps a node ID to its dijkstra information
     map<uint64_t, DijkstraNode> DMap;
@@ -117,7 +117,7 @@ set<uint64_t> TraceAtlas::Graph::Dijkstras(const Graph &graph, uint64_t source, 
 /// Returns true if one or more cycles exist in the graph specified by nodes, false otherwise
 /// The source node passed to this method must be the entrance node of the subgraph
 /// This algorithm has no way of looking behind
-bool TraceAtlas::Graph::FindCycles(const Graph &graph)
+bool Cyclebite::Graph::FindCycles(const Graph &graph)
 {
     // set of nodes that have been visited at least once (ie they are in the queue)
     set<std::shared_ptr<GraphNode>, p_GNCompare> visited;
@@ -240,7 +240,7 @@ bool Circuit(const std::set<std::shared_ptr<GraphNode>, p_GNCompare> &subgraph, 
     return foundCircuit;
 }
 
-vector<set<std::shared_ptr<GraphNode>>> TraceAtlas::Graph::FindAllUniqueCycles(const std::set<std::shared_ptr<GraphNode>, p_GNCompare> &subgraph)
+vector<set<std::shared_ptr<GraphNode>>> Cyclebite::Graph::FindAllUniqueCycles(const std::set<std::shared_ptr<GraphNode>, p_GNCompare> &subgraph)
 {
     // based on an algorithm from https://www.cs.tufts.edu/comp/150GA/homeworks/hw1/Johnson%2075.PDF
     // array of sets of nodes that describe each unique cycle found

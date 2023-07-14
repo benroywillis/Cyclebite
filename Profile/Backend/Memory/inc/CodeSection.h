@@ -4,7 +4,7 @@
 #include <set>
 #include <vector>
 
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     class Epoch;
     class CodeSection : public UniqueID
@@ -39,4 +39,4 @@ namespace TraceAtlas::Profile::Backend::Memory
             return lhs->contextLevel < rhs->contextLevel;
         }
     };
-} // namespace TraceAtlas::Profile::Backend::Memory
+} // namespace Cyclebite::Profile::Backend::Memory

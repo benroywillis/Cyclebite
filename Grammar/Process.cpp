@@ -5,19 +5,19 @@
 #include "IO.h"
 #include "Reduction.h"
 #include "ConstantFunction.h"
-#include "AtlasUtil/Annotate.h"
-#include "AtlasUtil/Print.h"
+#include "Util/Annotate.h"
+#include "Util/Print.h"
 #include "Task.h"
 #include "Dijkstra.h"
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <deque>
 
-using namespace TraceAtlas::Grammar;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Grammar;
+using namespace Cyclebite::Graph;
 using namespace std;
 
-set<shared_ptr<InductionVariable>> TraceAtlas::Grammar::getInductionVariables(const shared_ptr<Task>& t)
+set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(const shared_ptr<Task>& t)
 {
     // in order to understand the function and dimensionality of an algorithm we need two things
     // 1. an expression (nodes in the function category) to map to a Halide function
@@ -83,7 +83,7 @@ set<shared_ptr<InductionVariable>> TraceAtlas::Grammar::getInductionVariables(co
                             // we have found a cycle between a binary op and a phi, likely indicating an induction variable, thus add it to the set of dimensions
                             covered.insert(bin);
                             covered.insert(phi);
-                            vars.insert( TraceAtlas::Graph::DNIDMap.at((llvm::Instruction*)phi) );
+                            vars.insert( Cyclebite::Graph::DNIDMap.at((llvm::Instruction*)phi) );
                         }
                     }
                     else if( auto ld = llvm::dyn_cast<llvm::LoadInst>(use.get()) )
@@ -91,7 +91,7 @@ set<shared_ptr<InductionVariable>> TraceAtlas::Grammar::getInductionVariables(co
                         // case found in unoptimized programs when the induction variable lives on the heap (not in a value) and is communicated with through ld/st
                         // the pointer argument to this load is likely the induction variable pointer, so add that to the vars set
                         covered.insert(ld);
-                        vars.insert( TraceAtlas::Graph::DNIDMap.at((llvm::Instruction*)ld->getPointerOperand()) );
+                        vars.insert( Cyclebite::Graph::DNIDMap.at((llvm::Instruction*)ld->getPointerOperand()) );
                     }
                 }
                 Q.pop_front();
@@ -111,7 +111,7 @@ set<shared_ptr<InductionVariable>> TraceAtlas::Grammar::getInductionVariables(co
     return IVs;
 }
 
-set<shared_ptr<ReductionVariable>> TraceAtlas::Grammar::getReductionVariables(const shared_ptr<Task>& t, const set<shared_ptr<InductionVariable>>& vars)
+set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(const shared_ptr<Task>& t, const set<shared_ptr<InductionVariable>>& vars)
 {
     set<shared_ptr<ReductionVariable>> rvs;
     // these stores have a value operand that comes from the functional group
@@ -245,7 +245,7 @@ set<shared_ptr<ReductionVariable>> TraceAtlas::Grammar::getReductionVariables(co
     return rvs;
 }
 
-set<shared_ptr<BasePointer>> TraceAtlas::Grammar::getBasePointers(const shared_ptr<Task>& t)
+set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_ptr<Task>& t)
 {
     // in order to find base pointers, we introspect all load instructions, and walk backward through the pointer operand of a given load until we find a bedrock load (a load that uses a pointer with no offset - a magic number). The pointer of that load is a "base pointer"
     // base pointers are useful for modeling significant memory chunks. This input data represents an entity that can be used for communication
@@ -838,7 +838,7 @@ vector<shared_ptr<InductionVariable>> getOrdering( const llvm::GetElementPtrInst
     return order;
 }
 
-set<shared_ptr<Collection>> TraceAtlas::Grammar::getCollections(const shared_ptr<Task>& t, const set<shared_ptr<InductionVariable>>& IVs, const set<shared_ptr<BasePointer>>& BPs)
+set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<Task>& t, const set<shared_ptr<InductionVariable>>& IVs, const set<shared_ptr<BasePointer>>& BPs)
 {
     // collections map IVs to BPs
     // an IV and a BP form a collection of an IV is used at least once to offset a BP
@@ -1285,7 +1285,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     // thus, the following logic attempts to order the instructions such that the instructions at the beginning of the group are done first
     // this way, the expressions that use earlier expressions have an expression to refer to
     // each binary operation in the function group is recorded in order, this will give us the operators in the expression
-    vector<TraceAtlas::Graph::Operation> ops;
+    vector<Cyclebite::Graph::Operation> ops;
     // in order to find the ordering of the group, we find the instruction that doesn't use any other instruction in the group
     // then we walk the DFG to find all subsequent instructions
     const llvm::Instruction* first = nullptr;
@@ -1307,7 +1307,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
         }
     }
     DataGraph dg(functionGroup, edges);
-    if( TraceAtlas::Graph::FindCycles(dg) ) // forms a cycle
+    if( Cyclebite::Graph::FindCycles(dg) ) // forms a cycle
     {
         // get the phi and set a user of it (that is within the function group) as the first instruction
         // the phi itself does not belong in the function group (because phis create false dependencies and are not important to the expression)
@@ -1471,7 +1471,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
             // if it is a binary operation we need to take its operation
             if( const auto bin = llvm::dyn_cast<llvm::BinaryOperator>(node->getInst()) )
             {
-                ops.push_back( TraceAtlas::Graph::GetOp(bin->getOpcode()) );
+                ops.push_back( Cyclebite::Graph::GetOp(bin->getOpcode()) );
             }
             vector<shared_ptr<Symbol>> vec;
             for( const auto& op : node->getInst()->operands() )
@@ -1560,7 +1560,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
             // if it is a binary operation we need to take its operation
             if( const auto bin = llvm::dyn_cast<llvm::BinaryOperator>(node->getInst()) )
             {
-                ops.push_back( TraceAtlas::Graph::GetOp(bin->getOpcode()) );
+                ops.push_back( Cyclebite::Graph::GetOp(bin->getOpcode()) );
             }
             vector<shared_ptr<Symbol>> vec;
             for( const auto& op : node->getInst()->operands() )
@@ -1662,7 +1662,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     return funcs;
 }*/
 
-void TraceAtlas::Grammar::Process(const set<shared_ptr<Task>>& tasks)
+void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
 {
     // each expression maps 1:1 with tasks from the cartographer
     for( const auto& t : tasks )

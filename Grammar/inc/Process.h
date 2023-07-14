@@ -3,7 +3,7 @@
 #include "DataGraph.h"
 #include "ReductionVariable.h"
 
-namespace TraceAtlas::Grammar
+namespace Cyclebite::Grammar
 {
     class Task;
     /// @brief Sets the threshold, in bytes, that a memory allocation must make in order to be considered a base pointer
@@ -14,4 +14,4 @@ namespace TraceAtlas::Grammar
     std::set<std::shared_ptr<BasePointer>> getBasePointers(const std::shared_ptr<Task>& t);
     std::set<std::shared_ptr<Collection>> getCollections(const std::shared_ptr<Task>& t, const std::set<std::shared_ptr<InductionVariable>>& IVs, const std::set<std::shared_ptr<BasePointer>>& BPs);
     void Process(const std::set<std::shared_ptr<Task>>& tasks);
-} // namespace TraceAtlas::Grammar
+} // namespace Cyclebite::Grammar

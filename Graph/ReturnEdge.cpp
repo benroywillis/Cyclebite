@@ -1,6 +1,6 @@
 #include "ReturnEdge.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using namespace std;
 
 ReturnEdge::ReturnEdge() : ConditionalEdge() {}

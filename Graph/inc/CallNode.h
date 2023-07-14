@@ -2,7 +2,7 @@
 #include "DataNode.h"
 #include "ControlBlock.h"
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class CallNode : public DataNode
     {
@@ -15,4 +15,4 @@ namespace TraceAtlas::Graph
         // Destinations of a callnode are the possible places this call instructions can go (think function pointer that calls objects with the same args)
         std::set<std::shared_ptr<ControlBlock>, p_GNCompare> destinations;
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

@@ -1,6 +1,6 @@
-#include "AtlasUtil/Format.h"
-#include "AtlasUtil/Print.h"
-#include "AtlasUtil/IO.h"
+#include "Util/Format.h"
+#include "Util/Print.h"
+#include "Util/IO.h"
 #include "ControlBlock.h"
 #include "ControlGraph.h"
 #include "IO.h"
@@ -16,8 +16,8 @@
 #include <llvm/Support/CommandLine.h>
 #include <nlohmann/json.hpp>
 
-using namespace TraceAtlas::Graph;
-using namespace TraceAtlas::Grammar;
+using namespace Cyclebite::Graph;
+using namespace Cyclebite::Grammar;
 using namespace llvm;
 using namespace std;
 
@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
     llvm::CallGraph staticCG(*SourceBitcode);
     // construct program control graph and call graph
     ControlGraph cg;
-    TraceAtlas::Graph::CallGraph dynamicCG;
+    Cyclebite::Graph::CallGraph dynamicCG;
     getDynamicInformation(cg, dynamicCG, ProfileFileName, SourceBitcode, staticCG, blockCallers, threadStarts, IDToBlock, false );
     // construct block ID to node ID mapping
     map<int64_t, shared_ptr<ControlNode>> blockToNode;
@@ -261,10 +261,10 @@ int main(int argc, char *argv[])
     
     // kernel function histogram
     map<string, uint64_t> hist;
-    for( unsigned i = 0; i < static_cast<int>(TraceAtlas::Graph::Operation::nop); i++ )
+    for( unsigned i = 0; i < static_cast<int>(Cyclebite::Graph::Operation::nop); i++ )
     {
-        auto op = static_cast<TraceAtlas::Graph::Operation>(i);
-        hist[TraceAtlas::Graph::OperationToString.at(static_cast<TraceAtlas::Graph::Operation>(i))] = 0;
+        auto op = static_cast<Cyclebite::Graph::Operation>(i);
+        hist[Cyclebite::Graph::OperationToString.at(static_cast<Cyclebite::Graph::Operation>(i))] = 0;
     }
     for( const auto& entry : specialInstructions["KF"] )
     {
@@ -273,7 +273,7 @@ int main(int argc, char *argv[])
         {
             try
             {
-                hist.at(TraceAtlas::Graph::OperationToString.at(GetOp(inst->getOpcode())))++;
+                hist.at(Cyclebite::Graph::OperationToString.at(GetOp(inst->getOpcode())))++;
             }
             catch( exception& e )
             {
@@ -283,7 +283,7 @@ int main(int argc, char *argv[])
         }
         else
         {
-            hist.at(TraceAtlas::Graph::OperationToString.at(TraceAtlas::Graph::Operation::nop))++;
+            hist.at(Cyclebite::Graph::OperationToString.at(Cyclebite::Graph::Operation::nop))++;
         }
     }
     output["Statistics"]["FunctionHistogram"] = hist;

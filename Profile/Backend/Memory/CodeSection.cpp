@@ -1,7 +1,7 @@
 #include "CodeSection.h"
 
 using namespace std;
-using namespace TraceAtlas::Profile::Backend::Memory;
+using namespace Cyclebite::Profile::Backend::Memory;
 
 CodeSection::CodeSection(set<int64_t> b, map<int64_t, set<int64_t>> ent, map<int64_t, set<int64_t>> ex) : UniqueID(), blocks(b), entrances(ent), exits(ex) {}
 

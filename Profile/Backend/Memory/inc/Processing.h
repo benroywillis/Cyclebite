@@ -1,7 +1,7 @@
 #pragma once
 #include "Memory.h"
 
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     /// @brief Parses the entrances and exits of kernels to decide which edges in the graph represent task boundaries
     ///
@@ -14,4 +14,4 @@ namespace TraceAtlas::Profile::Backend::Memory
     void ProcessEpochBoundaries();
     std::map<uint64_t, std::pair<std::set<uint64_t>, std::set<uint64_t>>> GenerateTaskCommunication();
 
-} // namespace TraceAtlas::Profile::Backend::Memory
+} // namespace Cyclebite::Profile::Backend::Memory

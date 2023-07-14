@@ -8,14 +8,14 @@
 
 using namespace llvm;
 using namespace std;
-using namespace TraceAtlas::Cartographer;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Cartographer;
+using namespace Cyclebite::Graph;
 using json = nlohmann::json;
 
 constexpr uint64_t THRESHOLD_MAX_COLD = 256;
 constexpr uint64_t THRESHOLD_MIN_HOT = 16;
 
-set<std::shared_ptr<MLCycle>, KCompare> TraceAtlas::Cartographer::DetectHotCode(const set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes, float hotThreshold)
+set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotCode(const set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes, float hotThreshold)
 {
     set<std::shared_ptr<MLCycle>, KCompare> kernels;
     // we are just detecting hot code
@@ -197,7 +197,7 @@ set<std::shared_ptr<MLCycle>, KCompare> TraceAtlas::Cartographer::DetectHotCode(
     return kernels;
 }
 
-set<std::shared_ptr<MLCycle>, KCompare> TraceAtlas::Cartographer::DetectHotLoops(const set<std::shared_ptr<MLCycle>, KCompare> &hotKernels, const Graph::Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const string &loopfilename)
+set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotLoops(const set<std::shared_ptr<MLCycle>, KCompare> &hotKernels, const Graph::Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const string &loopfilename)
 {
     set<std::shared_ptr<MLCycle>, KCompare> kernels;
     set<StaticLoop, StaticLoopCompare> staticLoops;

@@ -1,5 +1,5 @@
 #include "Annotate.h"
-#include "AtlasUtil/Format.h"
+#include "Util/Format.h"
 #include <iostream>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
@@ -13,26 +13,26 @@ using namespace llvm;
 
 namespace DashTracer::Passes
 {
-    cl::opt<uint64_t> TraceAtlasStartIndex("tai", llvm::cl::desc("Initial block index"), llvm::cl::value_desc("Initial block index"));
-    cl::opt<uint64_t> TraceAtlasStartValueIndex("tavi", llvm::cl::desc("Initial value index"), llvm::cl::value_desc("Initial value index"));
+    cl::opt<uint64_t> CyclebiteStartIndex("tai", llvm::cl::desc("Initial block index"), llvm::cl::value_desc("Initial block index"));
+    cl::opt<uint64_t> CyclebiteStartValueIndex("tavi", llvm::cl::desc("Initial value index"), llvm::cl::value_desc("Initial value index"));
     bool EncodedAnnotate::runOnModule(Module &M)
     {
-        if (TraceAtlasStartIndex.getNumOccurrences() != 0)
+        if (CyclebiteStartIndex.getNumOccurrences() != 0)
         {
-            TraceAtlasIndex = TraceAtlasStartIndex;
+            CyclebiteIndex = CyclebiteStartIndex;
         }
-        if (TraceAtlasStartValueIndex.getNumOccurrences() != 0)
+        if (CyclebiteStartValueIndex.getNumOccurrences() != 0)
         {
-            TraceAtlasValueIndex = TraceAtlasStartValueIndex;
+            CyclebiteValueIndex = CyclebiteStartValueIndex;
         }
         Format(&M);
-        if (TraceAtlasStartIndex.getNumOccurrences() != 0)
+        if (CyclebiteStartIndex.getNumOccurrences() != 0)
         {
-            std::cout << "Ending TraceAtlas block index: " << TraceAtlasIndex << std::endl;
+            std::cout << "Ending Cyclebite block index: " << CyclebiteIndex << std::endl;
         }
-        if (TraceAtlasStartValueIndex.getNumOccurrences() != 0)
+        if (CyclebiteStartValueIndex.getNumOccurrences() != 0)
         {
-            std::cout << "Ending TraceAtlas value index: " << TraceAtlasValueIndex << std::endl;
+            std::cout << "Ending Cyclebite value index: " << CyclebiteValueIndex << std::endl;
         }
         return true;
     }

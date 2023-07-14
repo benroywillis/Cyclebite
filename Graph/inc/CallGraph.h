@@ -3,7 +3,7 @@
 #include "CallGraphNode.h"
 #include "Graph.h"
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class CallGraph : public Graph
     {
@@ -18,4 +18,4 @@ namespace TraceAtlas::Graph
         void addNodes(const std::set<std::shared_ptr<CallGraphNode>, CGNCompare> &nodes);
         const std::shared_ptr<CallGraphNode> getMainNode() const;
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

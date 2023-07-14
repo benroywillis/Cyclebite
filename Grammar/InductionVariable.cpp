@@ -2,15 +2,15 @@
 #include "DataNode.h"
 #include <deque>
 #include <llvm/IR/Instructions.h>
-#include "AtlasUtil/Exceptions.h"
-#include "AtlasUtil/Print.h"
+#include "Util/Exceptions.h"
+#include "Util/Print.h"
 #include <spdlog/spdlog.h>
 
-using namespace TraceAtlas::Grammar;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Grammar;
+using namespace Cyclebite::Graph;
 using namespace std;
 
-InductionVariable::InductionVariable( const std::shared_ptr<TraceAtlas::Graph::DataNode>& n, const std::shared_ptr<Cycle>& c ) : Symbol("var"), cycle(c), node(n)
+InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataNode>& n, const std::shared_ptr<Cycle>& c ) : Symbol("var"), cycle(c), node(n)
 {
     // crawl the uses of the induction variable and try to ascertain what its dimensions are access patterns are
     deque<const llvm::Instruction*> Q;
@@ -368,7 +368,7 @@ StridePattern InductionVariable::getPattern() const
     return pat;
 }
 
-const set<shared_ptr<TraceAtlas::Graph::ControlBlock>, TraceAtlas::Graph::p_GNCompare>& InductionVariable::getBody() const
+const set<shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare>& InductionVariable::getBody() const
 {
     return body;
 }

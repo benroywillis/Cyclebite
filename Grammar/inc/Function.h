@@ -2,7 +2,7 @@
 #include "Collection.h"
 #include "Expression.h"
 
-namespace TraceAtlas::Grammar
+namespace Cyclebite::Grammar
 {
     class Function
     {
@@ -16,4 +16,4 @@ namespace TraceAtlas::Grammar
         std::set<std::shared_ptr<Collection>> collections;
         Expression expr;
     };
-} // namespace TraceAtlas::Grammar
+} // namespace Cyclebite::Grammar

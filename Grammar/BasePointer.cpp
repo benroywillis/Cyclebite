@@ -1,7 +1,7 @@
 #include "BasePointer.h"
 
-using namespace TraceAtlas::Grammar;
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Grammar;
+using namespace Cyclebite::Graph;
 using namespace std;
 
 const std::shared_ptr<DataNode>& BasePointer::getNode() const

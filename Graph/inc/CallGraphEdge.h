@@ -2,7 +2,7 @@
 #include "UnconditionalEdge.h"
 #include <set>
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class CallGraphNode;
     class CallEdge;
@@ -18,4 +18,4 @@ namespace TraceAtlas::Graph
     private:
         std::set<std::shared_ptr<CallEdge>, GECompare> calls;
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

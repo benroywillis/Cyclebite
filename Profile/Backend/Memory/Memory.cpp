@@ -1,5 +1,5 @@
-#include "AtlasUtil/Exceptions.h"
-#include "AtlasUtil/IO.h"
+#include "Util/Exceptions.h"
+#include "Util/IO.h"
 #include "Memory.h"
 #include "Epoch.h"
 #include "CodeInstance.h"
@@ -10,7 +10,7 @@ using namespace std;
 using json = nlohmann::json;
 using namespace llvm;
 
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     /// Timing information
     struct timespec start, end;
@@ -46,7 +46,7 @@ namespace TraceAtlas::Profile::Backend::Memory
 
     extern "C"
     {
-        void __TraceAtlas__Profile__Backend__MemoryDestroy()
+        void __Cyclebite__Profile__Backend__MemoryDestroy()
         {
             clock_gettime(CLOCK_MONOTONIC, &end);
             spdlog::info( "MEMORYPROFILETIME: "+to_string(CalculateTime(&start, &end))+"s");
@@ -61,7 +61,7 @@ namespace TraceAtlas::Profile::Backend::Memory
             OutputKernelInstances();
         }
 
-        void __TraceAtlas__Profile__Backend__MemoryIncrement(uint64_t a)
+        void __Cyclebite__Profile__Backend__MemoryIncrement(uint64_t a)
         {
             // if the profile is not active, we return
             if (!memoryActive)
@@ -88,7 +88,7 @@ namespace TraceAtlas::Profile::Backend::Memory
             lastBlock = (int64_t)a;
         }
 
-        void __TraceAtlas__Profile__Backend__MemoryStore(void *address, uint64_t bbID, uint32_t instructionID, uint64_t datasize)
+        void __Cyclebite__Profile__Backend__MemoryStore(void *address, uint64_t bbID, uint32_t instructionID, uint64_t datasize)
         {
             static MemTuple mt;
             mt.type = __TA_MemType::Writer;
@@ -109,7 +109,7 @@ namespace TraceAtlas::Profile::Backend::Memory
 #endif
         }
 
-        void __TraceAtlas__Profile__Backend__MemoryLoad(void *address, uint64_t bbID, uint32_t instructionID, uint64_t datasize)
+        void __Cyclebite__Profile__Backend__MemoryLoad(void *address, uint64_t bbID, uint32_t instructionID, uint64_t datasize)
         {
             static MemTuple mt;
             mt.type = __TA_MemType::Reader;
@@ -130,7 +130,7 @@ namespace TraceAtlas::Profile::Backend::Memory
 #endif
         }
 
-        void __TraceAtlas__Profile__Backend__MemoryInit(uint64_t a)
+        void __Cyclebite__Profile__Backend__MemoryInit(uint64_t a)
         {
             ReadKernelFile();
             try
@@ -151,7 +151,7 @@ namespace TraceAtlas::Profile::Backend::Memory
             lastBlock = (int64_t)a;
         }
 
-        void __TraceAtlas__Profile__Backend__MemoryCpy(void* ptr_src, void* ptr_snk, uint64_t dataSize)
+        void __Cyclebite__Profile__Backend__MemoryCpy(void* ptr_src, void* ptr_snk, uint64_t dataSize)
         {
             MemTuple mt;
             mt.type = __TA_MemType::Memcpy;
@@ -169,7 +169,7 @@ namespace TraceAtlas::Profile::Backend::Memory
             }
         }
 
-        void __TraceAtlas__Profile__Backend__MemoryMov(void* ptr_src, void* ptr_snk, uint64_t dataSize)
+        void __Cyclebite__Profile__Backend__MemoryMov(void* ptr_src, void* ptr_snk, uint64_t dataSize)
         {
             MemTuple mt;
             mt.type = __TA_MemType::Memmov;
@@ -187,7 +187,7 @@ namespace TraceAtlas::Profile::Backend::Memory
             }
         }
 
-        void __TraceAtlas__Profile__Backend__MemorySet(void* ptr, uint64_t dataSize)
+        void __Cyclebite__Profile__Backend__MemorySet(void* ptr, uint64_t dataSize)
         {
             MemTuple mt;
             mt.type = __TA_MemType::Memset;
@@ -200,7 +200,7 @@ namespace TraceAtlas::Profile::Backend::Memory
             }
         }
 
-        void __TraceAtlas__Profile__Backend__MemoryMalloc(void* ptr, uint64_t offset)
+        void __Cyclebite__Profile__Backend__MemoryMalloc(void* ptr, uint64_t offset)
         {
             if( currentEpoch )
             {
@@ -212,7 +212,7 @@ namespace TraceAtlas::Profile::Backend::Memory
             }
         }
 
-        void __TraceAtlas__Profile__Backend__MemoryFree(void* ptr)
+        void __Cyclebite__Profile__Backend__MemoryFree(void* ptr)
         {
             if( currentEpoch )
             {
@@ -220,4 +220,4 @@ namespace TraceAtlas::Profile::Backend::Memory
             }
         }
     }
-} // namespace TraceAtlas::Backend::BackendMemory
+} // namespace Cyclebite::Backend::BackendMemory

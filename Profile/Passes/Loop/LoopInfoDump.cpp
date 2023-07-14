@@ -1,8 +1,8 @@
 
 #include "LoopInfoDump.h"
 #include "Annotate.h"
-#include "AtlasUtil/Annotate.h"
-#include "AtlasUtil/Print.h"
+#include "Util/Annotate.h"
+#include "Util/Print.h"
 #include "MarkovIO.h"
 #include <fstream>
 #include <iomanip>

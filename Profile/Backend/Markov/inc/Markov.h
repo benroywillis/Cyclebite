@@ -4,8 +4,8 @@
 extern "C"
 {
 #endif
-    void TraceAtlasMarkovKernelEnter(char *label);
-    void TraceAtlasMarkovKernelExit(char *label);
+    void CyclebiteMarkovKernelEnter(char *label);
+    void CyclebiteMarkovKernelExit(char *label);
 #ifdef __cplusplus
 }
 #endif

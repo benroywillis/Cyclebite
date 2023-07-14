@@ -1,7 +1,7 @@
 #include "ConditionalEdge.h"
 #include "ControlNode.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 
 ConditionalEdge::ConditionalEdge() : UnconditionalEdge() {}
 

@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     constexpr uint64_t MIN_ANCHOR = 16;
     class MLCycle : public VirtualNode
@@ -59,4 +59,4 @@ namespace TraceAtlas::Graph
             return lhs < rhs->KID;
         }
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

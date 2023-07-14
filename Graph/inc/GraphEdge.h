@@ -2,7 +2,7 @@
 #include <cstdint>
 #include <memory>
 
-namespace TraceAtlas::Graph
+namespace Cyclebite::Graph
 {
     class GraphNode;
     class GraphEdge
@@ -38,4 +38,4 @@ namespace TraceAtlas::Graph
             return lhs->getSrc() < rhs->getSrc();
         }
     };
-} // namespace TraceAtlas::Graph
+} // namespace Cyclebite::Graph

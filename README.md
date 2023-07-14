@@ -1,14 +1,14 @@
-# TraceAtlas
+# Cyclebite
 
-TraceAtlas is a program analysis toolchain. It uses the LLVM api to profile programs dynamically and segment the coarse-grained tasks of the program automatically. 
+Cyclebite is a program analysis toolchain. It uses the LLVM api to profile programs dynamically and segment the coarse-grained tasks of the program automatically. 
 
-![Unit Tests](https://github.com/ruhrie/TraceAtlas/workflows/Unit%20Tests/badge.svg)
+![Unit Tests](https://github.com/ruhrie/Cyclebite/workflows/Unit%20Tests/badge.svg)
 
 ## Building
-TraceAtlas requires cmake version 3.13 or higher. You can run the test suite with the `test` target and generate the documentation with the `doc` target.
+Cyclebite requires cmake version 3.13 or higher. You can run the test suite with the `test` target and generate the documentation with the `doc` target.
 
 ### Dependencies
-TraceAtlas requires a few of libraries:
+Cyclebite requires a few of libraries:
 * [LLVM-9](https://llvm.org/)v9.0.1
 * [papi](https://icl.utk.edu/papi/)
 * [nlohmann-json](https://github.com/nlohmann/json)v3.7.3
@@ -16,10 +16,10 @@ TraceAtlas requires a few of libraries:
 * [spdlog](https://github.com/gabime/spdlog)v1.3.0
 * [indicators](https://github.com/)vDec 18, 2019
 
-The current development version of TraceAtlas uses LLVM9.0.1 to both link against and build its source code. It is recommended that you use the same version for your own development. YOU MUST USE THE SAME INSTALL OF LLVM TO BOTH COMPILE THE REPOSITORY AND LINK THE REPOSITORY AGAINST. This is to ensure that the legacy LLVM passes will have all their symbols defined when running opt passes.
+The current development version of Cyclebite uses LLVM9.0.1 to both link against and build its source code. It is recommended that you use the same version for your own development. YOU MUST USE THE SAME INSTALL OF LLVM TO BOTH COMPILE THE REPOSITORY AND LINK THE REPOSITORY AGAINST. This is to ensure that the legacy LLVM passes will have all their symbols defined when running opt passes.
 
 ### VCPKG
-A long time ago, [vcpkg](https://github.com/microsoft/vcpkg) was used to build the dependencies of this repository, and specific things relating to this package manager were injected into the CMake build flow and source code of TraceAtlas. For the sake of simplicity and convenience, it is recommended to use vcpkg to install the dependencies, then use their cmake toolchain file to import them into the TraceAtlas buildflow.
+A long time ago, [vcpkg](https://github.com/microsoft/vcpkg) was used to build the dependencies of this repository, and specific things relating to this package manager were injected into the CMake build flow and source code of Cyclebite. For the sake of simplicity and convenience, it is recommended to use vcpkg to install the dependencies, then use their cmake toolchain file to import them into the Cyclebite buildflow.
 
 Installing, bootstrapping and installing packages using vcpkg has been heavily refined to make it pretty easy to use. Simply clone their repository and run the bootstrap script. After this, install four dependencies using the vcpkg binary:
 `./vcpkg install zlib`
@@ -27,14 +27,14 @@ Installing, bootstrapping and installing packages using vcpkg has been heavily r
 `./vcpkg install spdlog`
 `./vcpkg install indicators`
 
-When configuring the TraceAtlas build flow, point to vcpkg's buildscript and CMake will find all dependencies you have installed:
+When configuring the Cyclebite build flow, point to vcpkg's buildscript and CMake will find all dependencies you have installed:
 `-DCMAKE_TOOLCHAIN_FILE=${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake`
 
 An example build after completing vcpkg package installs:
 `mkdir build ; cd build ; $CMAKE ../ -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=${VCPKG_INSTALL_PREFIX}/scripts/buildsystems/vcpkg.cmake -DENABLE_TESTING_LONG=ON`
 
 ### Custom dependency installs
-Currently TraceAtlas does not support custom installs. Its buildflow and source code are dependent on the configurations and custom build parameters of vcpkg. If you decide to go this route, there will be both CMake and source modifications required.
+Currently Cyclebite does not support custom installs. Its buildflow and source code are dependent on the configurations and custom build parameters of vcpkg. If you decide to go this route, there will be both CMake and source modifications required.
 
 The library dependency versions have not been well explored, so compatibility may not be supported outside the versions currently being used for development. The current development effort has built some dependencies from source (LLVM, nlohmann-json), installed the headers (spdlog), or used the local package manager (apt repository installs for zlib and papi).
 
@@ -75,5 +75,5 @@ If the repository is compiled with configuration `-DCMAKE_BUILD_TYPE=Debug`, car
 * `TransformedStaticControlGraph_\d.dot` is the CFG of the program after \d iterations of the loop segmentation algorithm has taken place.
 * `dot_<Program>.dot` is the final segmentation result of the cartographer. Dashed edges denote hierarchical kernel relationships, pointing from child to parent. 
 
-## TraceAtlas Algorithms
-A [small corpus](https://github.com/benroywillis/Algorithms) of programs facilitates the TraceAtlas toolchain using a GNU Makefile buildflow. This buildflow can be used to automate the TraceAtlas toolchain (after some environment adaptations and installations). The purpose of the repository is to verify the TraceAtlas pipeline and compare its structuring capabilities to that of state-of-the-art tools. [Halide](https://github.com/halide/Halide) programs have been written to "hand-compile" the structuring results of TraceAtlas with the [PERFECT](https://hpc.pnl.gov/PERFECT/) benchmark as the input corpus.
+## Cyclebite Algorithms
+A [small corpus](https://github.com/benroywillis/Algorithms) of programs facilitates the Cyclebite toolchain using a GNU Makefile buildflow. This buildflow can be used to automate the Cyclebite toolchain (after some environment adaptations and installations). The purpose of the repository is to verify the Cyclebite pipeline and compare its structuring capabilities to that of state-of-the-art tools. [Halide](https://github.com/halide/Halide) programs have been written to "hand-compile" the structuring results of Cyclebite with the [PERFECT](https://hpc.pnl.gov/PERFECT/) benchmark as the input corpus.

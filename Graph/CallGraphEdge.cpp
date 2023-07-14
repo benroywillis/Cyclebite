@@ -2,7 +2,7 @@
 #include "CallEdge.h"
 #include "CallGraphNode.h"
 
-using namespace TraceAtlas::Graph;
+using namespace Cyclebite::Graph;
 using namespace std;
 
 CallGraphEdge::CallGraphEdge() : UnconditionalEdge() {}

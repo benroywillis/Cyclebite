@@ -7,7 +7,7 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Value.h"
 
-namespace TraceAtlas::Profile::Backend::Memory
+namespace Cyclebite::Profile::Backend::Memory
 {
     // forward declarations for some structures
     class Epoch;
@@ -51,4 +51,4 @@ namespace TraceAtlas::Profile::Backend::Memory
     extern int64_t lastBlock;
     /// On/off switch for the profiler
     extern bool memoryActive;
-} // namespace TraceAtlas::Memory::Backend
+} // namespace Cyclebite::Memory::Backend
