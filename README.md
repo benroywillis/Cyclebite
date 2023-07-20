@@ -16,7 +16,7 @@ Cyclebite requires cmake version 3.13 or higher. You can run the test suite with
 
 The current development version of Cyclebite uses LLVM9.0.1 to both link against and build its source code. It is recommended that you use the same version for your own development. YOU MUST USE THE SAME INSTALL OF LLVM TO BOTH COMPILE THE REPOSITORY AND LINK THE REPOSITORY AGAINST. This is to ensure that the legacy LLVM passes will have all their symbols defined when running opt passes.
 
-We recommend you build llvm from source - this is the only way to ensure all submodules will be present and the correct version (mlir, lld, clang, openmp, polly, flang).
+We recommend you build llvm from source - this is the only way to ensure all submodules will be present and the correct version (mlir, lld, clang, openmp, polly, flang).  
 `wget \<link-to-llvm9.0.1\>`  
 `tar -xvf llvm-project-llvmorg-9.0.1.tar.gz`  
 `cd llvm-project-llvmorg-9.0.1`  
