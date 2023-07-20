@@ -25,38 +25,38 @@ We recommend you build llvm from source - this is the only way to ensure all sub
 (we find that memory usage is ~0.5GB/thread throughout the compilation process, so adjust your thread count according to available memory)  
 (we recommend you build both -DCMAKE\_BUILD\_TYPE=Debug and -DCMAKE\_BUILD\_TYPE=Release)  
 
-After this process, set your llvm build to be the default compiler for your user space
-`vi ~/.bashrc`
-add the following lines
-`export CC=/path/to/Installs/LLVM9.0.1/release/bin/clang`
-`export CXX=/path/to/Installs/LLVM9.0.1/release/bin/clang++`
-`export LLD=/path/to/Installs/LLVM9.0.1/release/bin/ld.lld`
+After this process, set your llvm build to be the default compiler for your user space  
+`vi ~/.bashrc`  
+add the following lines  
+`export CC=/path/to/Installs/LLVM9.0.1/release/bin/clang`  
+`export CXX=/path/to/Installs/LLVM9.0.1/release/bin/clang++`  
+`export LLD=/path/to/Installs/LLVM9.0.1/release/bin/ld.lld`  
 
 #### Build and link dependencies using VCPKG (easy way)
 A long time ago, [vcpkg](https://github.com/microsoft/vcpkg) was used to build the dependencies of this repository, and specific things relating to this package manager were injected into the CMake build flow and source code of Cyclebite. For the sake of simplicity and convenience, it is recommended to use vcpkg to install the dependencies, then use their cmake toolchain file to import them into the Cyclebite buildflow.
 
-Installing, bootstrapping and installing packages using vcpkg has been heavily refined to make it pretty easy to use. Simply clone their repository and run the bootstrap script. After this, install four dependencies using the vcpkg binary:
+Installing, bootstrapping and installing packages using vcpkg has been heavily refined to make it pretty easy to use. Simply clone their repository and run the bootstrap script. After this, install four dependencies using the vcpkg binary:  
 
-`git clone git@github.com:microsoft/vcpkg.git`
-`./bootstrap-vcpkg.sh`
-`./vcpkg install zlib nlohmann-json spdlog`
+`git clone git@github.com:microsoft/vcpkg.git`  
+`./bootstrap-vcpkg.sh`  
+`./vcpkg install zlib nlohmann-json spdlog`  
 
-When configuring the Cyclebite build flow, point to vcpkg's buildscript and CMake will find all dependencies you have installed:
-`-DCMAKE_TOOLCHAIN_FILE=${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake`
+When configuring the Cyclebite build flow, point to vcpkg's buildscript and CMake will find all dependencies you have installed:  
+`-DCMAKE_TOOLCHAIN_FILE=${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake`  
 
 #### Build and link dependencies manually (hard way)
 Currently Cyclebite does not support custom installs. Its buildflow and source code are dependent on the configurations and custom build parameters of vcpkg. If you decide to go this route, there will be both CMake and source modifications required.
 
 The library dependency versions have not been well explored, so compatibility may not be supported outside the versions currently being used for development. The current development effort has built some dependencies from source (LLVM, nlohmann-json), installed the headers (spdlog), or used the local package manager (apt repository installs for zlib and papi).
 
-For each dependency you install, you must have the CMake config files handy. Point the CMake variable for each dependency to the folder that contains its <LIBRARY_NAME>Config.cmake file:
-`-DLLVM_DIR=${LLVM_INSTALL_PREFIX}/lib/cmake/llvm/`
-`-Dnlohmann_json_DIR=${NLOHMANN_JSON_INSTALL_PREFIX}/lib/cmake/nlohmann_json/`
-`-Dindica_DIR=${INDICATORS_INSTALL_PREFIX}/lib/cmake/indica/`
-`-Dspdlog_DIR=${SPDLOG_INSTALL_PREFIX}/lib/cmake/spdlog/`
+For each dependency you install, you must have the CMake config files handy. Point the CMake variable for each dependency to the folder that contains its <LIBRARY_NAME>Config.cmake file:  
+`-DLLVM_DIR=${LLVM_INSTALL_PREFIX}/lib/cmake/llvm/`  
+`-Dnlohmann_json_DIR=${NLOHMANN_JSON_INSTALL_PREFIX}/lib/cmake/nlohmann_json/`  
+`-Dindica_DIR=${INDICATORS_INSTALL_PREFIX}/lib/cmake/indica/`  
+`-Dspdlog_DIR=${SPDLOG_INSTALL_PREFIX}/lib/cmake/spdlog/`  
 
-When linking against dependency installs, an example build command:
-`mkdir build ; cd build ; $CMAKE ../ -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_TESTING_LONG=ON -DLLVM_DIR=/mnt/heorot-10/bwilli46/Installs/LLVM9/install-release/lib/cmake/llvm/ -Dnlohmann_json_DIR=/mnt/heorot-10/bwilli46/Installs/nlohmann_json_3.7.3/release/lib/cmake/nlohmann_json/ -Dindica_DIR=/mnt/heorot-10/bwilli46/Installs/indicators/release/lib/cmake/indica/ -Dspdlog_DIR=/mnt/heorot-10/bwilli46/Installs/spdlog1.3.0/release/lib/cmake/spdlog/ ; ninja ; ninja test`
+When linking against dependency installs, an example build command:  
+`mkdir build ; cd build ; $CMAKE ../ -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_TESTING_LONG=ON -DLLVM_DIR=/mnt/heorot-10/bwilli46/Installs/LLVM9/install-release/lib/cmake/llvm/ -Dnlohmann_json_DIR=/mnt/heorot-10/bwilli46/Installs/nlohmann_json_3.7.3/release/lib/cmake/nlohmann_json/ -Dindica_DIR=/mnt/heorot-10/bwilli46/Installs/indicators/release/lib/cmake/indica/ -Dspdlog_DIR=/mnt/heorot-10/bwilli46/Installs/spdlog1.3.0/release/lib/cmake/spdlog/ ; ninja ; ninja test`  
 
 #### Example Cyclebite build 
 `mkdir build ; cd build ; $CMAKE ../ -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=/path/to/Cyclebite/debug/ -DLLVM_DIR=/path/to/Installs/LLVM9.0.1/release/lib/cmake/llvm/ -DCMAKE_TOOLCHAIN_FILE=${VCPKG_INSTALL_PREFIX}/scripts/buildsystems/vcpkg.cmake ; ninja test ; ninja install`
