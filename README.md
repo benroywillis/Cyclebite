@@ -8,32 +8,45 @@ Cyclebite is a program analysis toolchain. It uses the LLVM api to profile progr
 Cyclebite requires cmake version 3.13 or higher. You can run the test suite with the `test` target and generate the documentation with the `doc` target.
 
 ### Dependencies
-Cyclebite requires a few of libraries:
 * [LLVM-9](https://llvm.org/)v9.0.1
 * [papi](https://icl.utk.edu/papi/)
 * [nlohmann-json](https://github.com/nlohmann/json)v3.7.3
 * [zlib](https://www.zlib.net/)v1.2.11
 * [spdlog](https://github.com/gabime/spdlog)v1.3.0
-* [indicators](https://github.com/)vDec 18, 2019
+
+#### Building LLVM
 
 The current development version of Cyclebite uses LLVM9.0.1 to both link against and build its source code. It is recommended that you use the same version for your own development. YOU MUST USE THE SAME INSTALL OF LLVM TO BOTH COMPILE THE REPOSITORY AND LINK THE REPOSITORY AGAINST. This is to ensure that the legacy LLVM passes will have all their symbols defined when running opt passes.
 
-### VCPKG
+We recommend you build llvm from source - this is the only way to ensure all submodules will be present and the correct version (mlir, lld, clang, openmp, polly, flang).
+`wget \<link-to-llvm9.0.1\>`
+`tar -xvf llvm-project-llvmorg-9.0.1.tar.gz`
+`cd llvm-project-llvmorg-9.0.1`
+`mkdir build ; cd build`
+`cmake ../llvm/ -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/path/to/Installs/LLVM9.0.1/release/ -DLLVM_ENABLE_PROJECTS="clang;polly;flang;mlir;lld;openmp" -DLLVM_ENABLE_RTTI=ON ; ninja -j<threads> ; ninja test ; ninja install`
+(we find that memory usage is ~0.5GB/thread throughout the compilation process, so adjust your thread count according to available memory)
+(we recommend you build both -DCMAKE\_BUILD\_TYPE=Debug and -DCMAKE\_BUILD\_TYPE=Release)
+
+After this process, set your llvm build to be the default compiler for your user space
+`vi ~/.bashrc`
+add the following lines
+`export CC=/path/to/Installs/LLVM9.0.1/release/bin/clang`
+`export CXX=/path/to/Installs/LLVM9.0.1/release/bin/clang++`
+`export LLD=/path/to/Installs/LLVM9.0.1/release/bin/ld.lld`
+
+#### Build and link dependencies using VCPKG (easy way)
 A long time ago, [vcpkg](https://github.com/microsoft/vcpkg) was used to build the dependencies of this repository, and specific things relating to this package manager were injected into the CMake build flow and source code of Cyclebite. For the sake of simplicity and convenience, it is recommended to use vcpkg to install the dependencies, then use their cmake toolchain file to import them into the Cyclebite buildflow.
 
 Installing, bootstrapping and installing packages using vcpkg has been heavily refined to make it pretty easy to use. Simply clone their repository and run the bootstrap script. After this, install four dependencies using the vcpkg binary:
-`./vcpkg install zlib`
-`./vcpkg install nlohmann-json`
-`./vcpkg install spdlog`
-`./vcpkg install indicators`
+
+`git clone git@github.com:microsoft/vcpkg.git`
+`./bootstrap-vcpkg.sh`
+`./vcpkg install zlib nlohmann-json spdlog`
 
 When configuring the Cyclebite build flow, point to vcpkg's buildscript and CMake will find all dependencies you have installed:
 `-DCMAKE_TOOLCHAIN_FILE=${VCPKG_DIR}/scripts/buildsystems/vcpkg.cmake`
 
-An example build after completing vcpkg package installs:
-`mkdir build ; cd build ; $CMAKE ../ -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=${VCPKG_INSTALL_PREFIX}/scripts/buildsystems/vcpkg.cmake -DENABLE_TESTING_LONG=ON`
-
-### Custom dependency installs
+#### Build and link dependencies manually (hard way)
 Currently Cyclebite does not support custom installs. Its buildflow and source code are dependent on the configurations and custom build parameters of vcpkg. If you decide to go this route, there will be both CMake and source modifications required.
 
 The library dependency versions have not been well explored, so compatibility may not be supported outside the versions currently being used for development. The current development effort has built some dependencies from source (LLVM, nlohmann-json), installed the headers (spdlog), or used the local package manager (apt repository installs for zlib and papi).
@@ -46,6 +59,9 @@ For each dependency you install, you must have the CMake config files handy. Poi
 
 When linking against dependency installs, an example build command:
 `mkdir build ; cd build ; $CMAKE ../ -G Ninja -DCMAKE_BUILD_TYPE=Debug -DENABLE_TESTING_LONG=ON -DLLVM_DIR=/mnt/heorot-10/bwilli46/Installs/LLVM9/install-release/lib/cmake/llvm/ -Dnlohmann_json_DIR=/mnt/heorot-10/bwilli46/Installs/nlohmann_json_3.7.3/release/lib/cmake/nlohmann_json/ -Dindica_DIR=/mnt/heorot-10/bwilli46/Installs/indicators/release/lib/cmake/indica/ -Dspdlog_DIR=/mnt/heorot-10/bwilli46/Installs/spdlog1.3.0/release/lib/cmake/spdlog/ ; ninja ; ninja test`
+
+#### Example Cyclebite build 
+`mkdir build ; cd build ; $CMAKE ../ -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=/path/to/Cyclebite/debug/ -DLLVM_DIR=/path/to/Installs/LLVM9.0.1/release/lib/cmake/llvm/ -DCMAKE_TOOLCHAIN_FILE=${VCPKG_INSTALL_PREFIX}/scripts/buildsystems/vcpkg.cmake ; ninja test ; ninja install`
 
 ## Profile, Cartographer
 1. Compile to bitcode: `clang -flto -fuse-ld=lld -Wl,--plugin-opt=emit-llvm $(ARCHIVES) input.c -o input.bc`
