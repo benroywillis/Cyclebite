@@ -104,7 +104,7 @@ def readOutput(output, stage, case, variant):
 				return "Pass"
 			elif stage == "COLL":
 				# task 0: 
-
+				
 			else:
 				print("Stage name "+stage+" for test case "+case+" and variant "+variant+" not recognized")
 		elif variant == "OPFLAG_O3_DEBUG_G0":
