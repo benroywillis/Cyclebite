@@ -433,6 +433,18 @@ bool InductionVariable::isOffset(const llvm::Value* v) const
                     }
                 }
             }
+            else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
+            {
+                // sometimes induction variables are cast to their destination gep before being used
+                for( const auto& user : cast->users() )
+                {
+                    if( covered.find(user) == covered.end() )
+                    {
+                        Q.push_back(user);
+                        covered.insert(user);
+                    }
+                }
+            }
             Q.pop_front();
         }
     }
