@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
     {
         throw AtlasException("Failed to build DFG!");
     }
-    auto taskCycles = getTasks(dGraph, programFlow, instanceJson, kernelJson, IDToBlock);
+    auto taskCycles = getTasks(instanceJson, kernelJson, IDToBlock);
 
     // find the IVs in the program
     unsigned taskID = 0;
