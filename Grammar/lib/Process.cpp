@@ -336,7 +336,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                             }
                             else
                             {
-                                spdlog::warn("Found allocation of size "+to_string(allocSize)+" bytes, which does not meet the minumum allocation size for a base pointer.");
+                                spdlog::warn("Found allocation of size "+to_string(allocSize)+" bytes, which does not meet the minimum allocation size for a base pointer.");
                                 // when we encounter allocs and they are too small, this likely means our base pointer is being stored to a pointer which contains the base pointer
                                 // thus, we need to add the users of this alloc to the queue
                                 for( const auto& user : alloc->users() )
@@ -355,6 +355,33 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                             {
                                 // an allocating function is a base pointer
                                 bps.insert(DNIDMap.at((llvm::Instruction*)call));
+                            }
+                        }
+                        else if( auto arg = llvm::dyn_cast<llvm::Argument>(Q.front()) )
+                        {
+                            // arguments to the current context may be base pointers, or they may be mundane details
+                            // likely this argument was discovered by looking at the value operand of a store instruction (usually LLVM puts pointer arguments into the stack)
+                            // for now, we simply push the arguments into the base pointer list and hope they are big enough to justify doing so
+                            if( arg->getType()->isPointerTy() )
+                            {
+                                // the argument itself is not (yet) supported - it is not an instruction
+                                // thus, we use the store llvm uses to put it onto the stack
+                                bool pushed = false;
+                                for( const auto& use : arg->users() )
+                                {
+                                    if( const auto& st = llvm::dyn_cast<llvm::StoreInst>(use) )
+                                    {
+                                        if( st->getValueOperand() == arg )
+                                        {
+                                            pushed = true;
+                                            bps.insert(DNIDMap.at(llvm::cast<llvm::Instruction>(st->getPointerOperand())));
+                                        }
+                                    }
+                                }
+                                if( !pushed )
+                                {
+                                    spdlog::warn("Argument "+PrintVal(arg)+" to function "+string(arg->getParent()->getName())+" does not have a use that can be evaluated as a base pointer!");
+                                }
                             }
                         }
                         Q.pop_front();
@@ -786,6 +813,10 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
         }
         bp.insert( make_shared<BasePointer>(p, loads, stores) );
     }
+    if( bp.empty() )
+    {
+        throw AtlasException("Could not find any base pointers in this task!");
+    }
     return bp;
 }
 
@@ -996,6 +1027,11 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             auto targetGep = *taskGeps.begin();
             for( auto idx = targetGep->idx_begin(); idx != targetGep->idx_end(); idx++ )
             {
+                // if the index is a constant we don't worry about it
+                if( const auto& con = llvm::dyn_cast<llvm::Constant>(idx) )
+                {
+                    continue;
+                }
                 shared_ptr<InductionVariable> idxOp = nullptr;
                 for( const auto& iv : unorderedVars )
                 {
@@ -1007,6 +1043,10 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 if( idxOp == nullptr )
                 {
                     PrintVal(targetGep);
+                    for( const auto& iv : unorderedVars )
+                    {
+                        PrintVal(iv->getNode()->getInst());
+                    }
                     throw AtlasException("Cannot find an IV that maps to this index operand in the target gep!");
                 }
                 vars.push_back(idxOp);
@@ -1665,10 +1705,15 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
 void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
 {
     // each expression maps 1:1 with tasks from the cartographer
+    unsigned TID = 0;
     for( const auto& t : tasks )
     {
         try
         {
+#ifdef DEBUG
+            cout << endl;
+            spdlog::info("Task "+to_string(TID++));
+#endif
             // get all induction variables
             auto vars = getInductionVariables(t);
             // get all reduction variables
@@ -1708,6 +1753,9 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
         catch(AtlasException& e)
         {
             spdlog::critical(e.what());
+#ifdef DEBUG
+            cout << endl;
+#endif
         }
     }
 }
