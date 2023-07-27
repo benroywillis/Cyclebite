@@ -528,7 +528,7 @@ namespace Cyclebite::Profile::Backend::Memory
             OutputFileName = string(getenv("INSTANCE_FILE"));
         }
         ofstream oStream(OutputFileName);
-        oStream << setw(4) << output;
+        oStream << setw(2) << output;
         oStream.close();
     }
 } // namespace Cyclebite::Profile::Backend::Memory
