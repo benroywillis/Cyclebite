@@ -91,7 +91,14 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
                         // case found in unoptimized programs when the induction variable lives on the heap (not in a value) and is communicated with through ld/st
                         // the pointer argument to this load is likely the induction variable pointer, so add that to the vars set
                         covered.insert(ld);
-                        vars.insert( Cyclebite::Graph::DNIDMap.at((llvm::Instruction*)ld->getPointerOperand()) );
+                        if( const auto& p_inst = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()) )
+                        {
+                            if( BBCBMap.find(p_inst->getParent()) != BBCBMap.end() )
+                            {
+                                // now we know it is allive
+                                vars.insert( Cyclebite::Graph::DNIDMap.at((llvm::Instruction*)ld->getPointerOperand()) );
+                            }
+                        }
                     }
                 }
                 Q.pop_front();

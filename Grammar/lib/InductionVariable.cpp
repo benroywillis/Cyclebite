@@ -1,5 +1,8 @@
 #include "InductionVariable.h"
 #include "DataNode.h"
+#include "IO.h"
+#include "Transforms.h"
+#include "Util/Annotate.h"
 #include <deque>
 #include <llvm/IR/Instructions.h>
 #include "Util/Exceptions.h"
@@ -79,15 +82,15 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     {
         // probably only one of these binary ops is used by the comparator
         // thus we walk backwards from the comparator and see who it uses
-        if( cmps.size() != 1 )
-        {
-            PrintVal(node->getInst());
-            throw AtlasException("Could not find a comparator for an IV!");
-        }
-        else if( cmps.size() > 1 )
+        if( cmps.size() > 1 )
         {
             PrintVal(node->getInst());
             throw AtlasException("Cannot yet handle an IV with multiple comparators!");
+        }
+        else if( cmps.empty() )
+        {
+            PrintVal(node->getInst());
+            throw AtlasException("Could not find a comparator for an IV!");
         }
         // now we need to find out how the IV is incremented
         // there generally are two cases on how an IV will be incremented
@@ -191,9 +194,23 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         auto phi = *phis.begin();
         for( unsigned i = 0; i < phi->getNumIncomingValues(); i++ )
         {
+            // we need to figure out if this is the initialization value of the phi
+            // this can be found out in two ways
+            // first, the incoming value is a constant - this *most likely* points to the initialization value
+            // second, the incoming value comes from a block that is not this one (most of the time, when the optimizer is on, the incoming value from a block outside the current is the init)
+            // third, throw an error because the space becomes more complicated and we haven't had a reason to solve this problem yet
             if( auto con = llvm::dyn_cast<llvm::Constant>(phi->getIncomingValue(i)) )
             {
                 initValue = (int)*con->getUniqueInteger().getRawData();
+            }
+            else if( phi->getIncomingBlock(i) != phi->getParent() )
+            {
+                // the init value is not a constant, we use the dynamically observed information to find out what the frequency of this block was
+                // the frequency of the block *probably* tells us what the frequency of this task was
+                // this breaks down when the task was called repeatedly 
+                //  - for now, the belief is that this doesn't matter. EP ensures the task we are evaluating is a good accelerator candidate, and we trust EP
+                // TODO: the IO.cpp/BuildDFG() method doesn't yet populate the edges between ControlBlocks, so this will always return 0
+                initValue = BBCBMap.at(phi->getParent())->getFrequency();
             }
         }
     }
@@ -211,7 +228,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     auto cmp = *cmps.begin();
     // quick check here to make sure the sign we extract from the comparator makes sense
     // llvm::cmpinst* compare op0 to op1, that is, if cmp->getPredicate is gte, it is asking if op0 >= op1
-    // right now, we assume op0 is the IV and op1 is thet condition boundary, thus if this is not true we throw an error
+    // right now, we assume op0 is the IV and op1 is the condition boundary, thus if this is not true we throw an error
     if( !llvm::isa<llvm::Constant>(cmp->getOperand(1)) )
     {
         PrintVal(cmp->getOperand(0));
