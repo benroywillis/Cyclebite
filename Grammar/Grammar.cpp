@@ -3,12 +3,13 @@
 #include "Util/IO.h"
 #include "ControlBlock.h"
 #include "ControlGraph.h"
-#include "IO.h"
+#include "Graph/inc/IO.h"
 #include "CallGraph.h"
 #include "DataGraph.h"
 #include "Categorize.h"
 #include "Process.h"
 #include "Task.h"
+#include "IO.h"
 #include <fstream>
 #include <iostream>
 #include <llvm/IRReader/IRReader.h>
@@ -165,6 +166,8 @@ int main(int argc, char *argv[])
     {
         throw AtlasException("Failed to build DFG!");
     }
+    // takes the information from EP about which loads and stores touch significant memory chunks and injects that info into the DFG
+    InjectSignificantMemoryInstructions(instanceJson, IDToValue);
     auto taskCycles = getTasks(instanceJson, kernelJson, IDToBlock);
 
     // interpret the tasks in the DFG
