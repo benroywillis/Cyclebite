@@ -13,6 +13,12 @@ using namespace Cyclebite::Grammar;
 using namespace Cyclebite::Graph;
 using namespace std;
 
+enum class IV_BOUNDARIES 
+{
+    INVALID = -2,
+    UNDETERMINED = -1
+};
+
 InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataNode>& n, const std::shared_ptr<Cycle>& c ) : Symbol("var"), cycle(c), node(n)
 {
     // crawl the uses of the induction variable and try to ascertain what its dimensions are access patterns are
@@ -80,19 +86,6 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     // llvm ops defined at https://github.com/llvm-mirror/llvm/blob/master/include/llvm/IR/Instruction.def
     if( bins.size() != 1 )
     {
-        // probably only one of these binary ops is used by the comparator
-        // thus we walk backwards from the comparator and see who it uses
-        if( cmps.size() > 1 )
-        {
-            PrintVal(node->getInst());
-            throw AtlasException("Cannot yet handle an IV with multiple comparators!");
-        }
-        else if( cmps.empty() )
-        {
-            PrintVal(node->getInst());
-            throw AtlasException("Could not find a comparator for an IV!");
-        }
-        // now we need to find out how the IV is incremented
         // there generally are two cases on how an IV will be incremented
         // 1. (optimized case) the IV will bounce between a PHI and a binary op, and be used by comparators to determine the next state
         // 2. (unoptimized case) the IV will live in memory, thus its pointer will be used in store instructions, whose value operand is where the binary op can be found
@@ -167,7 +160,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
             throw AtlasException("Cannot yet handle opcode "+to_string(bin->getOpcode())+" that offsets an IV!");
     }
     // find out how the IV is initialized through its stores or phis
-    int initValue = -1;
+    int initValue = static_cast<int>(IV_BOUNDARIES::INVALID);
     if( !sts.empty() )
     {
         // likely the unoptimized case 
@@ -210,45 +203,59 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
                 // this breaks down when the task was called repeatedly 
                 //  - for now, the belief is that this doesn't matter. EP ensures the task we are evaluating is a good accelerator candidate, and we trust EP
                 // TODO: the IO.cpp/BuildDFG() method doesn't yet populate the edges between ControlBlocks, so this will always return 0
-                initValue = BBCBMap.at(phi->getParent())->getFrequency();
+                //initValue = (int)BBCBMap.at(phi->getParent())->getFrequency();
+                initValue = static_cast<int>(IV_BOUNDARIES::UNDETERMINED);
             }
         }
     }
-    if( initValue < 0 )
+    if( initValue == static_cast<int>(IV_BOUNDARIES::INVALID) )
     {
         PrintVal(node->getInst());
         throw AtlasException("Could not find initialization value for IV!");
     }
-    // use the predicate from the comparator, the constant int boundary from the comparator, and the initial IV value to find the boundaries of the IV
-    if( cmps.size() != 1 )
-    {
-        PrintVal(node->getInst());
-        throw AtlasException("Cannot yet handle an induction variable that is compared more than once!");
-    }
-    auto cmp = *cmps.begin();
     // quick check here to make sure the sign we extract from the comparator makes sense
     // llvm::cmpinst* compare op0 to op1, that is, if cmp->getPredicate is gte, it is asking if op0 >= op1
     // right now, we assume op0 is the IV and op1 is the condition boundary, thus if this is not true we throw an error
-    if( !llvm::isa<llvm::Constant>(cmp->getOperand(1)) )
+    auto targetCmp = llvm::cast<llvm::CmpInst>(cycle->getIteratorInst()->getCondition());
+    if( !targetCmp )
     {
-        PrintVal(cmp->getOperand(0));
-        PrintVal(n->getInst());
-        throw AtlasException("Induction variable is not in position 0 of the comparator!");
+#ifdef DEBUG
+        PrintVal(node->getInst());
+        PrintVal(cycle->getIteratorInst()->getCondition());
+        PrintVal(cycle->getIteratorInst());
+#endif
+        throw AtlasException("Cycle iterator inst was not fed by a condition!");
     }
-    int cmpBoundary = -1;
-    for( unsigned i = 0; i < cmp->getNumOperands(); i++ )
+    // here we figure out what the means for the induction variable
+    // for example, if the IV is in position 0 of the comparator, then the comparator's operation does not need to be inverted (e.g., IV < thresh means the lt can be taken literally)
+    // if the IV is in position 1 of the IV, the operation needs to be inverted (e.g., thresh < IV means the lt actually needs to be gt)
+    bool invert = false;
+    if( targetCmp->getOperand(1) == node->getInst() )
     {
-        if( auto con = llvm::dyn_cast<llvm::Constant>(cmp->getOperand(i)) )
+        invert = true;
+    }
+    int cmpBoundary = static_cast<int>(IV_BOUNDARIES::INVALID);
+    for( unsigned i = 0; i < targetCmp->getNumOperands(); i++ )
+    {
+        if( auto con = llvm::dyn_cast<llvm::Constant>(targetCmp->getOperand(i)) )
         {
             cmpBoundary = (int)*con->getUniqueInteger().getRawData();
         }
+        else
+        {
+            // TODO: walk backward through the dataflow to find the value, if it is determinable
+            cmpBoundary = static_cast<int>(IV_BOUNDARIES::UNDETERMINED); 
+        }
     }
-    if( cmpBoundary == -1 )
+    if( cmpBoundary == static_cast<int>(IV_BOUNDARIES::INVALID) )
     {
-        spdlog::critical("Could not find a constant boundary for an induction variable!");
-        throw AtlasException("Could not find a constant boundary for an induction variable!");
+#ifdef DEBUG
+        PrintVal(node->getInst());
+        PrintVal(targetCmp);
+#endif
+        throw AtlasException("Could not find a valid boundary for an induction variable!");
     }
-    switch(cmp->getPredicate())
+    switch(targetCmp->getPredicate())
     {
         case 32: // integer equal
             space.min = (uint32_t)cmpBoundary;
@@ -267,42 +274,106 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
             }
             break;
         case 34: // integer unsigned greater than
-            space.min = (uint32_t)cmpBoundary+1;
-            space.max = (uint32_t)initValue;
+            if( invert )
+            {
+                space.min = (uint32_t)initValue;
+                space.max = (uint32_t)cmpBoundary+1;
+            }
+            else
+            {
+                space.min = (uint32_t)cmpBoundary+1;
+                space.max = (uint32_t)initValue;
+            }
             break;
         case 35: // integer unsigned greater or equal
-            space.min = (uint32_t)cmpBoundary;
-            space.max = (uint32_t)initValue;
+            if( invert )
+            {
+                space.min = (uint32_t)initValue;
+                space.max = (uint32_t)cmpBoundary;
+            }
+            else
+            {
+                space.min = (uint32_t)cmpBoundary;
+                space.max = (uint32_t)initValue;
+            }
             break;
         case 36: // integer unsigned less than
-            space.min = (uint32_t)initValue;
-            space.max = (uint32_t)cmpBoundary-1;
+            if( invert )
+            {
+                space.min = (uint32_t)cmpBoundary-1;
+                space.max = (uint32_t)initValue;
+            }
+            else
+            {
+                space.min = (uint32_t)initValue;
+                space.max = (uint32_t)cmpBoundary-1;
+            }
             break;
         case 37: // integer unsigned less or equal
-            space.min = (uint32_t)initValue;
-            space.max = (uint32_t)cmpBoundary;
+            if( invert )
+            {
+                space.max = (uint32_t)initValue;
+                space.min = (uint32_t)cmpBoundary;
+            }
+            else
+            {
+                space.min = (uint32_t)initValue;
+                space.max = (uint32_t)cmpBoundary;
+            }
             break;
         case 38: // integer signed greater than
-            space.min = (uint32_t)cmpBoundary+1;
-            space.max = (uint32_t)initValue;
+            if( invert )
+            {
+                space.max = (uint32_t)initValue;
+                space.min = (uint32_t)cmpBoundary;
+            }
+            else
+            {
+                space.min = (uint32_t)cmpBoundary+1;
+                space.max = (uint32_t)initValue;
+            }
             break;
         case 39: // integer signed greater or equal
-            space.min = (uint32_t)cmpBoundary;
-            space.max = (uint32_t)initValue;
+            if( invert )
+            {
+                space.max = (uint32_t)initValue;
+                space.min = (uint32_t)cmpBoundary;
+            }
+            else
+            {
+                space.min = (uint32_t)cmpBoundary;
+                space.max = (uint32_t)initValue;
+            }
             break;
         case 40: // integer signed less than
-            space.min = (uint32_t)initValue;
-            space.max = (uint32_t)cmpBoundary-1;
+            if( invert )
+            {
+                space.max = (uint32_t)initValue;
+                space.min = (uint32_t)cmpBoundary;
+            }
+            else
+            {
+                space.min = (uint32_t)initValue;
+                space.max = (uint32_t)cmpBoundary-1;
+            }
             break;
         case 41: // integer signed less or equal
-            space.min = (uint32_t)initValue;
-            space.max = (uint32_t)cmpBoundary;
+            if( invert )
+            {
+                space.max = (uint32_t)initValue;
+                space.min = (uint32_t)cmpBoundary;
+            }
+            else
+            {
+                space.min = (uint32_t)initValue;
+                space.max = (uint32_t)cmpBoundary;
+            }
             break;
         default:
-            throw AtlasException("Cannot handle an induction variable whose comparator opcode is "+to_string(cmp->getPredicate()));
+            throw AtlasException("Cannot handle an induction variable whose comparator opcode is "+to_string(targetCmp->getPredicate()));
     }
     // sanity check, does the polyhedral space make sense
-/*    switch(cmp->getPredicate())
+/*    switch(targetCmp->getPredicate())
     {
         case 32: // integer equal
         case 33: // integer not equal
@@ -349,8 +420,8 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         case 40: // integer signed less than
         case 41: // integer signed less or equal
         default:
-            spdlog::critical("Cannot handle an induction variable whose comparator opcode is "+to_string(cmp->getPredicate()));
-            throw AtlasException("Cannot handle an induction variable whose comparator opcode is "+to_string(cmp->getPredicate()));
+            spdlog::critical("Cannot handle an induction variable whose comparator opcode is "+to_string(targetCmp->getPredicate()));
+            throw AtlasException("Cannot handle an induction variable whose comparator opcode is "+to_string(targetCmp->getPredicate()));
     }*/
 
     // build out loop body
