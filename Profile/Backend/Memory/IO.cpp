@@ -514,6 +514,13 @@ namespace Cyclebite::Profile::Backend::Memory
         output["BlockCallers"] = input["BlockCallers"];
         output["NonKernelBlocks"] = input["NonKernelBlocks"];
         output["ValidBlocks"] = input["ValidBlocks"];
+        for( const auto& value : instToTuple )
+        {
+            for( const auto& tuple : value.second )
+            {
+                output["Instruction Tuples"][to_string(value.first)].push_back( pair(tuple.base, tuple.base+tuple.offset) );
+            }
+        }
 
         string OutputFileName = "instance.json";
         if( getenv("INSTANCE_FILE") )

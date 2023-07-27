@@ -116,8 +116,6 @@ namespace DashTracer::Passes
                 }
             }
             // now inject load and store profiling operations
-            uint32_t ldInstructionIndex = 0;
-            uint32_t stInstructionIndex = 0;
             for (BasicBlock::iterator BI = fi->begin(), BE = fi->end(); BI != BE; ++BI)
             {
                 auto *CI = dyn_cast<Instruction>(BI);
@@ -132,12 +130,9 @@ namespace DashTracer::Passes
                     auto castCode = CastInst::getCastOpcode(addr, true, PointerType::get(Type::getInt8PtrTy(fi->getContext()), 0), true);
                     Value *addrCast = builder.CreateCast(castCode, addr, Type::getInt8PtrTy(fi->getContext()));
                     values.push_back(addrCast);
-                    //bb id
-                    Value *blockID = ConstantInt::get(Type::getInt64Ty(fi->getContext()), (uint64_t)blockId);
-                    values.push_back(blockID);
-                    // instruction index
-                    Value *instructionID = ConstantInt::get(Type::getInt32Ty(fi->getContext()), (uint32_t)ldInstructionIndex++);
-                    values.push_back(instructionID);
+                    // valueID
+                    Value* valueID = ConstantInt::get(Type::getInt64Ty(fi->getContext()), (uint64_t)GetValueID(load));
+                    values.push_back(valueID);
                     // data size
                     Value *dataSizeValue = ConstantInt::get(Type::getInt64Ty(fi->getContext()), dataSize);
                     values.push_back(dataSizeValue);
@@ -154,12 +149,9 @@ namespace DashTracer::Passes
                     auto castCode = CastInst::getCastOpcode(addr, true, PointerType::get(Type::getInt8PtrTy(fi->getContext()), 0), true);
                     Value *addrCast = builder.CreateCast(castCode, addr, Type::getInt8PtrTy(fi->getContext()));
                     values.push_back(addrCast);
-                    //bb id
-                    Value *blockID = ConstantInt::get(Type::getInt64Ty(fi->getContext()), (uint64_t)blockId);
-                    values.push_back(blockID);
-                    // instruction index
-                    Value *instructionID = ConstantInt::get(Type::getInt32Ty(fi->getContext()), (uint32_t)stInstructionIndex++);
-                    values.push_back(instructionID);
+                    // valueID
+                    Value* valueID = ConstantInt::get(Type::getInt64Ty(fi->getContext()), (uint64_t)GetValueID(store));
+                    values.push_back(valueID);
                     // data size
                     Value *dataSizeValue = ConstantInt::get(Type::getInt64Ty(fi->getContext()), dataSize);
                     values.push_back(dataSizeValue);
@@ -358,8 +350,8 @@ namespace DashTracer::Passes
 
     bool Memory::doInitialization(Module &M)
     {
-        MemoryLoad      = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryLoad", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
-        MemoryStore     = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryStore", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext()), Type::getInt32Ty(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
+        MemoryLoad      = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryLoad", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
+        MemoryStore     = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryStore", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext()),  Type::getInt64Ty(M.getContext())).getCallee());
         MemoryInit      = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryInit", Type::getVoidTy(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());
         MemoryDestroy   = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryDestroy", Type::getVoidTy(M.getContext())).getCallee());
         MemoryIncrement = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryIncrement", Type::getVoidTy(M.getContext()), Type::getInt64Ty(M.getContext())).getCallee());

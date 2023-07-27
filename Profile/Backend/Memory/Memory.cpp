@@ -23,6 +23,9 @@ namespace Cyclebite::Profile::Backend::Memory
     set<shared_ptr<Epoch>, UIDCompare> epochs;
     /// holds all sets of basic blocks that should be observed in an epoch at some point in the profile
     map<uint64_t, set<int64_t>> taskCandidates;
+    /// Maps instructions to their working set tuples
+    /// These mappings are used in the grammar tool to figure out which load instructions are touching critical pieces of memory
+    map<int64_t, set<MemTuple, MTCompare>> instToTuple;
 
     /// Holds all CodeSections
     /// A code section is a unique set of basic block IDs ie a codesection may map to multiple kernels
@@ -88,7 +91,7 @@ namespace Cyclebite::Profile::Backend::Memory
             lastBlock = (int64_t)a;
         }
 
-        void __Cyclebite__Profile__Backend__MemoryStore(void *address, uint64_t bbID, uint32_t instructionID, uint64_t datasize)
+        void __Cyclebite__Profile__Backend__MemoryStore(void *address, int64_t valueID, uint64_t datasize)
         {
             static MemTuple mt;
             mt.type = __TA_MemType::Writer;
@@ -107,9 +110,18 @@ namespace Cyclebite::Profile::Backend::Memory
                 merge_tuple_set(currentEpoch->memoryData.wTuples, mt);
             }
 #endif
+            // instruction tuples
+            if( instToTuple.find(valueID) == instToTuple.end() )
+            {
+                instToTuple[valueID].insert(mt);
+            }
+            else
+            {
+                merge_tuple_set(instToTuple.at(valueID), mt);
+            }
         }
 
-        void __Cyclebite__Profile__Backend__MemoryLoad(void *address, uint64_t bbID, uint32_t instructionID, uint64_t datasize)
+        void __Cyclebite__Profile__Backend__MemoryLoad(void *address, int64_t valueID, uint64_t datasize)
         {
             static MemTuple mt;
             mt.type = __TA_MemType::Reader;
@@ -128,6 +140,15 @@ namespace Cyclebite::Profile::Backend::Memory
                 merge_tuple_set(currentEpoch->memoryData.rTuples, mt);
             }
 #endif
+            // instruction tuples
+            if( instToTuple.find(valueID) == instToTuple.end() )
+            {
+                instToTuple[valueID].insert(mt);
+            }
+            else
+            {
+                merge_tuple_set(instToTuple.at(valueID), mt);
+            }
         }
 
         void __Cyclebite__Profile__Backend__MemoryInit(uint64_t a)

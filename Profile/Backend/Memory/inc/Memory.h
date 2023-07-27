@@ -15,6 +15,8 @@ namespace Cyclebite::Profile::Backend::Memory
     class Kernel;
     class NonKernel;
     struct UIDCompare;
+    struct MemTuple;
+    struct MTCompare;
 
     /// Timing information
     extern struct timespec start, end;
@@ -35,6 +37,9 @@ namespace Cyclebite::Profile::Backend::Memory
     extern std::set<std::shared_ptr<Epoch>, UIDCompare> epochs;
     /// holds all sets of basic blocks that should be observed in an epoch at some point in the profile
     extern std::map<uint64_t, std::set<int64_t>> taskCandidates;
+    /// Maps instructions to their working set tuples
+    /// These mappings are used in the grammar tool to figure out which load instructions are touching critical pieces of memory
+    extern std::map<int64_t, std::set<MemTuple, MTCompare>> instToTuple;
 
     /// Holds all CodeSections
     /// A code section is a unique set of basic block IDs ie a codesection may map to multiple kernels

@@ -13,5 +13,4 @@ namespace Cyclebite::Profile::Backend::Memory
     void GenerateMemoryRegions();
     void ProcessEpochBoundaries();
     std::map<uint64_t, std::pair<std::set<uint64_t>, std::set<uint64_t>>> GenerateTaskCommunication();
-
 } // namespace Cyclebite::Profile::Backend::Memory

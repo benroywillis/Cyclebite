@@ -8,5 +8,4 @@ namespace Cyclebite::Profile::Backend::Memory
     void GenerateTaskGraph();
     void GenerateTaskOnlyTaskGraph();
     void OutputKernelInstances();
-
 } // namespace Cyclebite::Profile::Backend::Memory
