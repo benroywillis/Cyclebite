@@ -35,7 +35,16 @@ const set<shared_ptr<Cycle>> Task::getParentMostCycles() const
     return parents;
 }
 
-bool Task::find(const shared_ptr<Cyclebite::Graph::DataNode>& n) const
+bool Task::find(const shared_ptr<Cyclebite::Graph::DataValue>& v) const
+{
+    if( const auto& inst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(v) )
+    {
+        return find(inst);
+    }
+    return false;
+}
+
+bool Task::find(const shared_ptr<Cyclebite::Graph::Inst>& n) const
 {
     for( const auto& c : cycles )
     {

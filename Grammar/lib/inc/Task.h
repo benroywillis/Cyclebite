@@ -13,7 +13,8 @@ namespace Cyclebite::Grammar
         const std::set<std::shared_ptr<Cycle>>& getCycles() const;
         const std::set<std::shared_ptr<Cycle>> getChildMostCycles() const;
         const std::set<std::shared_ptr<Cycle>> getParentMostCycles() const;
-        bool find(const std::shared_ptr<Cyclebite::Graph::DataNode>& n) const;
+        bool find(const std::shared_ptr<Cyclebite::Graph::DataValue>& v) const;
+        bool find(const std::shared_ptr<Cyclebite::Graph::Inst>& n) const;
         bool find(const std::shared_ptr<Cyclebite::Graph::ControlBlock>& b) const;
         bool find(const std::shared_ptr<Cycle>& c) const;
     private:

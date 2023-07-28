@@ -1,4 +1,4 @@
-set(SOURCES Dijkstra.cpp GraphNode.cpp ImaginaryNode.cpp ControlNode.cpp IO.cpp Transforms.cpp MLCycle.cpp ControlBlock.cpp DataNode.cpp VirtualNode.cpp GraphEdge.cpp UnconditionalEdge.cpp CallEdge.cpp ConditionalEdge.cpp ImaginaryEdge.cpp VirtualEdge.cpp CallGraphNode.cpp ReturnEdge.cpp Graph.cpp ControlGraph.cpp DataGraph.cpp CallGraph.cpp CallGraphEdge.cpp CallNode.cpp)
+set(SOURCES Dijkstra.cpp GraphNode.cpp ImaginaryNode.cpp ControlNode.cpp IO.cpp Transforms.cpp MLCycle.cpp ControlBlock.cpp DataValue.cpp Arg.cpp Inst.cpp VirtualNode.cpp GraphEdge.cpp UnconditionalEdge.cpp CallEdge.cpp ConditionalEdge.cpp ImaginaryEdge.cpp VirtualEdge.cpp CallGraphNode.cpp ReturnEdge.cpp Graph.cpp ControlGraph.cpp DataGraph.cpp CallGraph.cpp CallGraphEdge.cpp CallNode.cpp)
 
 add_library(Graph SHARED ${SOURCES})
 set_target_properties(

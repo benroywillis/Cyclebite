@@ -9,7 +9,8 @@
 namespace Cyclebite::Graph
 {
     class ControlNode;
-    class DataNode;
+    class DataValue;
+    class Inst;
     class ControlBlock;
     class MLCycle;
     class UnconditionalEdge;
@@ -26,7 +27,7 @@ namespace Cyclebite::Graph
     // instantiated in cartographer/new/IO.cpp
     extern std::map<std::vector<uint32_t>, uint64_t> NIDMap;
     // maps an llvm instruction to its corresponding libGraph datanode, initialized in Graph/IO.cpp:BuildDFG()
-    extern std::map<const llvm::Instruction*, const std::shared_ptr<DataNode>> DNIDMap;
+    extern std::map<const llvm::Value*, const std::shared_ptr<DataValue>> DNIDMap;
     // maps an llvm basic block to its corresponding libGraph controlnode, initialized in Graph/IO.cpp:BuildDFG()
     extern std::map<const llvm::BasicBlock*, const std::shared_ptr<ControlBlock>> BBCBMap;
     struct EntropyInfo
@@ -55,7 +56,7 @@ namespace Cyclebite::Graph
     std::string GenerateTransformedSegmentedDot(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes, const std::set<std::shared_ptr<MLCycle>, KCompare> &kernels, int markovOrder);
     void GenerateDynamicCoverage(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &dynamicNodes, const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &staticNodes);
     ControlGraph GenerateStaticCFG(llvm::Module *M);
-    std::string GenerateDataDot(const std::set<std::shared_ptr<DataNode>, p_GNCompare> &nodes);
+    std::string GenerateDataDot(const std::set<std::shared_ptr<DataValue>, p_GNCompare> &nodes);
     std::string GenerateBBSubgraphDot(const std::set<std::shared_ptr<ControlBlock>, p_GNCompare> &BBs);
     std::string GenerateHighlightedSubgraph(const Graph &graph, const Graph &subgraph);
     std::string GenerateFunctionSubgraph(const Graph &funcGraph, const std::shared_ptr<CallEdge> &entrance);

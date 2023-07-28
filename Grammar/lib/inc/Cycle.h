@@ -1,8 +1,9 @@
 #pragma once
-#include "ControlBlock.h"
-#include "DataGraph.h"
+#include "Graph/inc/ControlBlock.h"
+#include "Graph/inc/DataGraph.h"
 #include <llvm/IR/Instructions.h>
 #include <nlohmann/json.hpp>
+#include "Graph/inc/Inst.h"
 
 namespace Cyclebite::Grammar
 {
@@ -19,7 +20,8 @@ namespace Cyclebite::Grammar
         const std::set<std::shared_ptr<class Cycle>>& getChildren() const;
         const std::set<std::shared_ptr<class Cycle>>& getParents() const;
         const std::set<std::shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare>& getBody() const;
-        bool find(const std::shared_ptr<Cyclebite::Graph::DataNode>& n) const;
+        bool find(const std::shared_ptr<Cyclebite::Graph::DataValue>& v) const;
+        bool find(const std::shared_ptr<Cyclebite::Graph::Inst>& n) const;
         bool find(const std::shared_ptr<Cyclebite::Graph::ControlBlock>& b) const;
         void addChild(const std::shared_ptr<class Cycle>& c);
         void addParent(const std::shared_ptr<class Cycle>& p);

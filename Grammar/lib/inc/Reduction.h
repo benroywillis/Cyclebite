@@ -1,6 +1,7 @@
 #pragma once
 #include "Expression.h"
 #include "ReductionVariable.h"
+#include "Graph/inc/Inst.h"
 
 namespace Cyclebite::Grammar
 {

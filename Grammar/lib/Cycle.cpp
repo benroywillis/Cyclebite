@@ -5,6 +5,7 @@
 #include "Util/Exceptions.h"
 #include "Util/Annotate.h"
 #include "Util/Print.h"
+#include "Graph/inc/IO.h"
 
 using namespace Cyclebite::Grammar;
 using namespace Cyclebite::Graph;
@@ -30,7 +31,16 @@ const set<shared_ptr<Cycle>>& Cycle::getParents() const
     return parents;
 }
 
-bool Cycle::find(const shared_ptr<DataNode>& n) const
+bool Cycle::find(const shared_ptr<DataValue>& v) const
+{
+    if( const auto& inst = dynamic_pointer_cast<Inst>(v) )
+    {
+        return find(inst);
+    }
+    return false;
+}
+
+bool Cycle::find(const shared_ptr<Inst>& n) const
 {
     for( const auto& b : blocks )
     {

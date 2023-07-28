@@ -1,5 +1,5 @@
 #pragma once
-#include "GraphNode.h"
+#include "DataValue.h"
 #include <llvm/IR/Instruction.h>
 #include <map>
 
@@ -110,12 +110,12 @@ namespace Cyclebite::Graph
         Memory
     };
 
-    class DataNode : public GraphNode
+    class Inst : public DataValue
     {
     public:
         Operation op;
         std::shared_ptr<class ControlBlock> parent;
-        DataNode(const llvm::Instruction* inst, DNC t = DNC::None);
+        Inst(const llvm::Instruction* inst, DNC t = DNC::None);
         const llvm::Instruction* getInst() const; 
         bool isState() const;
         bool isFunction() const;
@@ -127,5 +127,4 @@ namespace Cyclebite::Graph
         const llvm::Instruction* inst;
         DNC type;
     };
-
 } // namespace Cyclebite::Graph

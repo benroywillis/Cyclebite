@@ -33,7 +33,7 @@ uint32_t markovOrder;
 /// Maps a vector of basic block IDs to a node ID
 map<vector<uint32_t>, uint64_t> Cyclebite::Graph::NIDMap;
 /// Maps each unique instruction to its datanode
-map<const llvm::Instruction *, const shared_ptr<DataNode>> Cyclebite::Graph::DNIDMap;
+map<const llvm::Value *, const shared_ptr<DataValue>> Cyclebite::Graph::DNIDMap;
 /// Maps each basic block to its ControlBlock
 std::map<const llvm::BasicBlock*, const std::shared_ptr<ControlBlock>> Cyclebite::Graph::BBCBMap;
 
@@ -1610,7 +1610,7 @@ void Cyclebite::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebi
     // who is empty in the static callgraph? Do they have edges to non-empty functions? Have we accounted for them all in the dynamic graph?
 }
 
-shared_ptr<DataNode> ConstructCallNode( const shared_ptr<DataNode>& newNode, const llvm::CallBase* call, const Cyclebite::Graph::CallGraph& dynamicCG, const map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, const set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock )
+shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode, const llvm::CallBase* call, const Cyclebite::Graph::CallGraph& dynamicCG, const map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, const set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock )
 {
     // upgrade to a CallNode
     // the llvm::CallBase instruction may contain missing information ie a function pointer
@@ -1657,7 +1657,7 @@ shared_ptr<DataNode> ConstructCallNode( const shared_ptr<DataNode>& newNode, con
                 {
                     // for now we instantiate this control block with an empty set of instructions
                     // later we will "upgrade" this block when its instructions are ready
-                    set<shared_ptr<DataNode>, p_GNCompare> insts;
+                    set<shared_ptr<Inst>, p_GNCompare> insts;
                     dest = make_shared<ControlBlock>(blockToNode.at( blockID ), insts);
                 }
                 dests.insert( dest );
@@ -1720,7 +1720,7 @@ shared_ptr<DataNode> ConstructCallNode( const shared_ptr<DataNode>& newNode, con
                     {
                         // for now we instantiate this control block with an empty set of instructions
                         // later we will "upgrade" this block when its instructions are ready
-                        set<shared_ptr<DataNode>, p_GNCompare> insts;
+                        set<shared_ptr<Inst>, p_GNCompare> insts;
                         dest = make_shared<ControlBlock>(blockToNode.at(GetBlockID(firstBlock)), insts);
                     }
                     dests.insert( dest );
@@ -1770,7 +1770,7 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
             kernelFunctions.insert(id);
         }
     }
-    /* this section constructs the data flow and ControlBlock */
+    // this section constructs the data flow of instructions (Cyclebite::Graph::Inst) and Cyclebite::Graph::ControlBlock
     for (auto f = SourceBitcode->begin(); f != SourceBitcode->end(); f++)
     {
         for (auto bit = f->begin(); bit != f->end(); bit++)
@@ -1783,30 +1783,30 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                 continue;
             }
             // these instructions will be passed into a ControlBlock at the end
-            set<std::shared_ptr<DataNode>, p_GNCompare> blockInstructions;
+            set<std::shared_ptr<Inst>, p_GNCompare> blockInstructions;
             for (auto it = bit->begin(); it != bit->end(); it++)
             {
                 const auto inst = cast<Instruction>(it);
-                std::shared_ptr<DataNode> newNode = nullptr;
+                std::shared_ptr<Inst> newNode = nullptr;
                 if (DNIDMap.find(inst) == DNIDMap.end())
                 {
                     // checks to see if this is a base pointer or induction variablej
                     auto ID = GetValueID(inst);
                     if (inductionVariables.find(ID) != inductionVariables.end())
                     {
-                        newNode = make_shared<DataNode>(inst, DNC::State);
+                        newNode = make_shared<Inst>(inst, DNC::State);
                     }
                     else if (basePointers.find(ID) != basePointers.end())
                     {
-                        newNode = make_shared<DataNode>(inst, DNC::Memory);
+                        newNode = make_shared<Inst>(inst, DNC::Memory);
                     }
                     else if (kernelFunctions.find(ID) != kernelFunctions.end())
                     {
-                        newNode = make_shared<DataNode>(inst, DNC::Function);
+                        newNode = make_shared<Inst>(inst, DNC::Function);
                     }
                     else
                     {
-                        newNode = make_shared<DataNode>(inst);
+                        newNode = make_shared<Inst>(inst);
                     }
                     if( auto call = dyn_cast<CallBase>(inst) )
                     {
@@ -1817,7 +1817,7 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                 }
                 else
                 {
-                    newNode = DNIDMap[inst];
+                    newNode = static_pointer_cast<Inst>(DNIDMap[inst]);
                     if( auto call = llvm::dyn_cast<llvm::CallBase>(inst) )
                     {
                         graph.removeNode(newNode);
@@ -1825,16 +1825,16 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                         graph.addNode(newNode);
                     }
                 }
-                DNIDMap.insert(pair<const llvm::Instruction*, const shared_ptr<DataNode>>(inst, newNode));
+                DNIDMap.insert(pair<const llvm::Instruction*, const shared_ptr<Inst>>(inst, newNode));
                 blockInstructions.insert(newNode);
                 for (const auto& use : inst->users())
                 {
                     if (const auto& user = dyn_cast<Instruction>(use))
                     {
-                        shared_ptr<DataNode> neighborNode = nullptr;
+                        shared_ptr<Inst> neighborNode = nullptr;
                         if (DNIDMap.find(user) != DNIDMap.end())
                         {
-                            neighborNode = DNIDMap[user];
+                            neighborNode = static_pointer_cast<Inst>(DNIDMap[user]);
                         }
                         else
                         {
@@ -1842,19 +1842,19 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                             auto ID = GetValueID(user);
                             if (inductionVariables.find(ID) != inductionVariables.end())
                             {
-                                neighborNode = make_shared<DataNode>(user, DNC::State);
+                                neighborNode = make_shared<Inst>(user, DNC::State);
                             }
                             else if (basePointers.find(ID) != basePointers.end())
                             {
-                                neighborNode = make_shared<DataNode>(user, DNC::Memory);
+                                neighborNode = make_shared<Inst>(user, DNC::Memory);
                             }
                             else if (kernelFunctions.find(ID) != kernelFunctions.end())
                             {
-                                neighborNode = make_shared<DataNode>(user, DNC::Function);
+                                neighborNode = make_shared<Inst>(user, DNC::Function);
                             }
                             else
                             {
-                                neighborNode = make_shared<DataNode>(user);
+                                neighborNode = make_shared<Inst>(user);
                             }
                             neighborNode->op = GetOp(user->getOpcode());
                             graph.addNode(neighborNode);
@@ -1874,17 +1874,17 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                         }
                         newNode->addSuccessor(newEdge);
                         neighborNode->addPredecessor(newEdge);
-                        DNIDMap.insert(pair<const llvm::Instruction*, const shared_ptr<DataNode>>(user, neighborNode));
+                        DNIDMap.insert(pair<const llvm::Instruction*, const shared_ptr<Inst>>(user, neighborNode));
                     }
                 }
                 for (const auto &val : inst->operands())
                 {
                     if (const auto& predInst = dyn_cast<Instruction>(val))
                     {
-                        std::shared_ptr<DataNode> nodePred = nullptr;
+                        std::shared_ptr<Inst> nodePred = nullptr;
                         if (DNIDMap.find(predInst) != DNIDMap.end())
                         {
-                            nodePred = DNIDMap[predInst];
+                            nodePred = static_pointer_cast<Inst>(DNIDMap[predInst]);
                         }
                         else
                         {
@@ -1892,22 +1892,22 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                             auto ID = GetValueID(predInst);
                             if (inductionVariables.find(ID) != inductionVariables.end())
                             {
-                                nodePred = make_shared<DataNode>(predInst, DNC::State);
+                                nodePred = make_shared<Inst>(predInst, DNC::State);
                             }
                             else if (basePointers.find(ID) != basePointers.end())
                             {
-                                nodePred = make_shared<DataNode>(predInst, DNC::Memory);
+                                nodePred = make_shared<Inst>(predInst, DNC::Memory);
                             }
                             else if (kernelFunctions.find(ID) != kernelFunctions.end())
                             {
-                                nodePred = make_shared<DataNode>(predInst, DNC::Function);
+                                nodePred = make_shared<Inst>(predInst, DNC::Function);
                             }
                             else
                             {
-                                nodePred = make_shared<DataNode>(predInst);
+                                nodePred = make_shared<Inst>(predInst);
                             }
                             nodePred->op = GetOp(predInst->getOpcode());
-                            DNIDMap.insert(pair<const llvm::Instruction*, const shared_ptr<DataNode>>(predInst, nodePred));
+                            DNIDMap.insert(pair<const llvm::Instruction*, const shared_ptr<Inst>>(predInst, nodePred));
                             graph.addNode(nodePred);
                         }
                         auto newEdge = make_shared<UnconditionalEdge>(nodePred, newNode);
@@ -1923,6 +1923,60 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                         newNode->addPredecessor(newEdge);
                         nodePred->addSuccessor(newEdge);
                     }
+                    else if( const auto& arg = dyn_cast<Argument>(val) )
+                    {
+                        std::shared_ptr<DataValue> argNode = nullptr;
+                        if( DNIDMap.find(arg) != DNIDMap.end() )
+                        {
+                            argNode = DNIDMap.at(arg);
+                        }
+                        else
+                        {
+                            argNode = make_shared<DataValue>(arg);
+                            DNIDMap.insert(pair<const llvm::Value*, const shared_ptr<DataValue>>(arg, argNode));
+                            graph.addNode(argNode);
+                        }
+                        auto newEdge = make_shared<UnconditionalEdge>(argNode, newNode);
+                        if (!graph.find(newEdge))
+                        {
+                            graph.addEdge(newEdge);
+                        }
+                        else
+                        {
+                            auto staleEdge = newEdge;
+                            newEdge = static_pointer_cast<UnconditionalEdge>(graph.getOriginalEdge(staleEdge));
+                        }
+                        newNode->addPredecessor(newEdge);
+                        argNode->addSuccessor(newEdge);
+                    }
+                    // you can only communicate with globals via ld/st in LLVM IR
+                    // thus, all we have to do is look at instruction operands to find their uses (ie an instruction cannot be used directly by a global)
+                    /*else if( const auto& glob = dyn_cast<GlobalValue>(val) )
+                    {
+                        std::shared_ptr<Global> globalNode = nullptr;
+                        if( DNIDMap.find(glob) != DNIDMap.end() )
+                        {
+                            globalNode = static_pointer_cast<Global>(DNIDMap.at(glob));
+                        }
+                        else
+                        {
+                            globalNode = make_shared<Global>(glob);
+                            DNIDMap.insert(pair<const llvm::GlobalValue*, const shared_ptr<Global>>(glob, globalNode));
+                            graph.addNode(globalNode);
+                        }
+                        auto newEdge = make_shared<UnconditionalEdge>(globalNode, newNode);
+                        if (!graph.find(newEdge))
+                        {
+                            graph.addEdge(newEdge);
+                        }
+                        else
+                        {
+                            auto staleEdge = newEdge;
+                            newEdge = static_pointer_cast<UnconditionalEdge>(graph.getOriginalEdge(staleEdge));
+                        }
+                        newNode->addPredecessor(newEdge);
+                        globalNode->addSuccessor(newEdge);
+                    }*/
                 }
             }
             // there is a one-to-one mapping between llvm::BasicBlock and Cyclebite::Graph::ControlBlock
@@ -3122,13 +3176,20 @@ void Cyclebite::Graph::GenerateDynamicCoverage(const std::set<std::shared_ptr<Co
 }
 
 // Data graph operations
-string Cyclebite::Graph::GenerateDataDot(const set<std::shared_ptr<DataNode>, p_GNCompare> &nodes)
+string Cyclebite::Graph::GenerateDataDot(const set<shared_ptr<DataValue>, p_GNCompare> &nodes)
 {
     string dotString = "digraph{\n";
     // label nodes based on their operations
     for (const auto &node : nodes)
     {
-        dotString += "\t" + to_string(node->NID) + " [label=\"" + OperationToString[node->op] + "\"];\n";
+        if( const auto& n = dynamic_pointer_cast<Inst>(node) )
+        {
+            dotString += "\t" + to_string(n->NID) + " [label=\"" + OperationToString[n->op] + "\"];\n";
+        }
+        else
+        {
+            dotString += "\t" + to_string(node->NID) + ";\n";
+        }
     }
     // now build out the nodes in the graph
     for (const auto &node : nodes)

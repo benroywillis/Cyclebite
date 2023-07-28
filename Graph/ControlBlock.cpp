@@ -1,10 +1,10 @@
 #include "ControlBlock.h"
-#include "DataNode.h"
+#include "Inst.h"
 #include "UnconditionalEdge.h"
 
 using namespace Cyclebite::Graph;
 
-ControlBlock::ControlBlock(std::shared_ptr<ControlNode> node, std::set<std::shared_ptr<DataNode>, p_GNCompare> inst) : ControlNode(*node)
+ControlBlock::ControlBlock(std::shared_ptr<ControlNode> node, std::set<std::shared_ptr<Inst>, p_GNCompare> inst) : ControlNode(*node)
 {
     instructions.insert(inst.begin(), inst.end());
 }

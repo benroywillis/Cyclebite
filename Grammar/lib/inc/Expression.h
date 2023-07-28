@@ -1,5 +1,6 @@
 #pragma once
 #include "Collection.h"
+#include "Graph/inc/Inst.h"
 
 namespace Cyclebite::Grammar
 {

@@ -2,7 +2,8 @@
 #include "DataGraph.h"
 #include "ControlBlock.h"
 #include "ConstantSymbol.h"
-#include "IO.h"
+#include "Graph/inc/IO.h"
+#include "inc/IO.h"
 #include "Reduction.h"
 #include "ConstantFunction.h"
 #include "Util/Annotate.h"
@@ -39,22 +40,22 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
     // thus, we will start from all the cycle-inducing instructions, walk backwards through the graph, and find the IVs (likely through PHIs and ld/st with the same pointer)
     for( const auto& cycle : t->getCycles() )
     {
-        auto d = DNIDMap.at(cycle->getIteratorInst());
+        auto d = static_pointer_cast<Inst>(DNIDMap.at(cycle->getIteratorInst()));
         if( (d->isTerminator()) && (d->parent->getSuccessors().size() > 1) )
         {
             // we have a multi-destination control instruction, walk its predecessors to find a memory or binary operation that indicates an induction variable
-            set<shared_ptr<DataNode>, p_GNCompare> vars;
+            set<shared_ptr<DataValue>, p_GNCompare> vars;
             set<const llvm::Instruction*> covered;
             deque<const llvm::Instruction*> Q;
-            Q.push_front(d->getInst());
-            covered.insert(d->getInst());
+            Q.push_front(llvm::cast<llvm::Instruction>(d->getVal()));
+            covered.insert(llvm::cast<llvm::Instruction>(d->getVal()));
             while( !Q.empty() )
             {
                 for( auto& use : Q.front()->operands() )
                 {
                     if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use.get()) )
                     {
-                        if( !cycle->find(DNIDMap[useInst]) )
+                        if( !cycle->find(DNIDMap.at(useInst)) )
                         {
                             continue;
                         }
@@ -107,7 +108,7 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
             {
                 for( const auto& var : vars )
                 {
-                    PrintVal(var->getInst());
+                    PrintVal(var->getVal());
                 }
                 throw AtlasException("Found more than one IV candidate for this cycle!");
             }
@@ -129,11 +130,11 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
         {
             for( const auto& i : b->instructions )
             {
-                if( const auto st = llvm::dyn_cast<llvm::StoreInst>(i->getInst()) )
+                if( const auto st = llvm::dyn_cast<llvm::StoreInst>(i->getVal()) )
                 {
                     if( const auto& v = llvm::dyn_cast<llvm::Instruction>(st->getValueOperand()) )
                     {
-                        if( DNIDMap.at(v)->isFunction() )
+                        if( static_pointer_cast<Inst>(DNIDMap.at(v))->isFunction() )
                         {
                             sts.insert(st);
                         }
@@ -152,10 +153,10 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
         // the difference between rv and iv is that rv lies entirely within a functional group
         // thus we crawl the functional group and put each value through checks similar to the getInductionVariables() method
         // we have a multi-destination control instruction, walk its predecessors to find a memory or binary operation that indicates an induction variable
-        set<shared_ptr<DataNode>> reductionCandidates;
+        set<shared_ptr<DataValue>> reductionCandidates;
         deque<const llvm::Instruction*> Q;
         set<const llvm::Instruction*> seen;
-        shared_ptr<DataNode> reductionOp = nullptr;
+        shared_ptr<DataValue> reductionOp = nullptr;
         Q.push_front(llvm::cast<llvm::Instruction>(s->getValueOperand()));
         seen.insert(llvm::cast<llvm::Instruction>(s->getValueOperand()));
         while( !Q.empty() )
@@ -227,7 +228,7 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
             // to find the induction variable associated with that candidate, the 
             if( const auto& v = llvm::dyn_cast<llvm::Instruction>(s->getValueOperand()) )
             {
-                auto b = DNIDMap.at(v);
+                auto b = static_pointer_cast<Inst>(DNIDMap.at(v));
                 for( const auto& var : vars )
                 {
                     if( var->getCycle()->find(b->parent) )
@@ -243,7 +244,7 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
             }
             if( iv == nullptr )
             {
-                PrintVal(can->getInst());
+                PrintVal(can->getVal());
                 throw AtlasException("Cannot map this reduction variable to an induction variable!");
             }
             rvs.insert( make_shared<ReductionVariable>(iv, reductionOp) );
@@ -257,7 +258,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
     // in order to find base pointers, we introspect all load instructions, and walk backward through the pointer operand of a given load until we find a bedrock load (a load that uses a pointer with no offset - a magic number). The pointer of that load is a "base pointer"
     // base pointers are useful for modeling significant memory chunks. This input data represents an entity that can be used for communication
     // when base pointers are combined with the state variables (induction variables) that index them, Collections are formed (a space of memory in which the access pattern can be understood - a polyhedral space)
-    set<shared_ptr<DataNode>, p_GNCompare> bps;
+    set<const llvm::Value*> bpCandidates;
     set<const llvm::Value*> covered;
     for( const auto& c : t->getCycles() )
     {
@@ -265,88 +266,36 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
         {
             for( const auto& n : b->instructions )
             {
-               auto d = static_pointer_cast<DataNode>(n);
-                if( d->op == Operation::load || d->op == Operation::store )
+                if( n->op == Operation::load || n->op == Operation::store )
                 {
-                    deque<const llvm::Value*> Q;
-                    covered.insert(d->getInst());
-                    Q.push_front(d->getInst());
-                    while( !Q.empty() )
+                    if( SignificantMemInst.find( n ) != SignificantMemInst.end() )
                     {
-                        if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
+                        deque<const llvm::Value*> Q;
+                        covered.insert(n->getVal());
+                        Q.push_front(n->getVal());
+                        while( !Q.empty() )
                         {
-                            if( GetBlockID(inst->getParent()) == IDState::Uninitialized )
+                            if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
                             {
-                                Q.pop_front();
-                                continue;
-                            }
-                        }
-                        if( auto cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
-                        {
-                            // dynamic allocations are often made as uint8_t arrays and cast to the appropriate type
-                            for( unsigned i = 0; i < cast->getNumOperands(); i++ )
-                            {
-                                if( covered.find( cast->getOperand(i) ) == covered.end() )
+                                if( GetBlockID(inst->getParent()) == IDState::Uninitialized )
                                 {
-                                    covered.insert(cast->getOperand(i));
-                                    Q.push_back(cast->getOperand(i));
+                                    Q.pop_front();
+                                    continue;
                                 }
                             }
-                            // they can also cast pointer allocations to the type of the base pointer, so we have to put uses of the cast into the queue too
-                            for( const auto& user : cast->users() )
+                            if( auto cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
                             {
-                                if( covered.find(user) == covered.end() )
+                                // dynamic allocations are often made as uint8_t arrays and cast to the appropriate type
+                                for( unsigned i = 0; i < cast->getNumOperands(); i++ )
                                 {
-                                    Q.push_back(user);
-                                    covered.insert(user);
+                                    if( covered.find( cast->getOperand(i) ) == covered.end() )
+                                    {
+                                        covered.insert(cast->getOperand(i));
+                                        Q.push_back(cast->getOperand(i));
+                                    }
                                 }
-                            }
-                        }
-                        else if( auto ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
-                        {
-                            if( covered.find(ld->getPointerOperand()) == covered.end() )
-                            {
-                                covered.insert(ld->getPointerOperand());
-                                Q.push_back(ld->getPointerOperand());
-                            }
-                        }
-                        else if( auto st = llvm::dyn_cast<llvm::StoreInst>(Q.front()) )
-                        {
-                            if( covered.find(st->getPointerOperand()) == covered.end() )
-                            {
-                                covered.insert(st->getPointerOperand());
-                                Q.push_back(st->getPointerOperand());
-                            }
-                            // with stores, we evaluate the value operand as well
-                            // for example in case an allocation is put into a double pointer, the value operand will lead back to the allocation, the pointer operand will lead to a static pointer allocation
-                            if( covered.find(st->getValueOperand()) == covered.end() )
-                            {
-                                covered.insert(st->getValueOperand());
-                                Q.push_back(st->getValueOperand());
-                            }
-                        }
-                        else if( auto gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
-                        {
-                            if( covered.find(gep->getPointerOperand()) == covered.end() )
-                            {
-                                covered.insert(gep->getPointerOperand());
-                                Q.push_back(gep->getPointerOperand());
-                            }
-                        }
-                        else if( auto alloc = llvm::dyn_cast<llvm::AllocaInst>(Q.front()) )
-                        {
-                            // an originating alloc indicates a base pointer, if it is big enough
-                            auto allocSize = alloc->getAllocationSizeInBits(alloc->getParent()->getParent()->getParent()->getDataLayout()).getValue()/8;
-                            if( allocSize >= ALLOC_THRESHOLD )
-                            {
-                                bps.insert(DNIDMap.at((llvm::Instruction*)alloc));
-                            }
-                            else
-                            {
-                                spdlog::warn("Found allocation of size "+to_string(allocSize)+" bytes, which does not meet the minimum allocation size for a base pointer.");
-                                // when we encounter allocs and they are too small, this likely means our base pointer is being stored to a pointer which contains the base pointer
-                                // thus, we need to add the users of this alloc to the queue
-                                for( const auto& user : alloc->users() )
+                                // they can also cast pointer allocations to the type of the base pointer, so we have to put uses of the cast into the queue too
+                                for( const auto& user : cast->users() )
                                 {
                                     if( covered.find(user) == covered.end() )
                                     {
@@ -355,51 +304,86 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                     }
                                 }
                             }
-                        }
-                        else if( auto call = llvm::dyn_cast<llvm::CallBase>(Q.front()) )
-                        {
-                            if( isAllocatingFunction(call) )
+                            else if( auto ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
                             {
-                                // an allocating function is a base pointer
-                                bps.insert(DNIDMap.at((llvm::Instruction*)call));
-                            }
-                        }
-                        else if( auto arg = llvm::dyn_cast<llvm::Argument>(Q.front()) )
-                        {
-                            // arguments to the current context may be base pointers, or they may be mundane details
-                            // likely this argument was discovered by looking at the value operand of a store instruction (usually LLVM puts pointer arguments into the stack)
-                            // for now, we simply push the arguments into the base pointer list and hope they are big enough to justify doing so
-                            if( arg->getType()->isPointerTy() )
-                            {
-                                // the argument itself is not (yet) supported - it is not an instruction
-                                // thus, we use the store llvm uses to put it onto the stack
-                                bool pushed = false;
-                                for( const auto& use : arg->users() )
+                                if( covered.find(ld->getPointerOperand()) == covered.end() )
                                 {
-                                    if( const auto& st = llvm::dyn_cast<llvm::StoreInst>(use) )
+                                    covered.insert(ld->getPointerOperand());
+                                    Q.push_back(ld->getPointerOperand());
+                                }
+                            }
+                            else if( auto st = llvm::dyn_cast<llvm::StoreInst>(Q.front()) )
+                            {
+                                if( covered.find(st->getPointerOperand()) == covered.end() )
+                                {
+                                    covered.insert(st->getPointerOperand());
+                                    Q.push_back(st->getPointerOperand());
+                                }
+                                // with stores, we evaluate the value operand as well
+                                // for example in case an allocation is put into a double pointer, the value operand will lead back to the allocation, the pointer operand will lead to a static pointer allocation
+                                if( covered.find(st->getValueOperand()) == covered.end() )
+                                {
+                                    covered.insert(st->getValueOperand());
+                                    Q.push_back(st->getValueOperand());
+                                }
+                            }
+                            else if( auto gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
+                            {
+                                if( covered.find(gep->getPointerOperand()) == covered.end() )
+                                {
+                                    covered.insert(gep->getPointerOperand());
+                                    Q.push_back(gep->getPointerOperand());
+                                }
+                            }
+                            else if( auto alloc = llvm::dyn_cast<llvm::AllocaInst>(Q.front()) )
+                            {
+                                // an originating alloc indicates a base pointer, if it is big enough
+                                auto allocSize = alloc->getAllocationSizeInBits(alloc->getParent()->getParent()->getParent()->getDataLayout()).getValue()/8;
+                                if( allocSize >= ALLOC_THRESHOLD )
+                                {
+                                    bpCandidates.insert(alloc);
+                                }
+                                else
+                                {
+                                    spdlog::warn("Found allocation of size "+to_string(allocSize)+" bytes, which does not meet the minimum allocation size for a base pointer.");
+                                    // when we encounter allocs and they are too small, this likely means our base pointer is being stored to a pointer which contains the base pointer
+                                    // thus, we need to add the users of this alloc to the queue
+                                    for( const auto& user : alloc->users() )
                                     {
-                                        if( st->getValueOperand() == arg )
+                                        if( covered.find(user) == covered.end() )
                                         {
-                                            pushed = true;
-                                            bps.insert(DNIDMap.at(llvm::cast<llvm::Instruction>(st->getPointerOperand())));
+                                            Q.push_back(user);
+                                            covered.insert(user);
                                         }
                                     }
                                 }
-                                if( !pushed )
+                            }
+                            else if( auto call = llvm::dyn_cast<llvm::CallBase>(Q.front()) )
+                            {
+                                if( isAllocatingFunction(call) )
                                 {
-                                    spdlog::warn("Argument "+PrintVal(arg)+" to function "+string(arg->getParent()->getName())+" does not have a use that can be evaluated as a base pointer!");
+                                    // an allocating function is a base pointer
+                                    bpCandidates.insert(call);
                                 }
                             }
+                            else if( auto arg = llvm::dyn_cast<llvm::Argument>(Q.front()) )
+                            {
+                                // we only care about arguments that are at least a pointer type (one or more indirection)
+                                if( arg->getType()->isPointerTy() )
+                                {
+                                    bpCandidates.insert(arg);
+                                }
+                            }
+                            Q.pop_front();
                         }
-                        Q.pop_front();
                     }
                 }
             }
         }
     }
     // now turn all base pointers into objects
-    set<shared_ptr<BasePointer>> bp;
-    for( const auto& p : bps )
+    set<shared_ptr<BasePointer>> bps;
+    for( const auto& bp : bpCandidates )
     {
         // for each base pointer, we are interested in finding all load and store instructions that touch its memory
         // this should include the pointer itself
@@ -409,13 +393,32 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
         set<const llvm::Value*> covered;
         // this remembers the base pointer value through all of its transformations and changes
         // for example, when the base pointer is casted, this value will take on the cast
-        const llvm::Instruction* basePointerInst = p->getInst();
+        const llvm::Instruction* basePointerInst = nullptr;
         deque<const llvm::Value*> Q;
-        Q.push_front(p->getInst());
-        covered.insert(p->getInst());
+        Q.push_front(bp);
+        covered.insert(bp);
         while( !Q.empty() )
         {
-            if( auto cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
+            if( DNIDMap.find(Q.front()) == DNIDMap.end() )
+            {
+                // we don't care about dead instructions
+                covered.insert(Q.front());
+                Q.pop_front();
+                continue;
+            }
+            if( auto arg = llvm::dyn_cast<llvm::Argument>(Q.front()) )
+            {
+                // arguments can only be used elsewhere so we search through its uses
+                for( const auto& user : arg->users() )
+                {
+                    if( covered.find(user) == covered.end() )
+                    {
+                        covered.insert(user);
+                        Q.push_back(user);
+                    }
+                }
+            }
+            else if( auto cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
             {
                 // a cast will turn the base pointer into its correct type (this happens when malloc allocates it)
                 // thus we move the base pointer inst to this cast
@@ -476,22 +479,18 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                 // if the base pointer is being stored somewhere, we care about that
                 // but the store instruction set is supposed to contain ops that store to the BP memory region
                 // thus, if the BP itself is being stored, we skip it
-                if( (basePointerInst != st->getValueOperand()) && (p->getInst() != st->getValueOperand()) )
+                if( (basePointerInst != st->getValueOperand()) && (bp != st->getValueOperand()) )
                 {
                     sts.insert(st);
                 }
-                // if this store is using our pointer as the value operand, we need to walk the users of the pointer operand
-                //if( (st->getValueOperand() == p->getInst()) )
-                //{
-                    if( const auto& ptr = llvm::dyn_cast<llvm::Instruction>(st->getPointerOperand()) )
+                if( const auto& ptr = llvm::dyn_cast<llvm::Instruction>(st->getPointerOperand()) )
+                {
+                    if( covered.find(ptr) == covered.end() )
                     {
-                        if( covered.find(ptr) == covered.end() )
-                        {
-                            covered.insert(ptr);
-                            Q.push_back(ptr);
-                        }
+                        covered.insert(ptr);
+                        Q.push_back(ptr);
                     }
-                //}
+                }
             }
             else if( auto alloc = llvm::dyn_cast<llvm::AllocaInst>(Q.front()) )
             {
@@ -522,7 +521,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
 #ifdef DEBUG
         if( geps.empty() )
         {
-            PrintVal(p->getInst());
+            PrintVal(bp);
             throw AtlasException("Could not map any geps to a base pointer candidate!");
         }
 #endif
@@ -543,6 +542,12 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
             bool gotPair = false;
             while( !Q.empty() )
             {
+                if( DNIDMap.find(Q.front()) == DNIDMap.end() )
+                {
+                    covered.insert(Q.front());
+                    Q.pop_front();
+                    continue;
+                }
                 if( const auto gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
                 {
                     loadPairs.insert(pair<const llvm::GetElementPtrInst*, const llvm::LoadInst*>(gep, ld));
@@ -571,7 +576,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                 }
                 else if( const auto inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
                 {
-                    if( DNIDMap.at(inst)->isMemory() )
+                    if( static_pointer_cast<Inst>(DNIDMap.at(inst))->isMemory() )
                     {
                         // we are out of the memory group, which definitely means we have completed our search
                         Q.clear();
@@ -595,7 +600,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
             bool found = false;
             for( const auto& succ : DNIDMap.at(ld)->getSuccessors() )
             {
-                if( static_pointer_cast<DataNode>(succ->getSnk())->isMemory() )
+                if( static_pointer_cast<Inst>(succ->getSnk())->isMemory() )
                 {
                     found = true;
                     break;
@@ -611,6 +616,12 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
         vector<const llvm::GetElementPtrInst*> ldOrdering;
         while( !orderQ.empty() )
         {
+            if( DNIDMap.find(orderQ.front()) == DNIDMap.end() )
+            {
+                orderCover.insert(orderQ.front());
+                orderQ.pop_front();
+                continue;
+            }
             if( const auto& gep = llvm::dyn_cast<const llvm::GetElementPtrInst>(orderQ.front()) )
             {
                 ldOrdering.push_back(gep);
@@ -687,6 +698,12 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
             bool gotPair = false;
             while( !Q.empty() )
             {
+                if( DNIDMap.find(Q.front()) == DNIDMap.end() )
+                {
+                    covered.insert(Q.front());
+                    Q.pop_front();
+                    continue;
+                }
                 if( const auto gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
                 {
                     storePairs.insert(pair<const llvm::GetElementPtrInst*, const llvm::StoreInst*>(gep, st));
@@ -715,7 +732,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                 }
                 else if( const auto inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
                 {
-                    if( DNIDMap.at(inst)->isMemory() )
+                    if( static_pointer_cast<Inst>(DNIDMap.at(inst))->isMemory() )
                     {
                         // we are out of the memory group, which definitely means we have completed our search
                         Q.clear();
@@ -738,7 +755,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                 // in random init kernels, the value operand is just a function and the pointer is the base pointer
                 // the problem is, the graph coloring algorithm doesn't color the function call as the functional group
                 // thus, this code doesn't work (as of 2023-06-20), so we don't do this check 
-                if( !static_pointer_cast<DataNode>(succ->getSrc())->isFunction() )
+                if( !static_pointer_cast<Inst>(succ->getSrc())->isFunction() )
                 {
                     func = false;
                     break;
@@ -754,6 +771,12 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
         vector<const llvm::GetElementPtrInst*> stOrdering;
         while( !orderQ.empty() )
         {
+            if( DNIDMap.find(orderQ.front()) == DNIDMap.end() )
+            {
+                orderCover.insert(orderQ.front());
+                orderQ.pop_front();
+                continue;
+            }
             if( const auto& gep = llvm::dyn_cast<const llvm::GetElementPtrInst>(orderQ.front()) )
             {
                 stOrdering.push_back(gep);
@@ -818,13 +841,13 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                 }
             }
         }
-        bp.insert( make_shared<BasePointer>(p, loads, stores) );
+        bps.insert( make_shared<BasePointer>(DNIDMap.at(bp), loads, stores) );
     }
-    if( bp.empty() )
+    if( bps.empty() )
     {
         throw AtlasException("Could not find any base pointers in this task!");
     }
-    return bp;
+    return bps;
 }
 
 bool hasConstantOffset(const llvm::GetElementPtrInst* gep )
@@ -849,7 +872,7 @@ vector<shared_ptr<InductionVariable>> getOrdering( const llvm::GetElementPtrInst
         bool found = false;
         for( const auto& iv : IVs )
         {
-            if( (iv->getNode()->getInst() == *idx) || (iv->isOffset(*idx)) )
+            if( (iv->getNode()->getVal() == *idx) || (iv->isOffset(*idx)) )
             {
                 found = true;
                 order.push_back(iv);
@@ -892,8 +915,8 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
         deque<const llvm::Value*> Q;
         // there may be several instructions between a GEPs offset and the IV, and the best way to address this is to walk forward starting at the IVs, and then doing a check every time a GEP is hit
         set<const llvm::GetElementPtrInst*> geps;
-        Q.push_front(iv->getNode()->getInst());
-        covered.insert(iv->getNode()->getInst());
+        Q.push_front(iv->getNode()->getVal());
+        covered.insert(iv->getNode()->getVal());
         while( !Q.empty() )
         {
             for( const auto& user : Q.front()->users() )
@@ -1003,15 +1026,15 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 }
                 if( unorderedVars.empty() )
                 {
-                    PrintVal(bp->getNode()->getInst());
+                    PrintVal(bp->getNode()->getVal());
                     for( const auto& iv : unorderedVars )
                     {
-                        PrintVal(iv->getNode()->getInst());
+                        PrintVal(iv->getNode()->getVal());
                     }
                     PrintVal(gep);
                     for( const auto& iv : IVs )
                     {
-                        PrintVal(iv->getNode()->getInst());
+                        PrintVal(iv->getNode()->getVal());
                     }
                     throw AtlasException("Could not find an IV for a dimension of a base pointer!");
                 }
@@ -1042,7 +1065,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 shared_ptr<InductionVariable> idxOp = nullptr;
                 for( const auto& iv : unorderedVars )
                 {
-                    if( (idx->get() == iv->getNode()->getInst()) || (iv->isOffset(idx->get())) )
+                    if( (idx->get() == iv->getNode()->getVal()) || (iv->isOffset(idx->get())) )
                     {
                         idxOp = iv;
                     }
@@ -1052,7 +1075,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                     PrintVal(targetGep);
                     for( const auto& iv : unorderedVars )
                     {
-                        PrintVal(iv->getNode()->getInst());
+                        PrintVal(iv->getNode()->getVal());
                     }
                     throw AtlasException("Cannot find an IV that maps to this index operand in the target gep!");
                 }
@@ -1084,7 +1107,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
 #ifdef DEBUG
                     if( std::find(ordering.begin(), ordering.end(), p.first) != ordering.end() )
                     {
-                        PrintVal(bp->getNode()->getInst());
+                        PrintVal(bp->getNode()->getVal());
                         for( const auto& o : ordering )
                         {
                             PrintVal(o);
@@ -1212,7 +1235,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             }
             else
             {
-                PrintVal(bp->getNode()->getInst());
+                PrintVal(bp->getNode()->getVal());
                 for( const auto& ld : bp->getAccesses() )
                 {
                     PrintVal(ld.first);
@@ -1248,9 +1271,9 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     shared_ptr<Expression> expr;
     // the following DFG walk does both 1 and 2
     // 1. Group all function nodes together
-    deque<shared_ptr<DataNode>> Q;
-    set<shared_ptr<GraphNode>, p_GNCompare> covered;
-    set<shared_ptr<DataNode>, p_GNCompare> functionGroup;
+    deque<shared_ptr<Inst>> Q;
+    set<shared_ptr<DataValue>, p_GNCompare> covered;
+    set<shared_ptr<Inst>, p_GNCompare> functionGroup;
     // 2. find the loads that feed each group
     set<const llvm::LoadInst*> lds;
     // 3. find the stores that store each group
@@ -1283,12 +1306,12 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                                 {
                                     if( covered.find(DNIDMap.at(userInst)) == covered.end() )
                                     {
-                                        if( DNIDMap.at(userInst)->isFunction() )
+                                        if( static_pointer_cast<Inst>(DNIDMap.at(userInst))->isFunction() )
                                         {
-                                            functionGroup.insert(DNIDMap.at(userInst));
+                                            functionGroup.insert(static_pointer_cast<Inst>(DNIDMap.at(userInst)));
                                         }
                                         covered.insert(DNIDMap.at(userInst));
-                                        Q.push_back(DNIDMap.at(userInst));
+                                        Q.push_back(static_pointer_cast<Inst>(DNIDMap.at(userInst)));
                                     }
                                 }
                             }
@@ -1304,12 +1327,12 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                                 {
                                     if( covered.find(DNIDMap.at(useInst)) == covered.end() )
                                     {
-                                        if( DNIDMap.at(useInst)->isFunction() )
+                                        if( static_pointer_cast<Inst>(DNIDMap.at(useInst))->isFunction() )
                                         {
-                                            functionGroup.insert(DNIDMap.at(useInst));
+                                            functionGroup.insert(static_pointer_cast<Inst>(DNIDMap.at(useInst)));
                                         }
                                         covered.insert(DNIDMap.at(useInst));
-                                        Q.push_back(DNIDMap.at(useInst));
+                                        Q.push_back(static_pointer_cast<Inst>(DNIDMap.at(useInst)));
                                     }
                                 }
                             }
@@ -1326,7 +1349,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     //   -- for each datanode, construct an expression
     //      --- if the datanode is a reduction variable, construct a reduction
     // maps each node to expressions, which makes it convenient to construct expressions that use other expressions
-    map<shared_ptr<DataNode>, shared_ptr<Expression>> nodeToExpr;
+    map<shared_ptr<DataValue>, shared_ptr<Expression>> nodeToExpr;
 
     // in order for expression generation to go well, ops need to be done in the right order (producer to consumer)
     // thus, the following logic attempts to order the instructions such that the instructions at the beginning of the group are done first
@@ -1335,7 +1358,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     vector<Cyclebite::Graph::Operation> ops;
     // in order to find the ordering of the group, we find the instruction that doesn't use any other instruction in the group
     // then we walk the DFG to find all subsequent instructions
-    const llvm::Instruction* first = nullptr;
+    shared_ptr<Inst> first = nullptr;
     // there are two checks here
     // 1. the group forms a phi -> op(s) -> phi... cycle
     //    - in this case the phi is the first instruction, since it has the initial value of whatever variable we are dealing with
@@ -1361,21 +1384,21 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
         set<const llvm::PHINode*> phis;
         for( const auto& n : functionGroup )
         {
-            if( const auto phi = llvm::dyn_cast<llvm::PHINode>(n->getInst()) )
+            if( const auto phi = llvm::dyn_cast<llvm::PHINode>(n->getVal()) )
             {
                 phis.insert(phi);
             }
         }
         if( phis.size() == 1 )
         {
-            first = *phis.begin();
+            first = static_pointer_cast<Inst>(DNIDMap.at(*phis.begin()));
         }
         else
         {
 #ifdef DEBUG
             for( const auto& n : functionGroup ) 
             {
-                PrintVal(n->getInst());
+                PrintVal(n->getVal());
             }
 #endif
             throw AtlasException("Cannot handle the case where a cycle in the DFG contains multiple phis!");
@@ -1399,7 +1422,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
             }
             if( allOutside )
             {
-                first = n->getInst();
+                first = n;
                 break;
             }
         }
@@ -1410,12 +1433,12 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     }
 
     // now we need to find the order of operations
-    vector<shared_ptr<DataNode>> order;
-    order.push_back(DNIDMap.at(first));
+    vector<shared_ptr<Inst>> order;
+    order.push_back(first);
     deque<const llvm::Instruction*> instQ;
     set<const llvm::Instruction*> instCovered;
-    instQ.push_front(first);
-    instCovered.insert(first);
+    instQ.push_front(first->getInst());
+    instCovered.insert(first->getInst());
     while(!instQ.empty() )
     {
         bool depthFirst = false;
@@ -1441,7 +1464,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                         {
                             throw AtlasException("Cannot resolve where to insert function inst operand in the ordered list!");
                         }
-                        order.insert(pos, DNIDMap.at(opInst));
+                        order.insert(pos, static_pointer_cast<Inst>(DNIDMap.at(opInst)));
                         instCovered.insert(opInst);
                         instQ.push_front(opInst);
                         depthFirst = true;
@@ -1459,7 +1482,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                 {
                     if( functionGroup.find(DNIDMap.at(userInst)) != functionGroup.end() )
                     {
-                        order.push_back(DNIDMap.at(userInst));
+                        order.push_back(static_pointer_cast<Inst>(DNIDMap.at(userInst)));
                         instQ.push_back(userInst);
                         instCovered.insert(userInst);
                     }
@@ -1472,7 +1495,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     spdlog::info("Function group ordering:");
     for( const auto& inst : order )
     {
-        PrintVal(inst->getInst());
+        PrintVal(inst->getVal());
     }
 #endif*/
 
@@ -1481,7 +1504,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     if( !rvs.empty() )
     {
         // make a quick mapping from datanode to reduction variable
-        map<shared_ptr<DataNode>, shared_ptr<ReductionVariable>> dnToRv;
+        map<shared_ptr<DataValue>, shared_ptr<ReductionVariable>> dnToRv;
         for( const auto& node : order )
         {
             for( const auto& rv : rvs )
@@ -1496,7 +1519,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
         // a reduction should be a cycle starting at a phi, followed by ops (binary or cast), that ultimately feed a reduction variable
         // we must separate the phi from the binary ops from the RV, then construct the expression for the reduction (which is just the binary ops), then add the reduction to it (which sets the operator next to the equal sign e.g. "+=")
         const llvm::PHINode* phi = nullptr;
-        vector<shared_ptr<DataNode>> insts;
+        vector<shared_ptr<Inst>> insts;
         shared_ptr<ReductionVariable> rv = nullptr;
         for( const auto& node : order )
         {
@@ -1570,7 +1593,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                         else
                         {
                             PrintVal(bin);
-                            PrintVal(opNode->getInst());
+                            PrintVal(opNode->getVal());
                             throw AtlasException("Cannot map this instruction to an expression!");
                         }
                     }
@@ -1584,14 +1607,14 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                     else
                     {
                         PrintVal(op);
-                        PrintVal(node->getInst());
+                        PrintVal(node->getVal());
                         throw AtlasException("Constant used in an expression is not an integer!");
                     }
                 }
                 else
                 {
                     PrintVal(op);
-                    PrintVal(node->getInst());
+                    PrintVal(node->getVal());
                     throw AtlasException("Cannot recognize this operand type when building an expression!");
                 }
             }
@@ -1655,7 +1678,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                         else
                         {
                             PrintVal(bin);
-                            PrintVal(opNode->getInst());
+                            PrintVal(opNode->getVal());
                             throw AtlasException("Cannot map this instruction to an expression!");
                         }
 
@@ -1678,14 +1701,14 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                     else
                     {
                         PrintVal(op);
-                        PrintVal(node->getInst());
+                        PrintVal(node->getVal());
                         throw AtlasException("Constant used in an expression is not an integer!");
                     }
                 }
                 else
                 {
                     PrintVal(op);
-                    PrintVal(node->getInst());
+                    PrintVal(node->getVal());
                     throw AtlasException("Cannot recognize this operand type when building an expression!");
                 }
             }
@@ -1735,17 +1758,17 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             spdlog::info("Vars:");
             for( const auto& var : vars )
             {
-                spdlog::info(var->dump()+" -> "+PrintVal(var->getNode()->getInst(), false));
+                spdlog::info(var->dump()+" -> "+PrintVal(var->getNode()->getVal(), false));
             }
             spdlog::info("Reductions");
             for( const auto& rv : rvs )
             {
-                spdlog::info(rv->dump()+" -> "+PrintVal(rv->getNode()->getInst(), false));
+                spdlog::info(rv->dump()+" -> "+PrintVal(rv->getNode()->getVal(), false));
             }
             spdlog::info("Base Pointers");
             for( const auto& bp : bps )
             {
-                spdlog::info(bp->dump()+" -> "+PrintVal(bp->getNode()->getInst(), false));
+                spdlog::info(bp->dump()+" -> "+PrintVal(bp->getNode()->getVal(), false));
             }
             spdlog::info("Collections:");
             for( const auto& c : cs )

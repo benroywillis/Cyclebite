@@ -1,5 +1,5 @@
 #pragma once
-#include "DataNode.h"
+#include "Inst.h"
 #include "Graph.h"
 
 namespace Cyclebite::Graph
@@ -9,7 +9,8 @@ namespace Cyclebite::Graph
     {
     public:
         DataGraph();
-        DataGraph(const std::set<std::shared_ptr<DataNode>, p_GNCompare> &nodeSet, const std::set<std::shared_ptr<UnconditionalEdge>, GECompare> &edgeSet);
-        const std::set<std::shared_ptr<DataNode>, p_GNCompare> getDataNodes() const;
+        DataGraph(const std::set<std::shared_ptr<DataValue>, p_GNCompare> &nodeSet, const std::set<std::shared_ptr<UnconditionalEdge>, GECompare> &edgeSet);
+        DataGraph(const std::set<std::shared_ptr<Inst>, p_GNCompare> &nodeSet, const std::set<std::shared_ptr<UnconditionalEdge>, GECompare> &edgeSet);
+        const std::set<std::shared_ptr<DataValue>, p_GNCompare> getDataNodes() const;
     };
 } // namespace Cyclebite::Graph

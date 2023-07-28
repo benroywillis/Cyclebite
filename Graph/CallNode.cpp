@@ -3,7 +3,7 @@
 using namespace std;
 using namespace Cyclebite::Graph;
 
-CallNode::CallNode( const llvm::Instruction* inst, const set<shared_ptr<ControlBlock>, p_GNCompare>& dests ) : DataNode(inst)
+CallNode::CallNode( const llvm::Instruction* inst, const set<shared_ptr<ControlBlock>, p_GNCompare>& dests ) : Inst(inst)
 {
     for( const auto& d : dests )
     {
@@ -11,7 +11,7 @@ CallNode::CallNode( const llvm::Instruction* inst, const set<shared_ptr<ControlB
     }
 }
 
-CallNode::CallNode(const DataNode *upgrade, const set<shared_ptr<ControlBlock>, p_GNCompare>& dests ) : DataNode(*upgrade)
+CallNode::CallNode(const Inst *upgrade, const set<shared_ptr<ControlBlock>, p_GNCompare>& dests ) : Inst(*upgrade)
 {
     for( const auto& d : dests )
     {

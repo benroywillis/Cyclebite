@@ -1,4 +1,4 @@
-#include "DataNode.h"
+#include "Inst.h"
 
 using namespace Cyclebite::Graph;
 
@@ -132,17 +132,17 @@ Operation Cyclebite::Graph::GetOp(unsigned int op)
     }
 }
 
-DataNode::DataNode(const llvm::Instruction* inst, DNC t) : GraphNode(), inst(inst), type(t)
+Inst::Inst(const llvm::Instruction* inst, DNC t) : DataValue(inst), inst(inst), type(t)
 {
     initOpToString();
 }
 
-const llvm::Instruction* DataNode::getInst() const
+const llvm::Instruction* Inst::getInst() const
 {
     return inst;
 }
 
-bool DataNode::isTerminator() const
+bool Inst::isTerminator() const
 {
     if ((op == Operation::ret) || (op == Operation::br) || (op == Operation::sw) || (op == Operation::ibr) || (op == Operation::invoke) || (op == Operation::resume))
     {
@@ -154,7 +154,7 @@ bool DataNode::isTerminator() const
     }
 }
 
-bool DataNode::isCaller() const
+bool Inst::isCaller() const
 {
     if( op == Operation::call )
     {
@@ -163,22 +163,22 @@ bool DataNode::isCaller() const
     return false;
 }
 
-bool DataNode::isState() const
+bool Inst::isState() const
 {
     return type == DNC::State;
 }
 
-bool DataNode::isMemory() const
+bool Inst::isMemory() const
 {
     return type == DNC::Memory;
 }
 
-bool DataNode::isFunction() const
+bool Inst::isFunction() const
 {
     return type == DNC::Function;
 }
 
-void DataNode::initOpToString()
+void Inst::initOpToString()
 {
     map_init(OperationToString)
         // terminator ops

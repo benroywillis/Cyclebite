@@ -6,7 +6,7 @@
 using namespace std;
 using namespace Cyclebite::Grammar;
 
-set<shared_ptr<Cyclebite::Graph::DataNode>, Cyclebite::Graph::p_GNCompare> Cyclebite::Grammar::SignificantMemInst;
+set<shared_ptr<Cyclebite::Graph::Inst>, Cyclebite::Graph::p_GNCompare> Cyclebite::Grammar::SignificantMemInst;
 
 void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::json& instanceJson, const map<int64_t, llvm::Value*>& IDToValue)
 {
@@ -23,7 +23,7 @@ void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::jso
             if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(val) )
             {
                 // mark as significant
-                SignificantMemInst.insert( Cyclebite::Graph::DNIDMap.at(inst) );
+                SignificantMemInst.insert( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(inst)) );
             }
         }
     }

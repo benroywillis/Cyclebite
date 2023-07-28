@@ -4,7 +4,7 @@ using namespace Cyclebite::Grammar;
 using namespace Cyclebite::Graph;
 using namespace std;
 
-const std::shared_ptr<DataNode>& BasePointer::getNode() const
+const std::shared_ptr<DataValue>& BasePointer::getNode() const
 {
     return node;
 }

@@ -1,5 +1,5 @@
 #include "InductionVariable.h"
-#include "DataNode.h"
+#include "DataValue.h"
 #include "IO.h"
 #include "Transforms.h"
 #include "Util/Annotate.h"
@@ -19,11 +19,11 @@ enum class IV_BOUNDARIES
     UNDETERMINED = -1
 };
 
-InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataNode>& n, const std::shared_ptr<Cycle>& c ) : Symbol("var"), cycle(c), node(n)
+InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n, const std::shared_ptr<Cycle>& c ) : Symbol("var"), cycle(c), node(n)
 {
     // crawl the uses of the induction variable and try to ascertain what its dimensions are access patterns are
-    deque<const llvm::Instruction*> Q;
-    set<const llvm::Instruction*> covered;
+    deque<const llvm::Value*> Q;
+    set<const llvm::Value*> covered;
     // binary operators tell us how the induction variable is incremented
     set<const llvm::BinaryOperator*> bins;
     // geps tell us which collections may be used by this IV
@@ -34,10 +34,10 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     set<const llvm::StoreInst*> sts;
     // PHIs tell us how the IV is initialized (in the case of optimized code)
     set<const llvm::PHINode*> phis;
-    Q.push_front(n->getInst());
-    covered.insert(n->getInst());
+    Q.push_front(n->getVal());
+    covered.insert(n->getVal());
     // if the instruction we are given is a phi itself we need to add that to the phi set
-    if( const auto phi = llvm::dyn_cast<llvm::PHINode>(node->getInst()) )
+    if( const auto phi = llvm::dyn_cast<llvm::PHINode>(node->getVal()) )
     {
         phis.insert(phi);
     }
@@ -101,22 +101,25 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         }
         while( !Q.empty() )
         {
-            for( unsigned i = 0; i < Q.front()->getNumOperands(); i++ )
+            if( auto inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
             {
-                if( const auto useInst = llvm::dyn_cast<llvm::Instruction>(Q.front()->getOperand(i)) )
+                for( unsigned i = 0; i < inst->getNumOperands(); i++ )
                 {
-                    if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(useInst) )
+                    if( const auto useInst = llvm::dyn_cast<llvm::Instruction>(inst->getOperand(i)) )
                     {
-                        if( bins.find(bin) != bins.end() )
+                        if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(useInst) )
                         {
-                            covered.insert(bin);
-                            Q.push_back(bin);
+                            if( bins.find(bin) != bins.end() )
+                            {
+                                covered.insert(bin);
+                                Q.push_back(bin);
+                            }
                         }
-                    }
-                    else if( covered.find(useInst) == covered.end() )
-                    {
-                        covered.insert(useInst);
-                        Q.push_back(useInst);
+                        else if( covered.find(useInst) == covered.end() )
+                        {
+                            covered.insert(useInst);
+                            Q.push_back(useInst);
+                        }
                     }
                 }
             }
@@ -140,7 +143,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         }
         if( bins.size() != 1 )
         {
-            PrintVal(node->getInst());
+            PrintVal(node->getVal());
             throw AtlasException("Cannot yet handle an induction variable that is operated on by none or multiple operator!");
         }
     }
@@ -210,7 +213,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     }
     if( initValue == static_cast<int>(IV_BOUNDARIES::INVALID) )
     {
-        PrintVal(node->getInst());
+        PrintVal(node->getVal());
         throw AtlasException("Could not find initialization value for IV!");
     }
     // quick check here to make sure the sign we extract from the comparator makes sense
@@ -220,7 +223,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     if( !targetCmp )
     {
 #ifdef DEBUG
-        PrintVal(node->getInst());
+        PrintVal(node->getVal());
         PrintVal(cycle->getIteratorInst()->getCondition());
         PrintVal(cycle->getIteratorInst());
 #endif
@@ -230,7 +233,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     // for example, if the IV is in position 0 of the comparator, then the comparator's operation does not need to be inverted (e.g., IV < thresh means the lt can be taken literally)
     // if the IV is in position 1 of the IV, the operation needs to be inverted (e.g., thresh < IV means the lt actually needs to be gt)
     bool invert = false;
-    if( targetCmp->getOperand(1) == node->getInst() )
+    if( targetCmp->getOperand(1) == node->getVal() )
     {
         invert = true;
     }
@@ -250,7 +253,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     if( cmpBoundary == static_cast<int>(IV_BOUNDARIES::INVALID) )
     {
 #ifdef DEBUG
-        PrintVal(node->getInst());
+        PrintVal(node->getVal());
         PrintVal(targetCmp);
 #endif
         throw AtlasException("Could not find a valid boundary for an induction variable!");
@@ -441,7 +444,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     }*/
 }
 
-const shared_ptr<DataNode>& InductionVariable::getNode() const
+const shared_ptr<DataValue>& InductionVariable::getNode() const
 {
     return node;
 }
@@ -477,8 +480,8 @@ bool InductionVariable::isOffset(const llvm::Value* v) const
     {
         deque<const llvm::Value*> Q;
         set<const llvm::Value*> covered;
-        Q.push_front(node->getInst());
-        covered.insert(node->getInst());
+        Q.push_front(node->getVal());
+        covered.insert(node->getVal());
         while( !Q.empty() )
         {
             if( Q.front() == v )
@@ -486,7 +489,7 @@ bool InductionVariable::isOffset(const llvm::Value* v) const
                 // this is the value we are looking for, return true
                 return true;
             }
-            if( Q.front() == node->getInst() )
+            if( Q.front() == node->getVal() )
             {
                 for( const auto& user : Q.front()->users() )
                 {
