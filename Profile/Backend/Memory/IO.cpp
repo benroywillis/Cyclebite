@@ -516,10 +516,12 @@ namespace Cyclebite::Profile::Backend::Memory
         output["ValidBlocks"] = input["ValidBlocks"];
         for( const auto& value : instToTuple )
         {
+            output["Instruction Tuples"].push_back(value.first);
+            /*
             for( const auto& tuple : value.second )
             {
-                output["Instruction Tuples"][to_string(value.first)].push_back( pair(tuple.base, tuple.base+tuple.offset) );
-            }
+                output["Instruction Tuples"].[to_string(value.first)].push_back( pair(tuple.base, tuple.base+tuple.offset) );
+            }*/
         }
 
         string OutputFileName = "instance.json";
