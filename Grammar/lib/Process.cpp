@@ -673,11 +673,17 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
 #ifdef DEBUG
                     if( targetPair.first )
                     {
+                        PrintVal(gep);
                         throw AtlasException("Found a gep that maps to more than one load instruction");
                     }
 #endif
                     targetPair = p;
                 }
+            }
+            if( targetPair.first == nullptr || targetPair.second == nullptr )
+            {
+                PrintVal(gep);
+                throw AtlasException("Found a gep that doesn't map to a load instruction!");
             }
             loads.push_back(targetPair);
         }
@@ -833,13 +839,25 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
         for( auto rgep = stOrdering.rbegin(); rgep < stOrdering.rend(); rgep++ )
         {
             auto gep = *rgep;
+            pair<const llvm::GetElementPtrInst*, const llvm::StoreInst*> targetPair(nullptr, nullptr);
             for( const auto& p : storePairs )
             {
                 if( p.first == gep )
                 {
-                    stores.push_back(p);
+#ifdef DEBUG
+                    if( targetPair.first )
+                    {
+                        throw AtlasException("Found a gep that maps to more than one store instruction");
+                    }
+#endif
+                    targetPair = p;
                 }
             }
+            if( targetPair.first == nullptr || targetPair.second == nullptr )
+            {
+                throw AtlasException("Found a gep that doesn't map to a store instruction!");
+            }
+            stores.push_back(targetPair);
         }
         bps.insert( make_shared<BasePointer>(DNIDMap.at(bp), loads, stores) );
     }
