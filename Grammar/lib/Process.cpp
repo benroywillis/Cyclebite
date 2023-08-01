@@ -552,12 +552,22 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                 {
                     loadPairs.insert(pair<const llvm::GetElementPtrInst*, const llvm::LoadInst*>(gep, ld));
                     gotPair = true;
+                    // sometimes the geps compound, ie they gep a multi-indirected pointer
+                    // thus we must search through the gep pointer
+                    if( covered.find( gep->getPointerOperand()) == covered.end() )
+                    {
+                        Q.push_back(gep->getPointerOperand());
+                        covered.insert(gep->getPointerOperand());
+                    }
                 }
                 else if( const auto ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
                 {
-                    // we have hit the next load, quit
-                    Q.clear();
-                    break;
+                    // there may be many loads to get all the way down to the base pointer
+                    if( covered.find(ld->getPointerOperand()) == covered.end() )
+                    {
+                        Q.push_back(ld->getPointerOperand());
+                        covered.insert(ld->getPointerOperand());
+                    }
                 }
                 else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
                 {
@@ -670,14 +680,9 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
             {
                 if( p.first == gep )
                 {
-#ifdef DEBUG
-                    if( targetPair.first )
-                    {
-                        PrintVal(gep);
-                        throw AtlasException("Found a gep that maps to more than one load instruction");
-                    }
-#endif
+                    // geps can map to multiple loads when the optimizer is turned on
                     targetPair = p;
+                    break;
                 }
             }
             if( targetPair.first == nullptr || targetPair.second == nullptr )
@@ -714,12 +719,22 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                 {
                     storePairs.insert(pair<const llvm::GetElementPtrInst*, const llvm::StoreInst*>(gep, st));
                     gotPair = true;
+                    // sometimes the geps compound, ie they gep a multi-indirected pointer
+                    // thus we must search through the gep pointer
+                    if( covered.find( gep->getPointerOperand()) == covered.end() )
+                    {
+                        Q.push_back(gep->getPointerOperand());
+                        covered.insert(gep->getPointerOperand());
+                    }
                 }
                 else if( const auto ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
                 {
-                    // we have hit the next load, quit
-                    Q.clear();
-                    break;
+                    // there may be many loads to get all the way down to the base pointer
+                    if( covered.find(ld->getPointerOperand()) == covered.end() )
+                    {
+                        Q.push_back(ld->getPointerOperand());
+                        covered.insert(ld->getPointerOperand());
+                    }
                 }
                 else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
                 {
@@ -738,7 +753,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                 }
                 else if( const auto inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
                 {
-                    if( static_pointer_cast<Inst>(DNIDMap.at(inst))->isMemory() )
+                    if( !static_pointer_cast<Inst>(DNIDMap.at(inst))->isMemory() )
                     {
                         // we are out of the memory group, which definitely means we have completed our search
                         Q.clear();
@@ -844,17 +859,15 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
             {
                 if( p.first == gep )
                 {
-#ifdef DEBUG
-                    if( targetPair.first )
-                    {
-                        throw AtlasException("Found a gep that maps to more than one store instruction");
-                    }
-#endif
+                    // geps can map to multiple stores when the optimizer is turned on
                     targetPair = p;
+                    break;
                 }
             }
             if( targetPair.first == nullptr || targetPair.second == nullptr )
             {
+                PrintVal(bp);
+                PrintVal(gep);
                 throw AtlasException("Found a gep that doesn't map to a store instruction!");
             }
             stores.push_back(targetPair);
