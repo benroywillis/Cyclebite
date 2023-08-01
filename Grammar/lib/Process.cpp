@@ -1121,7 +1121,6 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             //    - to find this case, we simply introspect the offsets of each gep, and if they both map to the same IVs, we actually have the 1-gep case (above)
             // 2. the geps are working together to offset the base pointer (commonly found when the optimizer is turned off)
             //    - the ordering of the geps is implied in the base pointer class. Thus we need to reference the loads/stores members to get the correct ordering
-            map<const llvm::GetElementPtrInst*, set<shared_ptr<InductionVariable>>> indexMap;
             // to get the ordering back for the applicable geps, we make a vector of the task geps with the ordering implied from the base pointer loads/stores members
             vector<const llvm::GetElementPtrInst*> ordering;
             for( const auto& p : bp->getAccesses() )
@@ -1135,22 +1134,15 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             {
                 if( taskGeps.find(p.first) != taskGeps.end() )
                 {
-#ifdef DEBUG
-                    if( std::find(ordering.begin(), ordering.end(), p.first) != ordering.end() )
+                    // we don't want to push duplicate geps from the BP stores into the ordering vector
+                    if( std::find(ordering.begin(), ordering.end(), p.first) == ordering.end() )
                     {
-                        PrintVal(bp->getNode()->getVal());
-                        for( const auto& o : ordering )
-                        {
-                            PrintVal(o);
-                        }
-                        PrintVal(p.first);
-                        throw AtlasException("Just tried to push the same gep into the ordering vector!");
+                        ordering.push_back(p.first);
                     }
-#endif
-                    ordering.push_back(p.first);
                 }
             }
-            // now we go through each gep and map each gep to the IV in its offsets
+            // now we go through each gep and map them to the IV in its offsets
+            map<const llvm::GetElementPtrInst*, set<shared_ptr<InductionVariable>>> indexMap;
             for( const auto& gep : ordering )
             {
                 for( auto idx = gep->idx_begin(); idx != gep->idx_end(); idx++ )
@@ -1165,14 +1157,15 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                     }
                 }
             }
-            // the map now contains each gep and the IVs they map to
-            // if each gap maps to the same IVs then they are all the "same" operation
+            // cluster the geps that use the same IVs
             set<set<const llvm::GetElementPtrInst*>> gepGroups;
+            // there should be a 1:1 mapping of IV -> gep, so once a gep is covered it cannot form a new group
             set<const llvm::GetElementPtrInst*> covered;
             for( const auto& gep : indexMap )
             {
                 if( covered.find(gep.first) == covered.end() )
                 {
+                    // go find all other geps that map to the same IVs as this one
                     set<const llvm::GetElementPtrInst*> newGroup;
                     newGroup.insert(gep.first);
                     covered.insert(gep.first);
@@ -1197,42 +1190,10 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             // series of geps -> there is more than one group
             if( gepGroups.size() == 1 )
             {
-                // since the geps use the same IVs we just use the beginning one
-#ifdef DEBUG
-                // some checks to see if the geps are the acting the same way
-                // 1. same number of indices
-                auto group = *gepGroups.begin();
-                unsigned indices = (*group.begin())->getNumIndices();
-                for( auto i = next( group.begin() ); i != group.end(); i++ )
+                for( const auto& gep : *gepGroups.begin() )
                 {
-                    if( (*i)->getNumIndices() != indices )
-                    {
-                        throw AtlasException("Gep group members have differing index counts!");
-                    }
+                    PrintVal(gep);
                 }
-                // 2. same ordering of IVs
-                /*vector<vector<const llvm::Value*>> idxes;
-                for( auto gep : group )
-                {
-                    vector<const llvm::Value*> indices;
-                    for( auto idx = gep->idx_begin(); idx != gep->idx_end(); idx++ )
-                    {
-                        indices.push_back(*idx);
-                    }
-                    idxes.push_back(indices);
-                }
-                for( unsigned i = 0; i < indices; i++ )
-                {
-                    auto idx = (*idxes.begin())[i];
-                    for( auto entry : idxes )
-                    {
-                        if( entry[i] != idx )
-                        {
-                            throw AtlasException("Geps within gep group do not have the same ordering of indices!");
-                        }
-                    }
-                }*/
-#endif
                 // get the ordering of vars from the gep and push them to the vars vector
                 auto geps = *gepGroups.begin();
                 // we evaluate each gep for its implied IV ordering
@@ -1663,6 +1624,16 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
             {
                 ops.push_back( Cyclebite::Graph::GetOp(bin->getOpcode()) );
             }
+            else if( const auto& shuffle = llvm::dyn_cast<llvm::ShuffleVectorInst>(node->getInst()) )
+            {
+                // shuffles appear to be useful for concatenating elemnents of different vectors into the same vector
+                // the only example so far that has used this is optimized (-O3) StencilChain/Naive
+                // we look for an identity shuffle (example, StencilChain/Naive), else throw an error because we don't support that
+                // we don't support shufflevectors yet because they usually contain more than one operation at once, and may be transformed later
+                // example: StencilChain/Naive/DFG_Kernel15.svg (shufflevector transforms i8 to i32, then i32 is converted to float before the MAC takes place)
+                PrintVal(node->getInst());
+                throw AtlasException("Cannot supoort shufflevector instructions yet!");
+            }
             vector<shared_ptr<Symbol>> vec;
             for( const auto& op : node->getInst()->operands() )
             {
@@ -1720,6 +1691,22 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                     if( con->getType()->isIntegerTy() )
                     {
                         vec.push_back(make_shared<ConstantSymbol>(*con->getUniqueInteger().getRawData()));
+                    }
+                    else if( const auto& undef = llvm::dyn_cast<llvm::UndefValue>(op) )
+                    {
+                        // the value is a constant that is not known till runtime
+                        // llvm has undefined values as a result of the optimizer to allow for constant-qualified values that aren't known till runtime
+                        // we don't support this yet
+                        PrintVal(con);
+                        PrintVal(node->getInst());
+                        throw AtlasException("Cannot support undefined constants yet");
+                    }
+                    else if( const auto& convec = llvm::dyn_cast<llvm::ConstantVector>(op) )
+                    {
+                        for( unsigned i = 0; i < convec->getNumOperands(); i++ )
+                        {
+                            vec.push_back(make_shared<ConstantSymbol>(*convec->getOperand(i)->getUniqueInteger().getRawData()));
+                        }
                     }
                     else if( const auto& func = llvm::dyn_cast<llvm::Function>(con) )
                     {
