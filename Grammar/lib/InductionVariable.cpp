@@ -524,6 +524,19 @@ bool InductionVariable::isOffset(const llvm::Value* v) const
                     }
                 }
             }
+            else if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
+            {
+                // when geps work together to access a multi-dimensional structure, they will hand off each others work until the reference is down to a primitive
+                // thus we walk through the users of a gep pointer
+                for( const auto& user : gep->users() )
+                {
+                    if( covered.find(user) == covered.end() )
+                    {
+                        Q.push_back(user);
+                        covered.insert(user);
+                    }
+                }
+            }
             else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
             {
                 // sometimes induction variables are cast to their destination gep before being used

@@ -1141,16 +1141,21 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                     }
                 }
             }
-            // now we go through each gep and map them to the IV in its offsets
+            // now we go through each gep and map them to the IV(s) in its offsets
             map<const llvm::GetElementPtrInst*, set<shared_ptr<InductionVariable>>> indexMap;
             for( const auto& gep : ordering )
             {
+                vector<const llvm::Value*> gepComponents;
+                gepComponents.push_back(gep->getPointerOperand());
                 for( auto idx = gep->idx_begin(); idx != gep->idx_end(); idx++ )
                 {
-                    shared_ptr<InductionVariable> idxOp = nullptr;
+                    gepComponents.push_back(idx->get());
+                }
+                for( const auto& comp : gepComponents )
+                {
                     for( const auto& iv : unorderedVars )
                     {
-                        if( iv->isOffset(idx->get()) )
+                        if( iv->isOffset(comp) )
                         {
                             indexMap[gep].insert(iv);
                         }
@@ -1159,7 +1164,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             }
             // cluster the geps that use the same IVs
             set<set<const llvm::GetElementPtrInst*>> gepGroups;
-            // there should be a 1:1 mapping of IV -> gep, so once a gep is covered it cannot form a new group
+            // GEPs belong to exactly one group, so once a gep is covered it cannot form a new group
             set<const llvm::GetElementPtrInst*> covered;
             for( const auto& gep : indexMap )
             {
@@ -1190,10 +1195,6 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             // series of geps -> there is more than one group
             if( gepGroups.size() == 1 )
             {
-                for( const auto& gep : *gepGroups.begin() )
-                {
-                    PrintVal(gep);
-                }
                 // get the ordering of vars from the gep and push them to the vars vector
                 auto geps = *gepGroups.begin();
                 // we evaluate each gep for its implied IV ordering
@@ -1223,7 +1224,51 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             }
             else if( gepGroups.size() > 1 )
             {
-                throw AtlasException("Cannot handle the case where there are more than one gep group for a collection!");
+                // in the known case where this occurs, and should occur even with the optimizer on, is StencilChain/Naive/ (which indexes the Pixel array with multiple geps to reduce a multi-dimensional array to its primitive types)
+                // in that case, the gep that doesn't belong is the gep that uses only the base index, not the second one (thus its IVs are a subset of the other groups IVs)
+                // if we can detect this case, sort the groups by their IV count in non-increasing order. For each group with one more GEP, we should get a new IV they use. This is the implied ordering of the IVs
+                vector<set<const llvm::GetElementPtrInst*>> orderedGroups;
+                orderedGroups.reserve(gepGroups.size());
+                for( const auto& entry : gepGroups )
+                {
+                    if( orderedGroups.empty() )
+                    {
+                        orderedGroups.push_back(entry);
+                    }
+                    else
+                    {
+                        auto idx = orderedGroups.begin();
+                        for( const auto g : orderedGroups )
+                        {
+                            // the size of entry can be found by looking up any of its members in the indexMap and taking that entry's IV count
+                            auto entrySample = indexMap.at(*entry.begin()).size();
+                            auto gSample     = indexMap.at(*g.begin()).size();
+                            if( entrySample > gSample )
+                            {
+                                idx = next(idx);
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        }
+                        orderedGroups.insert(idx, entry);
+                    }
+                }
+                // now we iterate through the orderedGroups each time finding the new IV that is added to each group with the higher IV count
+                vector<shared_ptr<InductionVariable>> seenIVs;
+                for( const auto& g : orderedGroups )
+                {
+                    auto groupIVs = indexMap.at( *g.begin() );
+                    for( const auto& n : groupIVs )
+                    {
+                        if( std::find(seenIVs.begin(), seenIVs.end(), n) == seenIVs.end() )
+                        {
+                            seenIVs.push_back(n);
+                        }
+                    }
+                }
+                vars = seenIVs;
             }
             else
             {
