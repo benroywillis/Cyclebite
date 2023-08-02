@@ -119,9 +119,11 @@ set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json&
                     }
                     else if( auto ret = llvm::dyn_cast<llvm::ReturnInst>(i->getInst()) )
                     {
-                        // recursion?
-                        spdlog::critical("Cannot yet support recursion when finding cycle iteration condition!");
-                        throw AtlasException("Cannot yet support recursion when finding cycle iteration condition!");
+                        // if there is a function within the task, it's probably not the boundary of they cycle
+                        // if it is, we are in trouble. There' no way for us to know what the condition is that leads to this exit, thus we don't have a known method of finding the iteratorCondition of this cycle
+                        continue;
+                        //spdlog::critical("Cannot yet support recursion when finding cycle iteration condition!");
+                        //throw AtlasException("Cannot yet support recursion when finding cycle iteration condition!");
                     }
                 }
             }
