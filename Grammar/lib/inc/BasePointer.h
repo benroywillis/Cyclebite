@@ -5,6 +5,9 @@
 
 namespace Cyclebite::Grammar
 {
+    /// @brief Sets the threshold, in bytes, that a memory allocation must make in order to be considered a base pointer
+    constexpr uint64_t ALLOC_THRESHOLD = 128;
+    uint32_t isAllocatingFunction(const llvm::CallBase* call);
     class BasePointer : public Symbol
     {
     public:
