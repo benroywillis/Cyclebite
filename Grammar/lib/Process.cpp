@@ -275,14 +275,6 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                         Q.push_front(n->getVal());
                         while( !Q.empty() )
                         {
-                            if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
-                            {
-                                if( GetBlockID(inst->getParent()) == IDState::Uninitialized )
-                                {
-                                    Q.pop_front();
-                                    continue;
-                                }
-                            }
                             if( auto cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
                             {
                                 // dynamic allocations are often made as uint8_t arrays and cast to the appropriate type
@@ -345,7 +337,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                 }
                                 else
                                 {
-                                    spdlog::warn("Found allocation of size "+to_string(allocSize)+" bytes, which does not meet the minimum allocation size for a base pointer.");
+                                    spdlog::warn("Found allocation of size "+to_string(allocSize)+" bytes, which does not meet the minimum allocation size of "+to_string(ALLOC_THRESHOLD)+" for a base pointer.");
                                     // when we encounter allocs and they are too small, this likely means our base pointer is being stored to a pointer which contains the base pointer
                                     // thus, we need to add the users of this alloc to the queue
                                     for( const auto& user : alloc->users() )

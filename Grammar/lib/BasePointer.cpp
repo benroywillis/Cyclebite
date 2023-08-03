@@ -1,5 +1,6 @@
 #include "Util/Exceptions.h"
 #include "Util/Annotate.h"
+#include "Util/Print.h"
 #include "BasePointer.h"
 #include "IO.h"
 #include "Graph/inc/IO.h"
@@ -93,7 +94,7 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
             {
                 if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
                 {
-                    if( GetBlockID(inst->getParent()) == IDState::Uninitialized )
+                    if( DNIDMap.find(inst) == DNIDMap.end() )
                     {
                         Q.pop_front();
                         continue;
@@ -148,25 +149,19 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
                         Q.push_back(st->getValueOperand());
                     }
                 }
-                else if( auto ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
+                else if( auto inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
                 {
-                    if( covered.find(ld->getPointerOperand()) == covered.end() )
+                    for( const auto& use : inst->users() )
                     {
-                        covered.insert(ld->getPointerOperand());
-                        Q.push_back(ld->getPointerOperand());
-                    }
-                }
-                else if( auto gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
-                {
-                    if( covered.find(gep->getPointerOperand()) == covered.end() )
-                    {
-                        covered.insert(gep->getPointerOperand());
-                        Q.push_back(gep->getPointerOperand());
+                        if( covered.find(use) == covered.end() )
+                        {
+                            Q.push_back(use);
+                            covered.insert(use);
+                        }
                     }
                 }
                 Q.pop_front();
             }
-
             for( const auto& ldorst : ldsnsts )
             {
                 if( SignificantMemInst.find( std::static_pointer_cast<Graph::Inst>(DNIDMap.at(ldorst)) ) != SignificantMemInst.end() )
