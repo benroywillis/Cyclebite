@@ -360,7 +360,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                             }
                             else if( auto call = llvm::dyn_cast<llvm::CallBase>(Q.front()) )
                             {
-                                if( isAllocatingFunction(call) )
+                                if( isAllocatingFunction(call) >= ALLOC_THRESHOLD )
                                 {
                                     // an allocating function is a base pointer
                                     bpCandidates.insert(call);
@@ -940,84 +940,26 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
     // map IVs to the geps that use them
     // these will be used to "group" IVs that work together to index a base pointer
     map<shared_ptr<InductionVariable>, set<const llvm::GetElementPtrInst*>> ivToGep;
-    for( const auto& iv : IVs )
+    for( const auto& c : t->getCycles() )
     {
-        set<const llvm::Value*> covered;
-        deque<const llvm::Value*> Q;
-        // there may be several instructions between a GEPs offset and the IV, and the best way to address this is to walk forward starting at the IVs, and then doing a check every time a GEP is hit
-        set<const llvm::GetElementPtrInst*> geps;
-        Q.push_front(iv->getNode()->getVal());
-        covered.insert(iv->getNode()->getVal());
-        while( !Q.empty() )
+        for( const auto& b : c->getBody() )
         {
-            for( const auto& user : Q.front()->users() )
+            for( const auto& i : b->instructions )
             {
-                if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(user) )
+                if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(i->getInst()) )
                 {
-                    if( covered.find(bin) == covered.end() )
+                    for( const auto& iv : IVs )
                     {
-                        covered.insert(bin);
-                        Q.push_back(bin);
+                        if( iv->isOffset(gep) )
+                        {
+                            ivToGep[iv].insert(gep);
+                        }
                     }
-                }
-                else if( auto cast = llvm::dyn_cast<llvm::CastInst>(user) )
-                {
-                    if( covered.find( cast ) == covered.end() )
-                    {
-                        covered.insert(cast);
-                        Q.push_back(cast);
-                    }
-                }
-                else if( auto gep = llvm::dyn_cast<llvm::GetElementPtrInst>(user) )
-                {
-                    // try to find this gep in the ordered list, 
-                    if( covered.find(gep) == covered.end() )
-                    {
-                        geps.insert(gep);
-                        covered.insert(gep);
-                        Q.push_back(gep);
-                    }
-                }
-                else if( auto ld = llvm::dyn_cast<llvm::LoadInst>(user) )
-                {
-                    if( covered.find(ld) == covered.end() )
-                    {
-                        covered.insert(ld);
-                        Q.push_back(ld);
-                    }
-                }
-            }
-            Q.pop_front();
-        }
-        ivToGep[iv] = geps;
-    }
-    // now use the mapping IV2gep to group IVs together
-    // IVs that overlap in their geps indicate which geps work together 
-    map<shared_ptr<InductionVariable>, set<shared_ptr<InductionVariable>>> ivToGroup;
-    for( const auto& iv : ivToGep )
-    {
-        for( const auto& iv2 : ivToGep )
-        {
-            if( iv.first == iv2.first )
-            {
-                continue;
-            }
-            for( const auto& gep : iv.second )
-            {
-                if( iv2.second.find(gep) != iv2.second.end() )
-                {
-                    // an overlap has been found, these two IVs work together to offset the same pointer. Thus they should be used together in a collection
-                    ivToGroup[iv.first].insert(iv2.first);
-                    ivToGroup[iv2.first].insert(iv.first);
-                    // now make the sets coherent
-                    ivToGroup[iv.first].insert( ivToGroup[iv2.first].begin(), ivToGroup[iv2.first].end() );
-                    ivToGroup[iv2.first].insert( ivToGroup[iv.first].begin(), ivToGroup[iv.first].end() );
-                    break;
                 }
             }
         }
     }
-    // now that we have groups of IVs that work together, map them to base pointers
+    // map IVs to base pointers
     // we do this by finding IVs and BPs that touch the same GEPs
     for( const auto& bp : BPs )
     {
@@ -1058,10 +1000,6 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 if( unorderedVars.empty() )
                 {
                     PrintVal(bp->getNode()->getVal());
-                    for( const auto& iv : unorderedVars )
-                    {
-                        PrintVal(iv->getNode()->getVal());
-                    }
                     PrintVal(gep);
                     for( const auto& iv : IVs )
                     {

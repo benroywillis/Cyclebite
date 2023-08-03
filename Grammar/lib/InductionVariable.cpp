@@ -549,6 +549,35 @@ bool InductionVariable::isOffset(const llvm::Value* v) const
                     }
                 }
             }
+            else if( const auto& comp = llvm::dyn_cast<llvm::CmpInst>(Q.front()) )
+            {
+                // when the optimizer has unrolled an inner loop, it may use comparators and select instructions to figure out which IV transformation to use on the next memory access
+                // example: StencilChain/Naive/ DFG_kernel22.dot
+                for( const auto& user : comp->users() )
+                {
+                    if( !llvm::isa<llvm::BranchInst>(user) )
+                    {
+                        if( covered.find(user) == covered.end() )
+                        {
+                            Q.push_back(user);
+                            covered.insert(user);
+                        }
+                    }
+                }
+            }
+            else if( const auto& sel = llvm::dyn_cast<llvm::SelectInst>(Q.front()) )
+            {
+                // when the optimizer has unrolled an inner loop, it may use comparators and select instructions to figure out which IV transformation to use on the next memory access
+                // example: StencilChain/Naive/ DFG_kernel22.dot
+                for( const auto& user : sel->users() )
+                {
+                    if( covered.find(user) == covered.end() )
+                    {
+                        Q.push_back(user);
+                        covered.insert(user);
+                    }
+                }
+            }
             Q.pop_front();
         }
     }
