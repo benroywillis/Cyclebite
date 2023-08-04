@@ -15,8 +15,8 @@ using namespace std;
 
 enum class IV_BOUNDARIES 
 {
-    INVALID = -2,
-    UNDETERMINED = -1
+    INVALID = INT_MIN,
+    UNDETERMINED = INT_MIN+1
 };
 
 InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n, const std::shared_ptr<Cycle>& c ) : Symbol("var"), cycle(c), node(n)
