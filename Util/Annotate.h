@@ -374,6 +374,11 @@ inline bool isAllocatingFunction(const llvm::CallBase* call)
         {
             return true;
         }
+        else if( call->getCalledFunction()->getName() == "calloc" )
+        {
+            spdlog::warn("Cannot yet support the size parameter of calloc. Allocation may be erroneously considered too small for processing.");
+            return true;
+        }
     }
     return false;
 }

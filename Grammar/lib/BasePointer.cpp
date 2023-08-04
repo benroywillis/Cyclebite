@@ -68,7 +68,7 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
 {
     if( call->getCalledFunction() )
     {
-        if( (call->getCalledFunction()->getName() == "malloc") || (call->getCalledFunction()->getName() == "_Znam") || (call->getCalledFunction()->getName() == "_Znwm") )
+        if( (call->getCalledFunction()->getName() == "malloc") || (call->getCalledFunction()->getName() == "calloc") || (call->getCalledFunction()->getName() == "_Znam") || (call->getCalledFunction()->getName() == "_Znwm") )
         {
             // return its allocation size
             // the functions identified above have a single argument - their allocation in size
@@ -78,6 +78,16 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
                 if( const auto& con = llvm::dyn_cast<llvm::Constant>(call->getArgOperand(0)) )
                 {
                     return (uint32_t)*con->getUniqueInteger().getRawData();
+                }
+            }
+            else if( call->getNumArgOperands() == 2 )
+            {
+                // calloc case, the first argument is the number of allocations and the second is the size of each allocation
+                const auto conSize = llvm::dyn_cast<llvm::Constant>(call->getArgOperand(0));
+                const auto conAllo = llvm::dyn_cast<llvm::Constant>(call->getArgOperand(1));
+                if( conSize && conAllo )
+                {
+                    return (uint32_t)*conSize->getUniqueInteger().getRawData() * (uint32_t)*conAllo->getUniqueInteger().getRawData();
                 }
             }
             else
