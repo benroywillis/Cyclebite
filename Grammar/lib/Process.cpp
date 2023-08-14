@@ -49,6 +49,7 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
             deque<const llvm::Instruction*> Q;
             Q.push_front(llvm::cast<llvm::Instruction>(d->getVal()));
             covered.insert(llvm::cast<llvm::Instruction>(d->getVal()));
+            PrintVal(Q.front());
             while( !Q.empty() )
             {
                 for( auto& use : Q.front()->operands() )
@@ -78,14 +79,11 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
                     }
                     else if( auto phi = llvm::dyn_cast<llvm::PHINode>(use.get()) )
                     {
-                        // case found in optimized programs when an induction variable lives in a value (not the heap) and has a DFG cycle between an add and a phi node 
-                        if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(Q.front()) )
-                        {
-                            // we have found a cycle between a binary op and a phi, likely indicating an induction variable, thus add it to the set of dimensions
-                            covered.insert(bin);
-                            covered.insert(phi);
-                            vars.insert( Cyclebite::Graph::DNIDMap.at((llvm::Instruction*)phi) );
-                        }
+                        // any phi within the current cycle that is used by a branch iterator inst is an IV candidate
+                        // later we see which phis have a binary instruction user within the given cycle, these phis will become IVs and filter those that come from elsewhere or set dynamic boundaries
+                        covered.insert(bin);
+                        covered.insert(phi);
+                        vars.insert( Cyclebite::Graph::DNIDMap.at((llvm::Instruction*)phi) );
                     }
                     else if( auto ld = llvm::dyn_cast<llvm::LoadInst>(use.get()) )
                     {
@@ -106,7 +104,7 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
             }
             if( vars.empty() )
             {
-                throw AtlasException("Found more than one IV candidate for this cycle!");
+                throw AtlasException("Could not find any IVs for this cycle!");
             }
             for( const auto& var : vars )
             {
