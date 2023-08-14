@@ -94,9 +94,9 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
                         covered.insert(ld);
                         if( const auto& p_inst = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()) )
                         {
+                            // make sure this IV is alive
                             if( BBCBMap.find(p_inst->getParent()) != BBCBMap.end() )
                             {
-                                // now we know it is allive
                                 vars.insert( Cyclebite::Graph::DNIDMap.at((llvm::Instruction*)ld->getPointerOperand()) );
                             }
                         }
@@ -104,23 +104,56 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
                 }
                 Q.pop_front();
             }
-            if( vars.size() != 1 )
+            if( vars.empty() )
             {
-                for( const auto& var : vars )
+                throw AtlasException("Found more than one IV candidate for this cycle!");
+            }
+            for( const auto& var : vars )
+            {
+                // make sure it has a binary operation within the cycle itself
+                // this will distinguish true IVs from dynamic boundaries that may be loaded and stored to just like IVs
+                // in order to be a candidate, the var must be manipulated by an llvm::BinaryOperator within the task itself
+                // this differentiates the IV from a dynamic boundary that is captured elsewhere
+                bool foundBin = false;
+                Q.clear();
+                covered.clear();
+                Q.push_front(static_pointer_cast<Inst>(var)->getInst());
+                covered.insert(static_pointer_cast<Inst>(var)->getInst());
+                while( !Q.empty() )
                 {
-                    PrintVal(var->getVal());
-                }
-                if( vars.empty() )
-                {
-                    throw AtlasException("Could not find an IV for this cycle!");
-                }
-                else
-                {
-                    throw AtlasException("Found more than one IV candidate for this cycle!");
+                    for( const auto& use : Q.front()->users() )
+                    {
+                        if( DNIDMap.find(use) == DNIDMap.end() )
+                        {
+                            continue;
+                        }
+                        if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(use) )
+                        {
+                            if( cycle->find(DNIDMap.at(bin)) )
+                            {
+                                foundBin = true;
+                                break;
+                            }
+                        }
+                        else if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(use) )
+                        {
+                            if( cycle->find(DNIDMap.at(inst)) )
+                            {
+                                Q.push_back(inst);
+                                covered.insert(inst);
+                            }
+                        }
+                    }
+                    if( foundBin )
+                    {
+                        auto newIV = make_shared<InductionVariable>(var, cycle);
+                        IVs.insert(newIV);
+                        Q.clear();
+                        break;
+                    }
+                    Q.pop_front();
                 }
             }
-            auto newIV = make_shared<InductionVariable>(*vars.begin(), cycle);
-            IVs.insert(newIV);
         }
     }
     return IVs;
