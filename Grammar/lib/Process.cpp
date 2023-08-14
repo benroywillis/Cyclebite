@@ -110,7 +110,14 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
                 {
                     PrintVal(var->getVal());
                 }
-                throw AtlasException("Found more than one IV candidate for this cycle!");
+                if( vars.empty() )
+                {
+                    throw AtlasException("Could not find an IV for this cycle!");
+                }
+                else
+                {
+                    throw AtlasException("Found more than one IV candidate for this cycle!");
+                }
             }
             auto newIV = make_shared<InductionVariable>(*vars.begin(), cycle);
             IVs.insert(newIV);
@@ -1263,6 +1270,10 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                         {
                             for( const auto& user : Q.front()->getInst()->users() )
                             {
+                                if( DNIDMap.find(user) == DNIDMap.end() )
+                                {
+                                    continue;
+                                }
                                 // we expect eating stores to happen only after functional groups
                                 if( const auto st = llvm::dyn_cast<llvm::StoreInst>(user) )
                                 {
@@ -1284,6 +1295,10 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                             }
                             for( const auto& use : Q.front()->getInst()->operands() )
                             {
+                                if( DNIDMap.find(use) == DNIDMap.end() )
+                                {
+                                    continue;
+                                }
                                 // we expect feeding loads to happen only prior to functional groups
                                 if( const auto ld = llvm::dyn_cast<llvm::LoadInst>(use) )
                                 {
@@ -1587,7 +1602,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
             }
             expr = make_shared<Reduction>(rv, vec, ops);
             nodeToExpr[node] = expr;
-            nodeToExpr[rv->getNode()] = expr;        
+            nodeToExpr[rv->getNode()] = expr;
         }
     }
     else
@@ -1602,12 +1617,11 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
             else if( const auto& shuffle = llvm::dyn_cast<llvm::ShuffleVectorInst>(node->getInst()) )
             {
                 // shuffles appear to be useful for concatenating elemnents of different vectors into the same vector
-                // the only example so far that has used this is optimized (-O3) StencilChain/Naive
-                // we look for an identity shuffle (example, StencilChain/Naive), else throw an error because we don't support that
+                // the only example so far that has used this is optimized (-O3) StencilChain/Naive, which uses an "identity shuffle" (example, StencilChain/Naive)
                 // we don't support shufflevectors yet because they usually contain more than one operation at once, and may be transformed later
                 // example: StencilChain/Naive/DFG_Kernel15.svg (shufflevector transforms i8 to i32, then i32 is converted to float before the MAC takes place)
                 PrintVal(node->getInst());
-                throw AtlasException("Cannot supoort shufflevector instructions yet!");
+                throw AtlasException("Cannot support shufflevector instructions yet!");
             }
             vector<shared_ptr<Symbol>> vec;
             for( const auto& op : node->getInst()->operands() )
@@ -1711,19 +1725,6 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     }
     return expr;
 }
-
-/*set<shared_ptr<Function>> getFunctions( const set<shared_ptr<Expression>>& exprs)
-{
-    set<shared_ptr<Function>> funcs;
-    // there is a 1:1 mapping between function and high-level expression, which are the expressions in the expr arg
-    for( const auto& expr : exprs )
-    {
-        // each expression represents an operation on two data elements
-        // the parallelism of these elements is determined by their position in the polyhedral space, defined by the collections in the expression
-        // to find parallelism between expressions
-    }
-    return funcs;
-}*/
 
 void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
 {
