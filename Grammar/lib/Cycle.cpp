@@ -120,10 +120,19 @@ set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json&
                     else if( auto ret = llvm::dyn_cast<llvm::ReturnInst>(i->getInst()) )
                     {
                         // if there is a function within the task, it's probably not the boundary of they cycle
-                        // if it is, we are in trouble. There' no way for us to know what the condition is that leads to this exit, thus we don't have a known method of finding the iteratorCondition of this cycle
+                        // to confirm that this return exits the loop, we need to know what the successors of the block are
+                        if( BBCBMap.find(ret->getParent()) != BBCBMap.end() )
+                        {
+                            for( const auto& succ : BBCBMap.at(ret->getParent())->getSuccessors() )
+                            {
+                                if( blocks.find( succ->getSnk() ) == blocks.end() )
+                                {
+                                    // we are in trouble. There' no way for us to know what the condition is that leads to this exit, thus we don't have a known method of finding the iteratorCondition of this cycle
+                                    throw AtlasException("Cannot yet support function return instructions when finding cycle iteration condition!");
+                                }
+                            }
+                        }
                         continue;
-                        //spdlog::critical("Cannot yet support recursion when finding cycle iteration condition!");
-                        //throw AtlasException("Cannot yet support recursion when finding cycle iteration condition!");
                     }
                 }
             }
