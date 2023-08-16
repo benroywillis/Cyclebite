@@ -1,6 +1,6 @@
 add_executable(matmul main.c)
 target_include_directories(matmul PRIVATE ${CMAKE_SOURCE_DIR}/Profile/Backend/Utilities/inc)
-InjectTracer(matmul)
+InjectMarkov(matmul)
 InjectMemory(matmul)
 
 add_test(NAME matmul_Markov_Profile COMMAND matmul.markov.native)

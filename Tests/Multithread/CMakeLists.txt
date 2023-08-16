@@ -1,6 +1,6 @@
 add_executable(multithread OptimizedGEMM.c)
 target_include_directories(multithread PRIVATE ${CMAKE_SOURCE_DIR}/Profile/Backend/Utilities/inc)
-InjectTracer(multithread)
+InjectMarkov(multithread)
 InjectMemory(multithread)
 
 add_test(NAME multithread_Markov_Profile COMMAND multithread.markov.native)

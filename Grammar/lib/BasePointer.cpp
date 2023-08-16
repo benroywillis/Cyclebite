@@ -73,14 +73,14 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
             // return its allocation size
             // the functions identified above have a single argument - their allocation in size
             // if it is determinable, we return that value
-            if( call->getNumArgOperands() == 1 )
+            if( call->arg_size() == 1 )
             {
                 if( const auto& con = llvm::dyn_cast<llvm::Constant>(call->getArgOperand(0)) )
                 {
                     return (uint32_t)*con->getUniqueInteger().getRawData();
                 }
             }
-            else if( call->getNumArgOperands() == 2 )
+            else if( call->arg_size() == 2 )
             {
                 // calloc case, the first argument is the number of allocations and the second is the size of each allocation
                 const auto conSize = llvm::dyn_cast<llvm::Constant>(call->getArgOperand(0));
