@@ -1007,6 +1007,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
         }
         if( taskGeps.empty() )
         {
+            PrintVal(bp->getNode()->getVal());
             throw AtlasException("Base pointer has no geps in the current task!");
         }
         for( const auto& gep : taskGeps )
@@ -1305,6 +1306,10 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                                 {
                                     continue;
                                 }
+                                else if( !t->find(DNIDMap.at(user)) )
+                                {
+                                    continue;
+                                }
                                 // we expect eating stores to happen only after functional groups
                                 if( const auto st = llvm::dyn_cast<llvm::StoreInst>(user) )
                                 {
@@ -1327,6 +1332,10 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                             for( const auto& use : Q.front()->getInst()->operands() )
                             {
                                 if( DNIDMap.find(use) == DNIDMap.end() )
+                                {
+                                    continue;
+                                }
+                                else if( !t->find(DNIDMap.at(use)) )
                                 {
                                     continue;
                                 }
@@ -1605,8 +1614,8 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                         }
                         else
                         {
+                            // expression likely comes from another task
                             PrintVal(bin);
-                            PrintVal(opNode->getVal());
                             throw AtlasException("Cannot map this instruction to an expression!");
                         }
                     }
