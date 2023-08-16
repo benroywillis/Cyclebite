@@ -12,6 +12,7 @@
 #include "IO.h"
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/Support/CommandLine.h>
 #include <nlohmann/json.hpp>

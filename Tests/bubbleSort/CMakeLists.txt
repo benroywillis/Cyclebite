@@ -1,6 +1,6 @@
 add_executable(bubbleSort bubbleSort.c)
 target_include_directories(bubbleSort PRIVATE ${CMAKE_SOURCE_DIR}/Profile/Backend/Markov/inc)
-InjectTracer(bubbleSort)
+InjectMarkov(bubbleSort)
 InjectMemory(bubbleSort)
 
 add_test(NAME bubbleSort_Markov_Profile COMMAND bubbleSort.markov.native 512)

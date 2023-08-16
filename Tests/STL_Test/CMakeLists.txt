@@ -1,5 +1,5 @@
 add_executable(STL_Test STL_Test.cpp)
-InjectTracer(STL_Test)
+InjectMarkov(STL_Test)
 InjectMemory(STL_Test)
 
 add_test(NAME STL_Test_Markov_Profile COMMAND STL_Test.markov.native 512)

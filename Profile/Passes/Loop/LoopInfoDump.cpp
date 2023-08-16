@@ -83,7 +83,6 @@ namespace DashTracer::Passes
     void functionCallCheck(Function *F, LoopInfo &LI)
     {
         bool loopInside = false;
-        BasicBlock *loopBB;
         for (auto b = F->begin(); b != F->end(); b++)
         {
             auto *BB = cast<BasicBlock>(b);
@@ -91,7 +90,6 @@ namespace DashTracer::Passes
             if (LI.getLoopFor(BB))
             {
                 loopInside = true;
-                loopBB = BB;
             }
             for (BasicBlock::iterator i = b->begin(), ie = b->end(); i != ie; ++i)
             {
@@ -229,7 +227,8 @@ namespace DashTracer::Passes
             auto &TLI = getAnalysis<TargetLibraryInfoWrapperPass>();
             auto AC = AssumptionCache(f);
             auto DT = DominatorTree(f);
-            auto SE = ScalarEvolution(f, TLI.getTLI(), AC, DT, LI);
+            auto tli = TLI.getTLI(f);
+            auto SE = ScalarEvolution(f, tli, AC, DT, LI);
             for (auto loop : LI)
             {
                 /*for( auto b : loop->blocks() )

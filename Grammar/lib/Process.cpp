@@ -368,7 +368,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                             else if( auto alloc = llvm::dyn_cast<llvm::AllocaInst>(Q.front()) )
                             {
                                 // an originating alloc indicates a base pointer, if it is big enough
-                                auto allocSize = alloc->getAllocationSizeInBits(alloc->getParent()->getParent()->getParent()->getDataLayout()).getValue()/8;
+                                auto allocSize = alloc->getAllocationSizeInBits(alloc->getParent()->getParent()->getParent()->getDataLayout())->getFixedValue()/8;
                                 if( allocSize >= ALLOC_THRESHOLD )
                                 {
                                     bpCandidates.insert(alloc);

@@ -1,5 +1,5 @@
 add_executable(SharedFunction SharedFunction.c)
-InjectTracer(SharedFunction)
+InjectMarkov(SharedFunction)
 InjectMemory(SharedFunction)
 
 add_test(NAME SharedFunction_Markov_Profile COMMAND SharedFunction.markov.native)

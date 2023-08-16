@@ -1,5 +1,5 @@
 add_executable(FunctionCall FunctionCall.c)
-InjectTracer(FunctionCall)
+InjectMarkov(FunctionCall)
 InjectMemory(FunctionCall)
 
 add_test(NAME FunctionCall_Markov_Profile COMMAND FunctionCall.markov.native)

@@ -185,9 +185,9 @@ namespace DashTracer::Passes
                 {
                     IRBuilder<> builder(load->getNextNode());
                     auto intercept = load;
-                    if( intercept->getType()->isVectorTy() )
+                    if( auto vt = llvm::dyn_cast<llvm::VectorType>(intercept->getType()) )
                     {
-                        for( unsigned i = 0; i < intercept->getType()->getVectorNumElements(); i++ )
+                        for( unsigned i = 0; i < vt->getElementCount().getFixedValue(); i++ )
                         {
                             auto extracted = builder.CreateExtractElement(intercept, i);
                             PassToBackend(builder, extracted, llvm::cast<llvm::Function>(fi), (uint64_t)blockId, ldInstructionIndex);
@@ -203,9 +203,9 @@ namespace DashTracer::Passes
                 {
                     IRBuilder<> builder(store);
                     Value *stVal = store->getValueOperand();
-                    if( stVal->getType()->isVectorTy() )
+                    if( auto vt = llvm::dyn_cast<llvm::VectorType>(stVal->getType()) )
                     {
-                        for( unsigned i = 0; i < stVal->getType()->getVectorNumElements(); i++ )
+                        for( unsigned i = 0; i < vt->getElementCount().getFixedValue(); i++ )
                         {
                             auto extracted = builder.CreateExtractElement(stVal, i);
                             PassToBackend(builder, extracted, llvm::cast<llvm::Function>(fi), (uint64_t)blockId, stInstructionIndex);

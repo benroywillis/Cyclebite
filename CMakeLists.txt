@@ -4,7 +4,7 @@ project(Cyclebite VERSION 1.1.0)
 SET(CMAKE_CXX_STANDARD 17)
 SET(CMAKE_C_STANDARD 11)
 
-find_package(LLVM 9 REQUIRED CONFIG)
+find_package(LLVM 16 REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 llvm_map_components_to_libnames(llvm_libs support core irreader bitreader bitwriter transformutils lto)
@@ -79,11 +79,11 @@ add_subdirectory("Utilities")
 add_subdirectory("Grammar")
 
 # responsible for injecting the tracer. Fairly fragile so be careful
-function(InjectTracer tar)
+function(InjectMarkov tar)
     target_compile_options(${tar} PRIVATE "-flto" "-g" "-mavx")
     set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=lld -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
     add_custom_command(OUTPUT ${tar}.markov.bc
-        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -load $<TARGET_FILE:AtlasPasses> -Markov $<TARGET_FILE:${tar}> -o ${tar}.markov.bc
+        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt --enable-new-pm=0 --load-pass-plugin=$<TARGET_FILE:AtlasPasses> --passes='Markov' $<TARGET_FILE:${tar}> -o ${tar}.markov.bc
         DEPENDS $<TARGET_FILE:${tar}>
     )
     set_source_files_properties(
@@ -102,7 +102,7 @@ function(InjectMemory tar)
     target_compile_options(${tar} PRIVATE "-flto" "-g" "-mavx")
     set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=lld -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
     add_custom_command(OUTPUT ${tar}.memory.bc
-        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -load $<TARGET_FILE:AtlasPasses> -Memory $<TARGET_FILE:${tar}> -o ${tar}.memory.bc
+        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -load $<TARGET_FILE:AtlasPasses> -p Memory $<TARGET_FILE:${tar}> -o ${tar}.memory.bc
         DEPENDS $<TARGET_FILE:${tar}>
     )
     set_source_files_properties(
@@ -115,25 +115,6 @@ function(InjectMemory tar)
     set_target_properties(${tar}.memory.native PROPERTIES LINKER_LANGUAGE CXX)
     set_target_properties(${tar}.memory.native PROPERTIES LINK_FLAGS "-lpapi -lgomp -fopenmp -mavx")
     target_link_libraries(${tar}.memory.native PRIVATE AtlasBackend)
-endfunction()
-
-function(LoopDetection tar)
-    target_compile_options(${tar} PRIVATE "-flto" "-g")
-    set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=lld -Wl,--plugin-opt=emit-llvm")
-    add_custom_command(OUTPUT loopDetect.bc
-        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -load $<TARGET_FILE:AtlasPasses> -CFG  $<TARGET_FILE:${tar}> -o loopDetect.bc > out 2> loopPrint.txt
-        DEPENDS $<TARGET_FILE:${tar}>
-    )
-    set_source_files_properties(
-        loopDetect.bc
-        PROPERTIES
-        EXTERNAL_OBJECT true
-        GENERATED true
-    )
-    add_executable(${tar}-CFG loopDetect.bc)
-    set_target_properties(${tar}-CFG PROPERTIES LINKER_LANGUAGE CXX)
-    set_target_properties(${tar}-CFG PROPERTIES LINK_FLAGS "-lpapi")
-    target_link_libraries(${tar}-CFG PRIVATE AtlasBackend)
 endfunction()
 
 # our unit tests
