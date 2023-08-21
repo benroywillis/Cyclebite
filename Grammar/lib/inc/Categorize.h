@@ -45,4 +45,5 @@ namespace Cyclebite::Grammar
     std::set<int64_t> findFunction(const std::map<std::string, std::set<llvm::BasicBlock *>> &kernelSets);
     std::set<int64_t> findState(const std::map<std::string, std::set<llvm::BasicBlock *>> &kernelSets);
     std::set<int64_t> findMemory(const std::map<std::string, std::set<llvm::BasicBlock *>> &kernelSets);
+    std::map<std::string, std::set<int64_t>> colorNodes( const std::map<std::string, std::set<llvm::BasicBlock *>> &kernelSets);
 } // namespace Cyclebite::Grammar
