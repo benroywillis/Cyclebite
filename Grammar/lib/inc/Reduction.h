@@ -10,6 +10,7 @@ namespace Cyclebite::Grammar
     public:
         Reduction(const std::shared_ptr<ReductionVariable>& var, const std::vector<std::shared_ptr<Symbol>>& s, const std::vector<Cyclebite::Graph::Operation>& o );
         ~Reduction() = default;
+        const std::shared_ptr<ReductionVariable>& getRV() const;
         std::string dump() const override;
     private:
         std::shared_ptr<ReductionVariable> var;
