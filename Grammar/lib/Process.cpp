@@ -195,8 +195,8 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
         deque<const llvm::Instruction*> Q;
         set<const llvm::Instruction*> seen;
         shared_ptr<DataValue> reductionOp = nullptr;
-        Q.push_front(llvm::cast<llvm::Instruction>(s->getValueOperand()));
-        seen.insert(llvm::cast<llvm::Instruction>(s->getValueOperand()));
+        Q.push_front(llvm::cast<llvm::Instruction>(s));
+        seen.insert(llvm::cast<llvm::Instruction>(s));
         while( !Q.empty() )
         {
             for( auto& use : Q.front()->operands() )
@@ -231,17 +231,20 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                 {
                     // a load's pointer may point us back to a store we have seen
                     // this will lead us back to a reduction variable pointer (in the case of unoptimized code)
-
+                    if( reductionOp )
+                    {
+                        if( (s->getPointerOperand() == ld->getPointerOperand()) && (s->getValueOperand() == reductionOp->getVal() ) )
+                        {
+                            // we have found a ld/st pair that uses the same pointer and saves the reductionOp, this is a reduction candidate
+                            reductionCandidates.insert(DNIDMap.at(s->getPointerOperand()));
+                        }
+                    }
+                    seen.insert(ld);
                 }
                 else if( auto st = llvm::dyn_cast<llvm::StoreInst>(use.get()) )
                 {
-                    // case found in unoptimized programs when the induction variable lives on the heap (not in a value) and is communicated with through ld/st
-                    // the pointer argument to this store is likely the induction variable pointer, so add that to the reductions set
+                    // shouldn't encounter this case, we started from the store and walked backwards
                     seen.insert(st);
-                    if( const auto ptr = llvm::dyn_cast<llvm::Instruction>(st->getPointerOperand()) )
-                    {
-                        reductionCandidates.insert(DNIDMap.at(ptr));
-                    } 
                 }
             }
             Q.pop_front();
