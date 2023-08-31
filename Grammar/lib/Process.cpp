@@ -239,10 +239,43 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     // this will lead us back to a reduction variable pointer (in the case of unoptimized code)
                     if( reductionOp )
                     {
+                        // first piece of criteria: we have a ld/st pair that uses the same pointer and saves the reductionOp
                         if( (s->getPointerOperand() == ld->getPointerOperand()) && (s->getValueOperand() == reductionOp->getVal() ) )
                         {
-                            // we have found a ld/st pair that uses the same pointer and saves the reductionOp, this is a reduction candidate
-                            reductionCandidates.insert(DNIDMap.at(s->getPointerOperand()));
+                            bool candidate = true;
+                            // second piece: the pointer must be constant throughout the local-most cycle
+                            // (see PERFECT/2DConv BB 5, which is basically a zip with a coefficient on each element)
+                            // the cycle has an iterator, and if that iterator is used to offset the pointer on each cycle iteration, this is not a reduction
+                            shared_ptr<Cycle> c = nullptr;
+                            for( const auto& cy : t->getCycles() )
+                            {
+                                if( cy->find(reductionOp) )
+                                {
+                                    c = cy;
+                                    break;
+                                }
+                            }
+                            if( !c )
+                            {
+                                throw AtlasException("Could not find the cycle of the reductionOp when finding reduction variable candidates!");
+                            }
+                            const shared_ptr<DataValue> ptr = DNIDMap.at(ld->getPointerOperand());
+                            for( const auto& iv : vars )
+                            {
+                                if( c->find(iv->getNode()) )
+                                {
+                                    if( iv->isOffset(ld->getPointerOperand()) )
+                                    {
+                                        // the load pointer is an offset of the loop iterator, thus we are not reducing a value into it
+                                        candidate = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if( candidate )
+                            {
+                                reductionCandidates.insert(DNIDMap.at(s->getPointerOperand()));
+                            }
                         }
                     }
                     seen.insert(ld);
