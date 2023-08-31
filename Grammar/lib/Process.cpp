@@ -217,14 +217,20 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                 }
                 else if( auto phi = llvm::dyn_cast<llvm::PHINode>(use.get()) )
                 {
-                    // case found in optimized programs when an induction variable lives in a value (not the heap) and has a DFG cycle between an add and a phi node 
+                    // case found in optimized programs when an induction variable lives in a value (not the heap) and has a DFG cycle between an add and a phi node
+                    // in order for this phi to be a reduction variable candidate, it must form a cycle with a binary operator
+                    // we only expect this cycle to involve two nodes, thus a check of the phis users suffices to find the complete cycle
                     if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(Q.front()) )
                     {
-                        // we have found a cycle between a binary op and a phi, likely indicating an induction variable, thus add it to the set of dimensions
-                        seen.insert(bin);
-                        seen.insert(phi);
-                        reductionOp = DNIDMap.at(bin);
-                        reductionCandidates.insert(DNIDMap.at(phi));
+                        auto binOnde = DNIDMap.at(bin);
+                        if( DNIDMap.at(bin)->isPredecessor(DNIDMap.at(phi)) )
+                        {
+                            // we have found a cycle between a binary op and a phi, likely indicating an induction variable, thus add it to the set of dimensions
+                            seen.insert(bin);
+                            seen.insert(phi);
+                            reductionOp = DNIDMap.at(bin);
+                            reductionCandidates.insert(DNIDMap.at(phi));
+                        }
                     }
                 }
                 else if( auto ld = llvm::dyn_cast<llvm::LoadInst>(use.get()) )
