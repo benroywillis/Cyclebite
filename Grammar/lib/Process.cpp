@@ -18,6 +18,42 @@ using namespace Cyclebite::Grammar;
 using namespace Cyclebite::Graph;
 using namespace std;
 
+void DisectConstant( vector<Symbol>& vec, const llvm::Constant* con)
+{
+    if( con->getType()->isIntegerTy() )
+    {
+        vec.push_back(make_shared<ConstantSymbol<int64_t>>(*con->getUniqueInteger().getRawData()));
+    }
+    else if( con->getType()->isFloatTy() )
+    {
+        if( const auto& conF = llvm::dyn_cast<llvm::ConstantFP>(con) )
+        {
+            vec.push_back(make_shared<ConstantSymbol<float>>( conF->getValueAPF().convertToFloat() ));
+        }
+        else
+        {
+            throw AtlasException("Could not extract float from constant float!");
+        }
+    }
+    else if( con->getType()->isDoubleTy() )
+    {
+        if( const auto& conD = llvm::dyn_cast<llvm::ConstantFP>(con) )
+        {
+            vec.push_back(make_shared<ConstantSymbol<double>>( conD->getValueAPF().convertToDouble() ));
+        }
+        else
+        {
+            throw AtlasException("Could not extract double from constant double!");
+        }
+    }
+    else
+    {
+        PrintVal(op);
+        PrintVal(node->getVal());
+        throw AtlasException("Cannot recognize this constant type!");
+    }
+}
+
 set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(const shared_ptr<Task>& t)
 {
     // in order to understand the function and dimensionality of an algorithm we need two things
@@ -155,6 +191,109 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
         }
     }
     return IVs;
+}
+
+set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const shared_ptr<Task>& t, const set<shared_ptr<BasePointer>>& BPs, const set<shared_ptr<InductionVariable>>& vars)
+{
+    // final set of index variables that may be found
+    set<shared_ptr<IndexVariable>> idxVars;
+    // mapping between base pointers and their index variables
+    map<shared_ptr<BasePointer>, set<shared_ptr<IndexVariable>>> BPtoIdx;
+    // our first step is to find all gep instructions
+    set<const llvm::GetElementPtrInst*> geps;
+    for( const auto& c : t->getCycles() )
+    {
+        for ( const auto& b : c->getBody() )
+        {
+            for( const auto& i : b->instructions )
+            {
+                if( const auto& gep : llvm::dyn_cast<llvm::GetElementPtrInst>(i->getVal()) )
+                {
+                    geps.insert(gep);
+                }
+            }
+        }
+    }
+    // next, gather preliminary information for each index variable
+    // later, we will use information that possibly connects them together
+    // finally, once we have each indexVariable and their connections, we construct indexVariable objects
+    for( const auto& gep : geps )
+    {
+        deque<const llvm::Value*> Q;
+        set<const llvm::Value*> covered;
+        // records binary operations found to be done on gep indices, used to investigate the dimensionality of the pointer offset being done by the gep
+        set<const llvm::BinaryOperator*> bins;
+        // holds the set of values that "source" the indexVariable
+        // these are used later to find out how this indexVariable is connected to others
+        set<const llvm::Value*> sources;
+        for( const auto& idx : gep->indices() )
+        {
+            Q.push_front(idx);
+        }
+        while( !Q.empty() )
+        {
+            // The indices of the gep represent the offset done on its pointer operand, and contain all the information of an idxVar
+            // - there are several cases that must be accounted for
+            //   -> constant: simplest idxVar of them all, commonly used in color-encoded images (to select r, g or b)
+            //   -> binary ops: may represent the combination of multiple dimensions, e.g., var0*SIZE + var1
+            //   -> cast: this is LLVM IR plumbing, ignore
+            //   -> instructions that terminate the DFG walk: finding the source pointer being offset, another gep (which represents another idx var), or a PHI (which may map to an IV)
+            if( const auto& con = llvm::dyn_cast<llvm::Constant>(Q.front()) )
+            {
+                // a constant is likely a simple offset on a structure, that's useful
+                AffineOffset of;
+                if( con->getType()->isIntegerTy() )
+                {
+                    of.constant = *con->getUniqueInteger().getRawData();
+                }
+                // floating point offsets shouldn't happen
+                else 
+                {
+                    throw AtlasException("Cannot handle a memory offset that isn't an integer!");
+                }
+            }
+            else if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(Q.front()) )
+            {
+                bins.push_back(bin);
+            }
+            else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
+            {
+                // do nothing, we don't care about cast operators they are just LLVM IR plumbing
+                for( const auto& op : cast->operands() )
+                {
+                    if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(op) )
+                    {
+                        Q.push_back(op);
+                    }
+                }
+                Q.pop_front();
+            }
+            // When we reach the end of the idxVar information space, stop
+            //  - possible places:
+            //    -> another gep, this represents another dimension and therefore another idxVar
+            //    -> PHI node, possibly maps to an induction variable
+            //    -> ld, pointer possibly maps to a BP
+            else if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
+            {
+                // may map to something else, but we're done
+                sources.insert(gep);
+            }
+            else if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
+            {
+                sources.insert(ld);
+            }
+            else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(Q.front()) )
+            {
+                sources.insert(phi);
+            }
+            Q.pop_front();
+        }
+    }
+    
+    // finally, we construct the indexVariable object
+    // - affine transforms are extracted from the list of ops done on the base value
+    // - geps are transformed into dimensions (and any possible binary transforms are recorded too)
+    // - stopping condition becomes the value of the index variable
 }
 
 set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(const shared_ptr<Task>& t, const set<shared_ptr<InductionVariable>>& vars)
@@ -1664,38 +1803,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                 }
                 else if( auto con = llvm::dyn_cast<llvm::Constant>(op) )
                 {
-                    if( con->getType()->isIntegerTy() )
-                    {
-                        vec.push_back(make_shared<ConstantSymbol<int64_t>>(*con->getUniqueInteger().getRawData()));
-                    }
-                    else if( con->getType()->isFloatTy() )
-                    {
-                        if( const auto& conF = llvm::dyn_cast<llvm::ConstantFP>(con) )
-                        {
-                            vec.push_back(make_shared<ConstantSymbol<float>>( conF->getValueAPF().convertToFloat() ));
-                        }
-                        else
-                        {
-                            throw AtlasException("Could not extract float from constant float!");
-                        }
-                    }
-                    else if( con->getType()->isDoubleTy() )
-                    {
-                        if( const auto& conD = llvm::dyn_cast<llvm::ConstantFP>(con) )
-                        {
-                            vec.push_back(make_shared<ConstantSymbol<double>>( conD->getValueAPF().convertToDouble() ));
-                        }
-                        else
-                        {
-                            throw AtlasException("Could not extract double from constant double!");
-                        }
-                    }
-                    else
-                    {
-                        PrintVal(op);
-                        PrintVal(node->getVal());
-                        throw AtlasException("Cannot recognize this constant type!");
-                    }
+                    DisectConstant(vec, con);
                 }
                 else
                 {
