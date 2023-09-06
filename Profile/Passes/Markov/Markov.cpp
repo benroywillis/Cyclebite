@@ -18,7 +18,7 @@ using namespace llvm;
 
 std::set<BasicBlock *> exitCovered;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
     bool Markov::runOnFunction(Function &F)
     {
@@ -247,9 +247,9 @@ namespace DashTracer::Passes
 
     void Markov::getAnalysisUsage(AnalysisUsage &AU) const
     {
-        AU.addRequired<DashTracer::Passes::LoopInfoDump>();
+        AU.addRequired<Cyclebite::Profile::Passes::LoopInfoDump>();
     }
 
     char Markov::ID = 0;
     static RegisterPass<Markov> Y("Markov", "Adds Markov Dumping to the binary", true, false);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes

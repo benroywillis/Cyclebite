@@ -23,7 +23,7 @@
 using namespace llvm;
 using namespace std;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
     bool Memory::runOnFunction(Function &F)
     {
@@ -365,10 +365,10 @@ namespace DashTracer::Passes
 
     void Memory::getAnalysisUsage(AnalysisUsage &AU) const
     {
-        AU.addRequired<DashTracer::Passes::EncodedAnnotate>();
-        AU.addRequired<DashTracer::Passes::MarkovIO>();
+        AU.addRequired<Cyclebite::Profile::Passes::EncodedAnnotate>();
+        AU.addRequired<Cyclebite::Profile::Passes::MarkovIO>();
     }
 
     char Memory::ID = 0;
     static RegisterPass<Memory> Y("Memory", "Injects memory profiling to the binary", true, false);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes

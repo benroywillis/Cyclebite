@@ -17,28 +17,25 @@
 
 using namespace llvm;
 
-namespace DashTracer
+namespace Cyclebite::Profile::Passes
 {
-    namespace Passes
+    bool TraceIO::runOnModule(Module &M)
     {
-        bool TraceIO::runOnModule(Module &M)
-        {
-            appendToGlobalCtors(M, openFunc, 0);
-            appendToGlobalDtors(M, closeFunc, 0);
-            return true;
-        }
+        appendToGlobalCtors(M, openFunc, 0);
+        appendToGlobalDtors(M, closeFunc, 0);
+        return true;
+    }
 
-        void TraceIO::getAnalysisUsage(AnalysisUsage &AU) const
-        {
-            AU.setPreservesAll();
-        }
-        bool TraceIO::doInitialization(Module &M)
-        {
-            openFunc = cast<Function>(M.getOrInsertFunction("CyclebiteOpenFile", Type::getVoidTy(M.getContext())).getCallee());
-            closeFunc = cast<Function>(M.getOrInsertFunction("CyclebiteCloseFile", Type::getVoidTy(M.getContext())).getCallee());
-            return true;
-        }
-    } // namespace Passes
-    char Passes::TraceIO::ID = 0;
-    static RegisterPass<Passes::TraceIO> TraceIO("TraceIO", "Adds function calls to open/close trace files", true, false);
-} // namespace DashTracer
+    void TraceIO::getAnalysisUsage(AnalysisUsage &AU) const
+    {
+        AU.setPreservesAll();
+    }
+    bool TraceIO::doInitialization(Module &M)
+    {
+        openFunc = cast<Function>(M.getOrInsertFunction("CyclebiteOpenFile", Type::getVoidTy(M.getContext())).getCallee());
+        closeFunc = cast<Function>(M.getOrInsertFunction("CyclebiteCloseFile", Type::getVoidTy(M.getContext())).getCallee());
+        return true;
+    }
+    char TraceIO::ID = 0;
+    static RegisterPass<TraceIO> TraceIO("TraceIO", "Adds function calls to open/close trace files", true, false);
+} // namespace Cyclebite

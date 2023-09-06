@@ -7,7 +7,7 @@
 
 using namespace llvm;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
     MDNode *libName;
     bool AddLibrary::runOnFunction(Function &F)
@@ -32,4 +32,4 @@ namespace DashTracer::Passes
 
     char AddLibrary::ID = 0;
     static RegisterPass<AddLibrary> X("AddLibrary", "Labels functions with the library name", true, true);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes
