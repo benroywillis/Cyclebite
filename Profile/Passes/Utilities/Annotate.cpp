@@ -17,6 +17,7 @@ namespace Cyclebite::Profile::Passes
     cl::opt<uint64_t> CyclebiteStartValueIndex("tavi", llvm::cl::desc("Initial value index"), llvm::cl::value_desc("Initial value index"));
     bool EncodedAnnotate::runOnModule(Module &M)
     {
+        std::cout << "Starting EncodedAnnotate module run" << std::endl;
         if (CyclebiteStartIndex.getNumOccurrences() != 0)
         {
             CyclebiteIndex = CyclebiteStartIndex;
