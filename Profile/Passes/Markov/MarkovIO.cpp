@@ -19,24 +19,21 @@
 
 using namespace llvm;
 
-namespace DashTracer
+namespace Cyclebite::Profile::Passes
 {
-    namespace Passes
+    GlobalVariable *tst;
+    bool MarkovIO::runOnModule(Module &M)
     {
-        GlobalVariable *tst;
-        bool MarkovIO::runOnModule(Module &M)
-        {
-            uint64_t blockCount = GetBlockCount(&M);
-            ConstantInt *i = ConstantInt::get(Type::getInt64Ty(M.getContext()), blockCount);
-            tst = new GlobalVariable(M, i->getType(), false, llvm::GlobalValue::LinkageTypes::ExternalLinkage, i, "MarkovBlockCount");
-            return true;
-        }
+        uint64_t blockCount = GetBlockCount(&M);
+        ConstantInt *i = ConstantInt::get(Type::getInt64Ty(M.getContext()), blockCount);
+        tst = new GlobalVariable(M, i->getType(), false, llvm::GlobalValue::LinkageTypes::ExternalLinkage, i, "MarkovBlockCount");
+        return true;
+    }
 
-        void MarkovIO::getAnalysisUsage(AnalysisUsage &AU) const
-        {
-            AU.setPreservesAll();
-        }
-    } // namespace Passes
-    char Passes::MarkovIO::ID = 0;
-    static RegisterPass<Passes::MarkovIO> MarkovIO("MarkovIO", "Adds function calls to open/close markov files", true, false);
-} // namespace DashTracer
+    void MarkovIO::getAnalysisUsage(AnalysisUsage &AU) const
+    {
+        AU.setPreservesAll();
+    }
+    char MarkovIO::ID = 0;
+    static RegisterPass<MarkovIO> MarkovIO("MarkovIO", "Adds function calls to open/close markov files", true, false);
+} // namespace Cyclebite::Profile

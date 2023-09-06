@@ -16,7 +16,7 @@
 
 using namespace llvm;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
     bool Instance::runOnFunction(Function &F)
     {
@@ -121,10 +121,10 @@ namespace DashTracer::Passes
 
     void Instance::getAnalysisUsage(AnalysisUsage &AU) const
     {
-        AU.addRequired<DashTracer::Passes::EncodedAnnotate>();
-        AU.addRequired<DashTracer::Passes::MarkovIO>();
+        AU.addRequired<Cyclebite::Profile::Passes::EncodedAnnotate>();
+        AU.addRequired<Cyclebite::Profile::Passes::MarkovIO>();
     }
 
     char Instance::ID = 0;
     static RegisterPass<Instance> Y("Instance", "Adds Instance Dumping to the binary", true, false);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes

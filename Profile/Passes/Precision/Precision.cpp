@@ -26,7 +26,7 @@
 using namespace llvm;
 using namespace std;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
     void PassToBackend(llvm::IRBuilder<>& builder, llvm::Value* val, llvm::Function* fi, uint64_t blockId, uint32_t idx)
     {
@@ -236,10 +236,10 @@ namespace DashTracer::Passes
 
     void Precision::getAnalysisUsage(AnalysisUsage &AU) const
     {
-        AU.addRequired<DashTracer::Passes::EncodedAnnotate>();
-        AU.addRequired<DashTracer::Passes::MarkovIO>();
+        AU.addRequired<Cyclebite::Profile::Passes::EncodedAnnotate>();
+        AU.addRequired<Cyclebite::Profile::Passes::MarkovIO>();
     }
 
     char Precision::ID = 0;
     static RegisterPass<Precision> Y("Precision", "Injects Precision profiling to the binary", true, false);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes

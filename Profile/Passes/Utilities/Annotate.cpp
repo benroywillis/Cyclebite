@@ -11,7 +11,7 @@
 
 using namespace llvm;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
     cl::opt<uint64_t> CyclebiteStartIndex("tai", llvm::cl::desc("Initial block index"), llvm::cl::value_desc("Initial block index"));
     cl::opt<uint64_t> CyclebiteStartValueIndex("tavi", llvm::cl::desc("Initial value index"), llvm::cl::value_desc("Initial value index"));
@@ -43,4 +43,4 @@ namespace DashTracer::Passes
     }
     char EncodedAnnotate::ID = 0;
     static RegisterPass<EncodedAnnotate> Z("EncodedAnnotate", "Renames the basic blocks in the module", true, false);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes

@@ -21,7 +21,7 @@
 using namespace llvm;
 using namespace std;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
 
     std::vector<uint64_t> kernelBlock;
@@ -154,10 +154,10 @@ namespace DashTracer::Passes
 
     void PapiExport::getAnalysisUsage(AnalysisUsage &AU) const
     {
-        AU.addRequired<DashTracer::Passes::EncodedAnnotate>();
-        AU.addRequired<DashTracer::Passes::PapiIO>();
+        AU.addRequired<Cyclebite::Profile::Passes::EncodedAnnotate>();
+        AU.addRequired<Cyclebite::Profile::Passes::PapiIO>();
     }
 
     char PapiExport::ID = 0;
     static RegisterPass<PapiExport> Y("PapiExport", "Adds papi instrumentation calls to the binary", false, false);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes

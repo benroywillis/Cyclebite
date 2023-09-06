@@ -18,31 +18,28 @@
 
 using namespace llvm;
 
-namespace DashTracer
+namespace Cyclebite::Profile::Passes
 {
-    namespace Passes
+    Function *papiInitiate;
+    Function *papiTerminate;
+    bool PapiIO::runOnModule(Module &M)
     {
-        Function *papiInitiate;
-        Function *papiTerminate;
-        bool PapiIO::runOnModule(Module &M)
-        {
-            appendToGlobalCtors(M, papiInitiate, 0);
-            appendToGlobalDtors(M, papiTerminate, 0);
-            return true;
-        }
+        appendToGlobalCtors(M, papiInitiate, 0);
+        appendToGlobalDtors(M, papiTerminate, 0);
+        return true;
+    }
 
-        void PapiIO::getAnalysisUsage(AnalysisUsage &AU) const
-        {
-            AU.setPreservesAll();
-        }
-        bool PapiIO::doInitialization(Module &M)
-        {
-            papiTerminate = cast<Function>(M.getOrInsertFunction("TerminatePapi", Type::getVoidTy(M.getContext())).getCallee());
-            papiInitiate = cast<Function>(M.getOrInsertFunction("InitializePapi", Type::getVoidTy(M.getContext())).getCallee());
-            return true;
-        }
-    } // namespace Passes
-    char Passes::PapiIO::ID = 0;
-    static RegisterPass<Passes::PapiIO> TraceIO("PapiIO", "Adds function calls to open/close papi instrumentation", true, false);
+    void PapiIO::getAnalysisUsage(AnalysisUsage &AU) const
+    {
+        AU.setPreservesAll();
+    }
+    bool PapiIO::doInitialization(Module &M)
+    {
+        papiTerminate = cast<Function>(M.getOrInsertFunction("TerminatePapi", Type::getVoidTy(M.getContext())).getCallee());
+        papiInitiate = cast<Function>(M.getOrInsertFunction("InitializePapi", Type::getVoidTy(M.getContext())).getCallee());
+        return true;
+    }
+    char PapiIO::ID = 0;
+    static RegisterPass<PapiIO> TraceIO("PapiIO", "Adds function calls to open/close papi instrumentation", true, false);
 
-} // namespace DashTracer
+} // namespace Cyclebite

@@ -17,7 +17,7 @@ using namespace llvm;
 using namespace std;
 using json = nlohmann::json;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
     enum class LoopType
     {
@@ -492,11 +492,11 @@ namespace DashTracer::Passes
     void LoopInfoDump::getAnalysisUsage(AnalysisUsage &AU) const
     {
         AU.setPreservesCFG();
-        AU.addRequired<DashTracer::Passes::EncodedAnnotate>();
-        AU.addRequired<DashTracer::Passes::MarkovIO>();
+        AU.addRequired<Cyclebite::Profile::Passes::EncodedAnnotate>();
+        AU.addRequired<Cyclebite::Profile::Passes::MarkovIO>();
         AU.addRequired<LoopInfoWrapperPass>();
         AU.addRequired<TargetLibraryInfoWrapperPass>();
     }
     char LoopInfoDump::LoopInfoDump::ID = 0;
     static RegisterPass<LoopInfoDump> X("LoopInfoDump", "Dumps information about loop info", true, true);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes

@@ -21,7 +21,7 @@
 using namespace llvm;
 using namespace std;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
 
     std::vector<uint64_t> kernelBlockValue;
@@ -106,10 +106,10 @@ namespace DashTracer::Passes
 
     void EncodedTraceMemory::getAnalysisUsage(AnalysisUsage &AU) const
     {
-        AU.addRequired<DashTracer::Passes::EncodedAnnotate>();
-        AU.addRequired<DashTracer::Passes::TraceMemIO>();
+        AU.addRequired<Cyclebite::Profile::Passes::EncodedAnnotate>();
+        AU.addRequired<Cyclebite::Profile::Passes::TraceMemIO>();
         AU.setPreservesCFG();
     }
     char EncodedTraceMemory::ID = 1;
     static RegisterPass<EncodedTraceMemory> Y("EncodedTraceMemory", "Adds encoded tracing memory value in the kernel to the binary", true, false);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes

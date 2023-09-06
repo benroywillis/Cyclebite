@@ -4,19 +4,14 @@
 
 using namespace llvm;
 
-namespace DashTracer
+namespace Cyclebite::Profile::Passes
 {
-    namespace Passes
+    struct PapiExport : public FunctionPass
     {
-
-        struct PapiExport : public FunctionPass
-        {
-            static char ID;
-            PapiExport() : FunctionPass(ID) {}
-            bool runOnFunction(Function &F) override;
-            bool doInitialization(Module &M) override;
-            void getAnalysisUsage(AnalysisUsage &AU) const override;
-        };
-
-    } // namespace Passes
-} // namespace DashTracer
+        static char ID;
+        PapiExport() : FunctionPass(ID) {}
+        bool runOnFunction(Function &F) override;
+        bool doInitialization(Module &M) override;
+        void getAnalysisUsage(AnalysisUsage &AU) const override;
+    };
+} // namespace Cyclebite::Profile::Passes

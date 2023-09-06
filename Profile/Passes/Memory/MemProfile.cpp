@@ -21,11 +21,10 @@
 using namespace llvm;
 using namespace std;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
     bool MemProfile::runOnFunction(Function &F)
     {
-
         // for (Function::iterator BB = F.begin(), E = F.end(); BB != E; ++BB)
         for (auto BB = F.begin(); BB != F.end(); BB++)
         {
@@ -168,8 +167,8 @@ namespace DashTracer::Passes
 
     void MemProfile::getAnalysisUsage(AnalysisUsage &AU) const
     {
-        AU.addRequired<DashTracer::Passes::EncodedAnnotate>();
+        AU.addRequired<Cyclebite::Profile::Passes::EncodedAnnotate>();
     }
     char MemProfile::ID = 1;
     static RegisterPass<MemProfile> Y("MemProfile", "memory profiler", true, false);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes
