@@ -1210,7 +1210,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                     else
                     {
                         auto idx = orderedGroups.begin();
-                        for( const auto g : orderedGroups )
+                        for( const auto& g : orderedGroups )
                         {
                             // the size of entry can be found by looking up any of its members in the indexMap and taking that entry's IV count
                             auto entrySample = indexMap.at(*entry.begin()).size();
@@ -1543,16 +1543,11 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
         }
         // a reduction should be a cycle starting at a phi, followed by ops (binary or cast), that ultimately feed a reduction variable
         // we must separate the phi from the binary ops from the RV, then construct the expression for the reduction (which is just the binary ops), then add the reduction to it (which sets the operator next to the equal sign e.g. "+=")
-        const llvm::PHINode* phi = nullptr;
         vector<shared_ptr<Inst>> insts;
         shared_ptr<ReductionVariable> rv = nullptr;
         for( const auto& node : order )
         {
-            if( const auto p = llvm::dyn_cast<llvm::PHINode>(node->getInst()) )
-            {
-                phi = p;
-            }
-            else if( dnToRv.find(node) != dnToRv.end() )
+            if( dnToRv.find(node) != dnToRv.end() )
             {
                 rv = dnToRv.at(node);
             }
