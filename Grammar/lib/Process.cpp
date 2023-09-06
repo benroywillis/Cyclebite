@@ -195,8 +195,8 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
         deque<const llvm::Instruction*> Q;
         set<const llvm::Instruction*> seen;
         shared_ptr<DataValue> reductionOp = nullptr;
-        Q.push_front(llvm::cast<llvm::Instruction>(s->getValueOperand()));
-        seen.insert(llvm::cast<llvm::Instruction>(s->getValueOperand()));
+        Q.push_front(llvm::cast<llvm::Instruction>(s));
+        seen.insert(llvm::cast<llvm::Instruction>(s));
         while( !Q.empty() )
         {
             for( auto& use : Q.front()->operands() )
@@ -231,17 +231,20 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                 {
                     // a load's pointer may point us back to a store we have seen
                     // this will lead us back to a reduction variable pointer (in the case of unoptimized code)
-
+                    if( reductionOp )
+                    {
+                        if( (s->getPointerOperand() == ld->getPointerOperand()) && (s->getValueOperand() == reductionOp->getVal() ) )
+                        {
+                            // we have found a ld/st pair that uses the same pointer and saves the reductionOp, this is a reduction candidate
+                            reductionCandidates.insert(DNIDMap.at(s->getPointerOperand()));
+                        }
+                    }
+                    seen.insert(ld);
                 }
                 else if( auto st = llvm::dyn_cast<llvm::StoreInst>(use.get()) )
                 {
-                    // case found in unoptimized programs when the induction variable lives on the heap (not in a value) and is communicated with through ld/st
-                    // the pointer argument to this store is likely the induction variable pointer, so add that to the reductions set
+                    // shouldn't encounter this case, we started from the store and walked backwards
                     seen.insert(st);
-                    if( const auto ptr = llvm::dyn_cast<llvm::Instruction>(st->getPointerOperand()) )
-                    {
-                        reductionCandidates.insert(DNIDMap.at(ptr));
-                    } 
                 }
             }
             Q.pop_front();
@@ -1624,13 +1627,35 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                 {
                     if( con->getType()->isIntegerTy() )
                     {
-                        vec.push_back(make_shared<ConstantSymbol>(*con->getUniqueInteger().getRawData()));
+                        vec.push_back(make_shared<ConstantSymbol<int64_t>>(*con->getUniqueInteger().getRawData()));
+                    }
+                    else if( con->getType()->isFloatTy() )
+                    {
+                        if( const auto& conF = llvm::dyn_cast<llvm::ConstantFP>(con) )
+                        {
+                            vec.push_back(make_shared<ConstantSymbol<float>>( conF->getValueAPF().convertToFloat() ));
+                        }
+                        else
+                        {
+                            throw AtlasException("Could not extract float from constant float!");
+                        }
+                    }
+                    else if( con->getType()->isDoubleTy() )
+                    {
+                        if( const auto& conD = llvm::dyn_cast<llvm::ConstantFP>(con) )
+                        {
+                            vec.push_back(make_shared<ConstantSymbol<double>>( conD->getValueAPF().convertToDouble() ));
+                        }
+                        else
+                        {
+                            throw AtlasException("Could not extract double from constant double!");
+                        }
                     }
                     else
                     {
                         PrintVal(op);
                         PrintVal(node->getVal());
-                        throw AtlasException("Constant used in an expression is not an integer!");
+                        throw AtlasException("Cannot recognize this constant type!");
                     }
                 }
                 else
@@ -1719,7 +1744,29 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                 {
                     if( con->getType()->isIntegerTy() )
                     {
-                        vec.push_back(make_shared<ConstantSymbol>(*con->getUniqueInteger().getRawData()));
+                        vec.push_back(make_shared<ConstantSymbol<int64_t>>(*con->getUniqueInteger().getRawData()));
+                    }
+                    else if( con->getType()->isFloatTy() )
+                    {
+                        if( const auto& conF = llvm::dyn_cast<llvm::ConstantFP>(con) )
+                        {
+                            vec.push_back(make_shared<ConstantSymbol<float>>( conF->getValueAPF().convertToFloat() ));
+                        }
+                        else
+                        {
+                            throw AtlasException("Could not extract float from constant float!");
+                        }
+                    }
+                    else if( con->getType()->isDoubleTy() )
+                    {
+                        if( const auto& conD = llvm::dyn_cast<llvm::ConstantFP>(con) )
+                        {
+                            vec.push_back(make_shared<ConstantSymbol<double>>( conD->getValueAPF().convertToDouble() ));
+                        }
+                        else
+                        {
+                            throw AtlasException("Could not extract double from constant double!");
+                        }
                     }
                     else if( const auto& undef = llvm::dyn_cast<llvm::UndefValue>(op) )
                     {
@@ -1734,7 +1781,32 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                     {
                         for( unsigned i = 0; i < convec->getNumOperands(); i++ )
                         {
-                            vec.push_back(make_shared<ConstantSymbol>(*convec->getOperand(i)->getUniqueInteger().getRawData()));
+                            if( convec->getOperand(i)->getType()->isIntegerTy() )
+                            {
+                                vec.push_back(make_shared<ConstantSymbol<int64_t>>(*convec->getOperand(i)->getUniqueInteger().getRawData()));
+                            }
+                            else if( convec->getOperand(i)->getType()->isFloatTy() )
+                            {
+                                if( const auto& conF = llvm::dyn_cast<llvm::ConstantFP>(convec->getOperand(i)) )
+                                {
+                                    vec.push_back(make_shared<ConstantSymbol<float>>( conF->getValueAPF().convertToFloat() ));
+                                }
+                                else
+                                {
+                                    throw AtlasException("Could not extract float from constant float!");
+                                }
+                            }
+                            else if( convec->getOperand(i)->getType()->isDoubleTy() )
+                            {
+                                if( const auto& conD = llvm::dyn_cast<llvm::ConstantFP>(convec->getOperand(i)) )
+                                {
+                                    vec.push_back(make_shared<ConstantSymbol<double>>( conD->getValueAPF().convertToDouble() ));
+                                }
+                                else
+                                {
+                                    throw AtlasException("Could not extract double from constant double!");
+                                }
+                            }
                         }
                     }
                     else if( const auto& func = llvm::dyn_cast<llvm::Function>(con) )

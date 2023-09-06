@@ -5,6 +5,11 @@ using namespace Cyclebite::Grammar;
 
 Reduction::Reduction(const shared_ptr<ReductionVariable>& v, const vector<shared_ptr<Symbol>>& s, const vector<Cyclebite::Graph::Operation>& o ) : Expression(s, o), var(v) {}
 
+const shared_ptr<ReductionVariable>& Reduction::getRV() const
+{
+    return var;
+}
+
 string Reduction::dump() const
 {
     string expr = name + " " + Cyclebite::Graph::OperationToString.at(var->getOp()) + "= ";

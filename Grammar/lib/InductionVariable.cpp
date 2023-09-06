@@ -1,6 +1,7 @@
 #include "InductionVariable.h"
 #include "DataValue.h"
 #include "IO.h"
+#include "Graph/inc/IO.h"
 #include "Transforms.h"
 #include "Util/Annotate.h"
 #include <deque>
@@ -103,22 +104,27 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         {
             if( auto inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
             {
-                for( unsigned i = 0; i < inst->getNumOperands(); i++ )
+                // we are only interested in finding the instructions that control the algorithm, the other binary ops are used for other things (likely memory space, but possibly function too)
+                // thus, if you are not in the control group, we don't pay attention to you
+                if( static_pointer_cast<Inst>(DNIDMap.at(Q.front()))->isState() )
                 {
-                    if( const auto useInst = llvm::dyn_cast<llvm::Instruction>(inst->getOperand(i)) )
+                    for( unsigned i = 0; i < inst->getNumOperands(); i++ )
                     {
-                        if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(useInst) )
+                        if( const auto useInst = llvm::dyn_cast<llvm::Instruction>(inst->getOperand(i)) )
                         {
-                            if( bins.find(bin) != bins.end() )
+                            if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(useInst) )
                             {
-                                covered.insert(bin);
-                                Q.push_back(bin);
+                                if( bins.find(bin) != bins.end() )
+                                {
+                                    covered.insert(bin);
+                                    Q.push_back(bin);
+                                }
                             }
-                        }
-                        else if( covered.find(useInst) == covered.end() )
-                        {
-                            covered.insert(useInst);
-                            Q.push_back(useInst);
+                            else if( covered.find(useInst) == covered.end() )
+                            {
+                                covered.insert(useInst);
+                                Q.push_back(useInst);
+                            }
                         }
                     }
                 }
@@ -144,7 +150,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         if( bins.size() != 1 )
         {
             PrintVal(node->getVal());
-            throw AtlasException("Cannot yet handle an induction variable that is operated on by none or multiple operator!");
+            throw AtlasException("Cannot yet handle an induction variable that is operated on by none or multiple operators!");
         }
     }
     auto bin = *bins.begin();
@@ -183,6 +189,10 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         // we can only handle the case with one phi
         if( phis.size() != 1 )
         {
+            for( const auto& phi : phis )
+            {
+                PrintVal(phi);
+            }
             throw AtlasException("Cannot handle an IV that is touched by more than one phi!");
         }
         // the phi should have two cases, one where the IV gets a value and one where the IV gets a constant
