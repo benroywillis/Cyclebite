@@ -133,7 +133,7 @@ endif()
 
 # stolen from https://github.com/ttroy50/cmake-examples/blob/master/04-static-analysis/clang-format/cmake/modules/clang-format.cmake
 # runs clang-format on the entire source tree
-find_program(FORMAT NAMES clang-format ENV FORMAT)
+find_program(FORMAT NAMES clang-format ENV "FORMAT")
 if(${FORMAT} STREQUAL "FORMAT-NOTFOUND")
     message(WARNING "clang-format not found. Disabling formatting target")
 else()
