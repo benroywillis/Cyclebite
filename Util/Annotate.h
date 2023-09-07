@@ -457,7 +457,7 @@ inline void DebugExports(llvm::Module *mod, const std::string &fileName)
     {
         if (f.hasExactDefinition())
         {
-            llvm::MDNode *FMDN;
+            /*llvm::MDNode *FMDN;
             if (f.hasMetadata("KernelName"))
             {
                 FMDN = f.getMetadata("KernelName");
@@ -465,7 +465,7 @@ inline void DebugExports(llvm::Module *mod, const std::string &fileName)
             else
             {
                 FMDN = llvm::MDNode::get(f.getContext(), llvm::MDString::get(f.getContext(), f.getName()));
-            }
+            }*/
             std::vector<llvm::Metadata *> ElTys;
             ElTys.push_back(uType);
             for (unsigned int i = 0; i < f.getNumOperands(); i++)

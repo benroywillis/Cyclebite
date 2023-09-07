@@ -146,6 +146,7 @@ namespace Cyclebite::Profile::Backend::Precision
                     auto vt = llvm::cast<llvm::VectorType>(ty);
                     return LLVMTy2PrecisionTy(vt->getElementType());
                 }
+            default: throw AtlasException("Cannot handle precision type!");
             /* LLVM 15 enums
             // all floating-point llvm type IDs are defined at https://llvm.org/doxygen/Type_8h_source.html
             case 0: 
@@ -226,5 +227,6 @@ namespace Cyclebite::Profile::Backend::Precision
                 return PrecisionType::void_t;
                 */
         }
+        return PrecisionType::void_t;
     }
 } // namespace Cyclebite::Memory::Backend::Precision

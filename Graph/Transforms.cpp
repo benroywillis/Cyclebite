@@ -718,22 +718,18 @@ void Cyclebite::Graph::VirtualizeSubgraph(Graph &graph, std::shared_ptr<VirtualN
 
         // first step, accumulate all outgoing edges
         uint64_t totalFreq = 0;
-        double totalProb = 0.0;
         for (auto succ : ent->getSuccessors())
         {
             totalFreq += succ->getFreq();
-            totalProb += succ->getWeight();
         }
         // second, accumulate edges that enter the VN subgraph
         uint64_t VNfreq = 0;
-        double VNprob = 0.0;
         set<shared_ptr<UnconditionalEdge>, GECompare> VNEdges;
         for (auto succ : ent->getSuccessors())
         {
             if (VN->find(succ->getWeightedSnk()))
             {
                 VNfreq += succ->getFreq();
-                VNprob += succ->getWeight();
                 VNEdges.insert(succ);
             }
         }
