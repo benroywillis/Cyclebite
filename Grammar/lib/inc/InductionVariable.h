@@ -2,23 +2,10 @@
 #include "Symbol.h"
 #include "ControlBlock.h"
 #include "Cycle.h"
+#include "Polyhedral.h"
 
 namespace Cyclebite::Grammar
 {
-    /// @brief Defines stride patterns
-    enum class StridePattern
-    {
-        Sequential,
-        Random
-    };
-
-    struct PolySpace
-    {
-        uint32_t min;
-        uint32_t max;
-        uint32_t stride;
-    };
-    
     class InductionVariable : public Symbol
     {
     public:
