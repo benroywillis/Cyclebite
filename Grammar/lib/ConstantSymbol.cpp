@@ -3,7 +3,9 @@
 using namespace Cyclebite::Grammar;
 using namespace std;
 
-string ConstantSymbol::dump() const
+
+template <typename T>
+string ConstantSymbol<T>::dump() const
 {
     return to_string(bits);
 }

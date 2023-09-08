@@ -1,10 +1,21 @@
 #include "Expression.h"
 #include "Reduction.h"
+#include "Util/Exceptions.h"
 
 using namespace std;
 using namespace Cyclebite::Grammar;
 
-Expression::Expression( const vector<shared_ptr<Symbol>>& s, const vector<Cyclebite::Graph::Operation>& o ) : Symbol("expr"), ops(o), symbols(s) {}
+Expression::Expression( const vector<shared_ptr<Symbol>>& s, const vector<Cyclebite::Graph::Operation>& o ) : Symbol("expr"), ops(o), symbols(s) 
+{
+    if( s.empty() )
+    {
+        throw AtlasException("Expression cannot be empty!");
+    }
+    else if( o.size() != s.size()-1 )
+    {
+        throw AtlasException("There should be "+to_string(symbols.size()-1)+" operations for an expression with "+to_string(symbols.size())+" symbols! Operation count: "+to_string(o.size()));
+    }
+}
 
 string Expression::dump() const
 {

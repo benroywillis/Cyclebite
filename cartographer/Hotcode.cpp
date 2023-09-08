@@ -100,7 +100,7 @@ set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotCode(c
         }
         // check if this block is a neighbor to an existing kernel
         bool found = false;
-        for (const auto k : kernels)
+        for (const auto& k : kernels)
         {
             for (const auto &block : k->getSubgraph())
             {

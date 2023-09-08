@@ -9,7 +9,8 @@ using namespace std;
 
 /// @brief Finds the instructions that carry out the function of a kernel
 ///
-/// First pass: find the values that are stored, and walk their fan-in until a load is hit, color all touched nodes red
+/// First pass: find the values that are stored (in both addresses ie llvm::StoreInst and registers ie llvm::PHINode)
+///             and walk their fan-in until a load (in both addresses ie llvm::LoadInst and registers ie llvm::PHINode) is hit, color all touched nodes red
 /// Second pass: for all loads found in the first pass, walk their fan-out until a store is hit, color all touched nodes blue
 /// Red: values that are stored and did not come from a load
 /// Blue: values that are loaded but do not get stored
@@ -21,9 +22,9 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
     for (auto k : kernelSets)
     {
         // set of ld instructions that were the first lds seen when walking back from sts
-        set<llvm::LoadInst *> lds;
+        set<llvm::Instruction *> lds;
         // set of sts that receive kernel function fan-out
-        set<llvm::StoreInst *> sts;
+        set<llvm::Instruction *> sts;
         // First pass
         for (auto bb : k.second)
         {
@@ -64,6 +65,26 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
                             {
                                 lds.insert(ld);
                             }
+                            else if( auto phi = llvm::dyn_cast<llvm::PHINode>(v) )
+                            {
+                                lds.insert(phi);
+                            }
+                            else if( auto call = llvm::dyn_cast<llvm::CallBase>(v) )
+                            {
+                                // a node that is only read may be a function that only returned a value, like libc::rand()
+                                // thus, if it is a function we consider it part of the function group
+                                lds.insert(call);
+                                // unlike the other types of lds, for all we know a function does work itself (not just a memory transaction)
+                                // thus it is colored
+                                auto r = colors.insert(make_shared<NodeColor>(call, OpColor::Red));
+                                if (!r.second)
+                                {
+                                    (*r.first)->colors.insert(OpColor::Red);
+                                }
+                                // the call instruction needs to be colored twice to ensure it is in the function group
+                                (*r.first)->colors.insert(OpColor::Blue);
+                                Q.push_back(call);
+                            }
                             else if (auto st = llvm::dyn_cast<llvm::StoreInst>(v))
                             {
                                 // a store can't possibly be used in a store... something is wrong
@@ -91,7 +112,7 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
         }
         // Second pass
         // works well for tasks that have an input working set
-        for (auto ld : lds)
+        for (const auto& ld : lds)
         {
             // walk fan-out from ld
             // we explore users until we run out of instructions, coloring everything blue as we go
@@ -101,24 +122,38 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
             covered.insert(ld);
             while (!Q.empty())
             {
-                for (auto u : Q.front()->users())
+                for ( const auto& u : Q.front()->users())
                 {
                     if (covered.find(u) != covered.end())
                     {
                         continue;
                     }
-                    else if (auto st = llvm::dyn_cast<llvm::StoreInst>(u))
+                    else if ( const auto& st = llvm::dyn_cast<llvm::StoreInst>(u))
                     {
+                        // stores mark the end of the possible function instructions
                         continue;
                     }
-                    else if (auto inst = llvm::dyn_cast<llvm::Instruction>(u))
+                    else if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(u) )
+                    {
+                        // we don't consider loads for function group membership, so skip
+                        continue;
+                    }
+                    else if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(u) )
+                    {
+                        // we also don't consider loads for funtion group membership either
+                        continue;
+                    }
+                    else if (const auto& inst = llvm::dyn_cast<llvm::Instruction>(u))
                     {
                         auto r = colors.insert(make_shared<NodeColor>(inst, OpColor::Blue));
                         if (!r.second)
                         {
                             (*r.first)->colors.insert(OpColor::Blue);
                         }
-                        Q.push_back(inst);
+                        if( covered.find(inst) == covered.end() )
+                        {
+                            Q.push_back(inst);
+                        }
                     }
                     covered.insert(u);
                 }
@@ -140,12 +175,7 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
             }
             else
             {
-                // a node that is only read may be a function that only returned a value, like libc::rand()
-                // thus, if it is a function we consider it part of the function group
-                if( const auto& call = llvm::dyn_cast<llvm::CallBase>(entry->inst) )
-                {
-                    funcInstructions.insert(GetValueID(entry->inst));
-                }
+
             }
         }
     }
@@ -197,30 +227,32 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
                         llvm::Instruction *target = nullptr;
                         if (auto br = llvm::dyn_cast<llvm::BranchInst>(inst))
                         {
-                            if (br->isConditional())
-                            {
-                                if (auto cond = llvm::dyn_cast<llvm::Instruction>(br->getCondition()))
-                                {
-                                    target = cond;
-                                }
-                            }
+                            //if (br->isConditional())
+                            //{
+                                //if (auto cond = llvm::dyn_cast<llvm::Instruction>(br->getCondition()))
+                                //{
+                                    target = br;
+                                //}
+                            //}
                         }
                         else if (auto se = llvm::dyn_cast<llvm::SelectInst>(inst))
                         {
-                            if (se->getNumSuccessors() > 1)
-                            {
-                                if (auto cond = llvm::dyn_cast<llvm::Instruction>(se->getCondition()))
-                                {
-                                    target = cond;
-                                }
-                            }
+                            //if (se->getNumSuccessors() > 1)
+                            //{
+                                //if (auto cond = llvm::dyn_cast<llvm::Instruction>(se->getCondition()))
+                                //{
+                                    //target = cond;
+                                    target = se;
+                                //}
+                            //}
                         }
                         else if (auto sw = llvm::dyn_cast<llvm::SwitchInst>(inst))
                         {
-                            if (auto cond = llvm::dyn_cast<llvm::Instruction>(sw->getCondition()))
-                            {
-                                target = cond;
-                            }
+                            //if (auto cond = llvm::dyn_cast<llvm::Instruction>(sw->getCondition()))
+                            //{
+                                //target = cond;
+                                target = sw;
+                            //}
                         }
                         else if (auto ret = llvm::dyn_cast<llvm::ReturnInst>(inst))
                         {
@@ -281,14 +313,21 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
                     }
                     else if( auto phi = llvm::dyn_cast<llvm::PHINode>(u.get()) )
                     {
-                        // case found in optimized programs when an induction variable lives in a value (not the heap) and has a DFG cycle between an add and a phi node 
-                        if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(Q.front()) )
+                        // we know for certain that a state-changing instruction uses this value (or a transformation of it) therefore we designate it state
+                        covered.insert(phi);
+                        auto r = colors.insert(make_shared<NodeColor>(phi, OpColor::Red));
+                        if (!r.second)
+                        {
+                            (*r.first)->colors.insert(OpColor::Red);
+                        }
+                        //stateP.insert(phi);              
+                        /*if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(Q.front()) )
                         {
                             // we have found a cycle between a binary op and a phi, likely indicating an induction variable, thus add it to the set of dimensions
                             covered.insert(bin);
                             covered.insert(phi);
-                            stateP.insert( phi );
-                        }
+                            //stateP.insert( phi );
+                        }*/
                     }
                     else if( auto ld = llvm::dyn_cast<llvm::LoadInst>(u.get()) )
                     {
@@ -437,7 +476,7 @@ set<int64_t> Cyclebite::Grammar::findMemory(const map<string, set<llvm::BasicBlo
         deque<llvm::Instruction *> Q;
         set<llvm::Value *> covered;
         // for each load pointer
-        for (const auto &ld : lds)
+        /*for (const auto &ld : lds)
         {
             if (auto valueInst = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()))
             {
@@ -465,9 +504,40 @@ set<int64_t> Cyclebite::Grammar::findMemory(const map<string, set<llvm::BasicBlo
                 Q.push_front(valueInst);
                 covered.insert(valueInst);
             }
+        }*/
+        for( const auto& ld : lds )
+        {
+            if( const auto& ptr = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()) )
+            {
+                Q.push_back(ptr);
+                covered.insert(ptr);
+                auto r = colors.insert(make_shared<NodeColor>(ld, OpColor::Blue));
+                if (!r.second)
+                {
+                    (*r.first)->colors.insert(OpColor::Blue);
+                }
+            }
+        }
+        for( const auto& st : sts )
+        {
+            if( const auto& ptr =  llvm::dyn_cast<llvm::Instruction>(st->getPointerOperand()) )
+            {
+                Q.push_back(ptr);
+                covered.insert(ptr);
+                auto r = colors.insert(make_shared<NodeColor>(st, OpColor::Blue));
+                if (!r.second)
+                {
+                    (*r.first)->colors.insert(OpColor::Blue);
+                }
+            }
         }
         while (!Q.empty())
         {
+            auto r = colors.insert(make_shared<NodeColor>(Q.front(), OpColor::Blue));
+            if (!r.second)
+            {
+                (*r.first)->colors.insert(OpColor::Blue);
+            }
             for (auto &u : Q.front()->operands())
             {
                 auto v = u.get();
@@ -477,11 +547,6 @@ set<int64_t> Cyclebite::Grammar::findMemory(const map<string, set<llvm::BasicBlo
                 }
                 else if (auto inst = llvm::dyn_cast<llvm::Instruction>(v))
                 {
-                    auto r = colors.insert(make_shared<NodeColor>(inst, OpColor::Blue));
-                    if (!r.second)
-                    {
-                        (*r.first)->colors.insert(OpColor::Blue);
-                    }
                     Q.push_back(inst);
                 }
                 covered.insert(v);
@@ -502,4 +567,28 @@ set<int64_t> Cyclebite::Grammar::findMemory(const map<string, set<llvm::BasicBlo
         }
     }
     return memInstructions;
+}
+
+map<string, set<int64_t>> Cyclebite::Grammar::colorNodes( const map<string, set<llvm::BasicBlock *>>& kernelSets )
+{
+    map<string, set<int64_t>> categories;
+    categories["KF"] = findFunction(kernelSets);
+    categories["IV"] = findState(kernelSets);
+    categories["BP"] = findMemory(kernelSets);
+    // one characteristic about the categories is that each instruction may only belong to one category
+    // the current graph coloring algorithms don't consider who is in which category at all, thus we do the exclusion algorithm here
+    // Priority of categories:
+    // 1. State
+    // 2. Function
+    // 3. Memory
+    for( const auto& id : categories.at("IV") )
+    {
+        categories["KF"].erase(id);
+        categories["BP"].erase(id);
+    }
+    for( const auto& id : categories.at("KF") )
+    {
+        categories["BP"].erase(id);
+    }
+    return categories;
 }

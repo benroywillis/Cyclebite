@@ -82,7 +82,7 @@ function(InjectMarkov tar)
     target_compile_options(${tar} PRIVATE "-flto" "-g" "-mavx")
     set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=lld -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
     add_custom_command(OUTPUT ${tar}.markov.bc
-        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt --enable-new-pm=0 --load-pass-plugin=$<TARGET_FILE:AtlasPasses> --passes='Markov' $<TARGET_FILE:${tar}> -o ${tar}.markov.bc
+        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -enable-new-pm=0 -load $<TARGET_FILE:AtlasPasses> --Markov $<TARGET_FILE:${tar}> -o ${tar}.markov.bc
         DEPENDS $<TARGET_FILE:${tar}>
     )
     set_source_files_properties(
@@ -101,7 +101,7 @@ function(InjectMemory tar)
     target_compile_options(${tar} PRIVATE "-flto" "-g" "-mavx")
     set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=lld -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
     add_custom_command(OUTPUT ${tar}.memory.bc
-        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -load $<TARGET_FILE:AtlasPasses> -p Memory $<TARGET_FILE:${tar}> -o ${tar}.memory.bc
+        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -enable-new-pm=0 -load $<TARGET_FILE:AtlasPasses> --Memory $<TARGET_FILE:${tar}> -o ${tar}.memory.bc
         DEPENDS $<TARGET_FILE:${tar}>
     )
     set_source_files_properties(
@@ -132,7 +132,7 @@ endif()
 
 # stolen from https://github.com/ttroy50/cmake-examples/blob/master/04-static-analysis/clang-format/cmake/modules/clang-format.cmake
 # runs clang-format on the entire source tree
-find_program(FORMAT NAMES clang-format-9 clang-format)
+find_program(FORMAT NAMES clang-format ENV "FORMAT")
 if(${FORMAT} STREQUAL "FORMAT-NOTFOUND")
     message(WARNING "clang-format not found. Disabling formatting target")
 else()

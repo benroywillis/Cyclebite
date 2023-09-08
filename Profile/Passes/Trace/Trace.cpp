@@ -16,7 +16,7 @@
 
 using namespace llvm;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
     cl::opt<bool> SkipAnnotation("sa", llvm::cl::desc("Skip annotation pass"), llvm::cl::value_desc("Skip the annotation pass due to a more complex build flow"));
     bool EncodedTrace::runOnFunction(Function &F)
@@ -83,11 +83,11 @@ namespace DashTracer::Passes
     {
         if (!SkipAnnotation)
         {
-            AU.addRequired<DashTracer::Passes::EncodedAnnotate>();
+            AU.addRequired<Cyclebite::Profile::Passes::EncodedAnnotate>();
         }
-        AU.addRequired<DashTracer::Passes::TraceIO>();
+        AU.addRequired<Cyclebite::Profile::Passes::TraceIO>();
     }
 
     char EncodedTrace::ID = 0;
     static RegisterPass<EncodedTrace> Y("EncodedTrace", "Adds encoded tracing to the binary", true, false);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes

@@ -143,18 +143,12 @@ int main(int argc, char *argv[])
     // we are only concerned with the "last" load instructions. These loads are the final loads in the serial DFG chain ie GEPs are not paid attention to
     try
     {
-        specialInstructions["KF"] = findFunction(kernelSets);
-        specialInstructions["IV"] = findState(kernelSets);
-        specialInstructions["BP"] = findMemory(kernelSets);
+        specialInstructions = colorNodes(kernelSets);
     }
     catch (AtlasException& e)
     {
         spdlog::critical(e.what());
         return EXIT_FAILURE;
-    }
-    for (const auto &entry : specialInstructions.at("IV"))
-    {
-        specialInstructions.at("KF").erase(entry);
     }
 
     /* this section constructs the data flow and shared_ptr<ControlBlock> */

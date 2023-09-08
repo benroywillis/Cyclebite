@@ -16,7 +16,7 @@
 
 using namespace llvm;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
     bool Timing::runOnFunction(Function &F)
     {
@@ -105,10 +105,10 @@ namespace DashTracer::Passes
 
     void Timing::getAnalysisUsage(AnalysisUsage &AU) const
     {
-        AU.addRequired<DashTracer::Passes::EncodedAnnotate>();
-        AU.addRequired<DashTracer::Passes::MarkovIO>();
+        AU.addRequired<Cyclebite::Profile::Passes::EncodedAnnotate>();
+        AU.addRequired<Cyclebite::Profile::Passes::MarkovIO>();
     }
 
     char Timing::ID = 0;
     static RegisterPass<Timing> Y("Timing", "Adds Timing Dumping to the binary", true, false);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes

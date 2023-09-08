@@ -21,7 +21,7 @@
 using namespace llvm;
 using namespace std;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
     bool LastWriter::runOnFunction(Function &F)
     {
@@ -164,8 +164,8 @@ namespace DashTracer::Passes
 
     void LastWriter::getAnalysisUsage(AnalysisUsage &AU) const
     {
-        AU.addRequired<DashTracer::Passes::EncodedAnnotate>();
+        AU.addRequired<Cyclebite::Profile::Passes::EncodedAnnotate>();
     }
     char LastWriter::ID = 1;
     static RegisterPass<LastWriter> Y("LastWriter", "memory profiler", true, false);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes

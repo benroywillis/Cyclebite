@@ -1511,56 +1511,6 @@ void Cyclebite::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebi
             }
         }
     }
-    // do the dynamic callgraph edges agree with the static code?
-    // try to "explain" each context switch in the DCG
-    for (const auto &edge : dynamicGraph.edges())
-    {
-        if (auto callEdge = dynamic_pointer_cast<CallEdge>(edge))
-        {
-            bool explained = false;
-            auto srcBlock = NodeToBlock(callEdge->getWeightedSrc(), IDToBlock);
-            auto snkBlock = NodeToBlock(callEdge->getWeightedSnk(), IDToBlock);
-            if (srcBlock && snkBlock)
-            {
-                if (srcBlock->getParent() != snkBlock->getParent())
-                {
-                    // we must explain this context switch
-                    // first try the static graph
-                    auto srcParentNode = SCG[srcBlock->getParent()];
-                    auto snkParentNode = SCG[snkBlock->getParent()];
-                    for (auto child = srcParentNode->begin(); child != srcParentNode->end(); child++)
-                    {
-                        if (child->second == snkParentNode)
-                        {
-                            // this edge exists in the static graph
-                            explained = true;
-                            break;
-                        }
-                    }
-                }
-                else if (hasDirectRecursion(SCG[srcBlock->getParent()]))
-                {
-                    // recursion (as verified by the static callgraph) is allowed so this explains the edge
-                    explained = true;
-                }
-                else
-                {
-                    // there shouldn't be a context switch here
-                    // this case arises when there is a function pointer called within an empty function that is called multiple times, forming a chain of calls in which the src of the calledge is the return block of the function and the sink is the first block in that same function
-                    // see SHOC/qsort
-                    PrintVal(srcBlock->getParent());
-                    PrintVal(srcBlock);
-                    PrintVal(snkBlock->getParent());
-                    PrintVal(snkBlock);
-                    throw AtlasException("Dynamic graph call edge was not confirmed to be a context switch by the source bitcode!");
-                }
-            }
-            else
-            {
-                throw AtlasException("Dynamic call edge nodes could not be mapped to an underlying basic block!");
-            }
-        }
-    }
     // which functions are alive in the static callgraph? do they all have call edges in the dynamic graph?
     for (const auto &node : SCG)
     {
@@ -2399,7 +2349,7 @@ double Cyclebite::Graph::EntropyCalculation(const std::set<std::shared_ptr<Contr
         for (const auto &pred : (*it)->getPredecessors())
         {
             // retrieve the edge probability and accumulate it to this node
-            stationaryDistribution[i] += pred->getFreq();
+            stationaryDistribution[i] += (double)pred->getFreq();
         }
     }
     // normalize each stationaryDistribution entry by the total edge weights in the state transition matrix
@@ -2408,7 +2358,7 @@ double Cyclebite::Graph::EntropyCalculation(const std::set<std::shared_ptr<Contr
     {
         for (const auto &nei : node->getSuccessors())
         {
-            totalEdgeWeights += nei->getFreq();
+            totalEdgeWeights += (double)nei->getFreq();
         }
     }
     for (auto &entry : stationaryDistribution)
@@ -2445,7 +2395,7 @@ double Cyclebite::Graph::TotalEntropy(const std::set<std::shared_ptr<ControlNode
 using json = nlohmann::json;
 
 /// @brief Used to find the underlying edge that occurs before or after the 
-const shared_ptr<UnconditionalEdge>& FindUnderlyingEdge(const shared_ptr<GraphNode>& node, bool entrance)
+const shared_ptr<UnconditionalEdge> FindUnderlyingEdge(const shared_ptr<GraphNode>& node, bool entrance)
 {
     deque<shared_ptr<GraphNode>> Q;
     set<shared_ptr<ControlNode>, p_GNCompare> underlying;

@@ -5,17 +5,13 @@
 
 using namespace llvm;
 
-namespace DashTracer
+namespace Cyclebite::Profile::Passes
 {
-    namespace Passes
+    struct EncodedAnnotate : public ModulePass
     {
-        struct EncodedAnnotate : public ModulePass
-        {
-            static char ID;
-            EncodedAnnotate() : ModulePass(ID) {}
-            bool runOnModule(Module &M) override;
-            void getAnalysisUsage(AnalysisUsage &AU) const override;
-        };
-
-    } // namespace Passes
-} // namespace DashTracer
+        static char ID;
+        EncodedAnnotate() : ModulePass(ID) {}
+        bool runOnModule(Module &M) override;
+        void getAnalysisUsage(AnalysisUsage &AU) const override;
+    };
+} // namespace Cyclebite::Profile::Passes
