@@ -1762,7 +1762,6 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                     {
                         newNode = ConstructCallNode(newNode, call, dynamicCG, blockToNode, programFlow, IDToBlock);
                     }
-                    newNode->op = GetOp(inst->getOpcode());
                     graph.addNode(newNode);
                 }
                 else
@@ -1806,7 +1805,6 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                             {
                                 neighborNode = make_shared<Inst>(user);
                             }
-                            neighborNode->op = GetOp(user->getOpcode());
                             graph.addNode(neighborNode);
                         }
                         // we have a user and we need to find a direct mapping between this instruction and that user
@@ -1856,7 +1854,6 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                             {
                                 nodePred = make_shared<Inst>(predInst);
                             }
-                            nodePred->op = GetOp(predInst->getOpcode());
                             DNIDMap.insert(pair<const llvm::Instruction*, const shared_ptr<Inst>>(predInst, nodePred));
                             graph.addNode(nodePred);
                         }
@@ -3134,7 +3131,7 @@ string Cyclebite::Graph::GenerateDataDot(const set<shared_ptr<DataValue>, p_GNCo
     {
         if( const auto& n = dynamic_pointer_cast<Inst>(node) )
         {
-            dotString += "\t" + to_string(n->NID) + " [label=\"" + OperationToString[n->op] + "\"];\n";
+            dotString += "\t" + to_string(n->NID) + " [label=\"" + OperationToString[n->getOp()] + "\"];\n";
         }
         else
         {
@@ -3180,19 +3177,19 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
         {
             if (node->isState())
             {
-                dotString += "\t" + to_string(node->NID) + " [color=red,label=\"" + OperationToString[node->op] + "\"];\n";
+                dotString += "\t" + to_string(node->NID) + " [color=red,label=\"" + OperationToString[node->getOp()] + "\"];\n";
             }
             else if (node->isMemory())
             {
-                dotString += "\t" + to_string(node->NID) + " [color=blue,label=\"" + OperationToString[node->op] + "\"];\n";
+                dotString += "\t" + to_string(node->NID) + " [color=blue,label=\"" + OperationToString[node->getOp()] + "\"];\n";
             }
             else if (node->isFunction())
             {
-                dotString += "\t" + to_string(node->NID) + " [color=green,label=\"" + OperationToString[node->op] + "\"];\n";
+                dotString += "\t" + to_string(node->NID) + " [color=green,label=\"" + OperationToString[node->getOp()] + "\"];\n";
             }
             else
             {
-                dotString += "\t" + to_string(node->NID) + " [label=\"" + OperationToString[node->op] + "\"];\n";
+                dotString += "\t" + to_string(node->NID) + " [label=\"" + OperationToString[node->getOp()] + "\"];\n";
             }
         }
         // now build out the nodes in the graph
