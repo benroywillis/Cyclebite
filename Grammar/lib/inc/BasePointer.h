@@ -20,6 +20,7 @@ namespace Cyclebite::Grammar
         const std::vector<const llvm::LoadInst*> getlds() const;
         const std::vector<const llvm::StoreInst*> getsts() const;
         const std::vector<const llvm::GetElementPtrInst*> getgps() const;
+        bool isOffset( const llvm::Value* val ) const;
     private:
         std::shared_ptr<Cyclebite::Graph::DataValue> node;
         std::vector<std::pair<const llvm::GetElementPtrInst*, const llvm::LoadInst*>> loads;

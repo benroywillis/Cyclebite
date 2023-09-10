@@ -59,6 +59,77 @@ const vector<const llvm::GetElementPtrInst*> BasePointer::getgps() const
     return geps;
 }
 
+bool BasePointer::isOffset( const llvm::Value* val ) const 
+{
+    if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(val) )
+    {
+        deque<const llvm::Value*> Q;
+        set<const llvm::Value*> covered;
+        Q.push_front(node->getVal());
+        covered.insert(node->getVal());
+        while( !Q.empty() )
+        {
+            if( Q.front() == val )
+            {
+                // this is the value we are looking for, return true
+                return true;
+            }
+            if( const auto& st = llvm::dyn_cast<llvm::StoreInst>(Q.front()) )
+            {
+                // there is a corner case where a pointer gets alloc'd on the stack and a malloc'd pointer gets stored to that stack pointer
+                // thus, when the base pointer gets stored to that pointer, we have to track that pointer
+                if( st->getValueOperand() == node->getVal() )
+                {
+                    if( covered.find(st->getPointerOperand()) == covered.end() )
+                    {
+                        Q.push_back(st->getPointerOperand());
+                        covered.insert(st->getPointerOperand());
+                    }
+                }
+            }
+            else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
+            {
+                // dynamic allocations are often made as uint8_t arrays and cast to the appropriate type
+                /*for(  const auto& op : cast->operands() )
+                {
+                    if( covered.find( op ) == covered.end() )
+                    {
+                        covered.insert(op);
+                        Q.push_back(op);
+                    }
+                }*/
+                // they can also cast pointer allocations to the type of the base pointer, so we have to put uses of the cast into the queue too
+                for( const auto& user : cast->users() )
+                {
+                    if( covered.find(user) == covered.end() )
+                    {
+                        Q.push_back(user);
+                        covered.insert(user);
+                    }
+                }
+            }
+            // default case, if this is an instruction we search through it
+            else if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
+            {
+                for( const auto& user : Q.front()->users() )
+                {
+                    if( covered.find(user) == covered.end() )
+                    {
+                        Q.push_back(user);
+                        covered.insert(user);
+                    }
+                }
+            }
+            else
+            {
+                //throw AtlasException("BP offset method cannot handle this instruction!");
+            }
+            Q.pop_front();
+        }
+    }
+    return false;
+}
+
 /// @brief Determines if the current function is an allocating function
 ///
 /// 
