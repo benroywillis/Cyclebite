@@ -63,10 +63,12 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
                             }
                             else if (auto ld = llvm::dyn_cast<llvm::LoadInst>(v))
                             {
+                                // regular case when the results of a function group are stored in a pointer (the heap)
                                 lds.insert(ld);
                             }
                             else if( auto phi = llvm::dyn_cast<llvm::PHINode>(v) )
                             {
+                                // in the case where results of a function group are stored in a register, this captures them
                                 lds.insert(phi);
                             }
                             else if( auto call = llvm::dyn_cast<llvm::CallBase>(v) )
@@ -586,9 +588,13 @@ map<string, set<int64_t>> Cyclebite::Grammar::colorNodes( const map<string, set<
         categories["KF"].erase(id);
         categories["BP"].erase(id);
     }
-    for( const auto& id : categories.at("KF") )
+    for( const auto& f : categories.at("BP") )
+    {
+        categories["KF"].erase(f);
+    }
+    /*for( const auto& id : categories.at("KF") )
     {
         categories["BP"].erase(id);
-    }
+    }*/
     return categories;
 }
