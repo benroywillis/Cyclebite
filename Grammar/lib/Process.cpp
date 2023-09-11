@@ -1366,11 +1366,16 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
         }
         for( const auto& node : insts )
         {
-            // if it is a binary operation we need to take its operation
-            if( const auto bin = llvm::dyn_cast<llvm::BinaryOperator>(node->getInst()) )
+            if( const auto& shuffle = llvm::dyn_cast<llvm::ShuffleVectorInst>(node->getInst()) )
             {
-                ops.push_back( Cyclebite::Graph::GetOp(bin->getOpcode()) );
+                // shuffles appear to be useful for concatenating elemnents of different vectors into the same vector
+                // the only example so far that has used this is optimized (-O3) StencilChain/Naive, which uses an "identity shuffle" (example, StencilChain/Naive)
+                // we don't support shufflevectors yet because they usually contain more than one operation at once, and may be transformed later
+                // example: StencilChain/Naive/DFG_Kernel15.svg (shufflevector transforms i8 to i32, then i32 is converted to float before the MAC takes place)
+                PrintVal(node->getInst());
+                throw AtlasException("Cannot support shufflevector instructions yet!");
             }
+            ops.push_back( Cyclebite::Graph::GetOp(node->getInst()->getOpcode()) );
             vector<shared_ptr<Symbol>> vec;
             for( const auto& op : node->getInst()->operands() )
             {
@@ -1404,6 +1409,12 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                         if( found )
                         {
                             vec.push_back(found);
+                        }
+                        else 
+                        {
+                            PrintVal(ld);
+                            PrintVal(opNode->getVal());
+                            throw AtlasException("Could not find a collection to describe this load!");
                         }
                     }
                     else if( const auto st = llvm::dyn_cast<llvm::StoreInst>(inst) )
@@ -1446,12 +1457,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     {
         for( const auto& node : order )
         {
-            // if it is a binary operation we need to take its operation
-            if( const auto bin = llvm::dyn_cast<llvm::BinaryOperator>(node->getInst()) )
-            {
-                ops.push_back( Cyclebite::Graph::GetOp(bin->getOpcode()) );
-            }
-            else if( const auto& shuffle = llvm::dyn_cast<llvm::ShuffleVectorInst>(node->getInst()) )
+            if( const auto& shuffle = llvm::dyn_cast<llvm::ShuffleVectorInst>(node->getInst()) )
             {
                 // shuffles appear to be useful for concatenating elemnents of different vectors into the same vector
                 // the only example so far that has used this is optimized (-O3) StencilChain/Naive, which uses an "identity shuffle" (example, StencilChain/Naive)
@@ -1460,6 +1466,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                 PrintVal(node->getInst());
                 throw AtlasException("Cannot support shufflevector instructions yet!");
             }
+            ops.push_back( Cyclebite::Graph::GetOp(node->getInst()->getOpcode()) );
             vector<shared_ptr<Symbol>> vec;
             for( const auto& op : node->getInst()->operands() )
             {
@@ -1489,6 +1496,12 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                         if( found )
                         {
                             vec.push_back(found);
+                        }
+                        else 
+                        {
+                            PrintVal(ld);
+                            PrintVal(opNode->getVal());
+                            throw AtlasException("Could not find a collection to describe this load!");
                         }
                     }
                     else if( const auto st = llvm::dyn_cast<llvm::StoreInst>(inst) )
