@@ -374,6 +374,10 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                                 p = idx;
                             }
                         }
+                        if( !p )
+                        {
+                            throw AtlasException("Could not find parent idxVar!");
+                        }
                         p->setChild(newIdx);
                         newIdx->setParent(p);
                     }
