@@ -87,19 +87,10 @@ bool BasePointer::isOffset( const llvm::Value* val ) const
                     }
                 }
             }
-            else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
+            else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(Q.front()) )
             {
-                // dynamic allocations are often made as uint8_t arrays and cast to the appropriate type
-                /*for(  const auto& op : cast->operands() )
-                {
-                    if( covered.find( op ) == covered.end() )
-                    {
-                        covered.insert(op);
-                        Q.push_back(op);
-                    }
-                }*/
-                // they can also cast pointer allocations to the type of the base pointer, so we have to put uses of the cast into the queue too
-                for( const auto& user : cast->users() )
+                // base pointers can be arguments sometimes, we just look through their users like they are an instructions
+                for( const auto& user : arg->users() )
                 {
                     if( covered.find(user) == covered.end() )
                     {
