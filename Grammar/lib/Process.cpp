@@ -1,16 +1,17 @@
 #include "Process.h"
-#include "DataGraph.h"
-#include "ControlBlock.h"
+#include "Graph/inc/DataGraph.h"
+#include "Graph/inc/ControlBlock.h"
 #include "ConstantSymbol.h"
 #include "Graph/inc/IO.h"
-#include "inc/IO.h"
+#include "IO.h"
 #include "Reduction.h"
 #include "ConstantFunction.h"
 #include "IndexVariable.h"
 #include "Util/Annotate.h"
 #include "Util/Print.h"
 #include "Task.h"
-#include "Dijkstra.h"
+#include "Graph/inc/Dijkstra.h"
+#include "BasePointer.h"
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <deque>
@@ -1039,302 +1040,33 @@ vector<shared_ptr<InductionVariable>> getOrdering( const llvm::GetElementPtrInst
     return order;
 }
 
-set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<Task>& t, const set<shared_ptr<InductionVariable>>& IVs, const set<shared_ptr<BasePointer>>& BPs)
+set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_ptr<IndexVariable>>& idxVars)
 {
-    // collections map IVs to BPs
-    // an IV and a BP form a collection of an IV is used at least once to offset a BP
-    // often, multiple IVs map to one BP
-    // - this case forms one collection, and the IVs are ordered in the order they offset the BP i.e. bp[i][j] is offset by i first, thus i is the "first" IV in the collection, j is second
+    // all collections that are forged in this method
     set<shared_ptr<Collection>> colls;
-    // map IVs to the geps that use them
-    // these will be used to "group" IVs that work together to index a base pointer
-    map<shared_ptr<InductionVariable>, set<const llvm::GetElementPtrInst*>> ivToGep;
-    for( const auto& c : t->getCycles() )
+
+    // the idxVars already encode which base pointer(s) they map to, what their hierarchical order is, and which induction variable they may be using
+    // but, this does not give us a clean, concise expression for the slabs of memory that are being indexed by the idxVars
+    // thus, we describe these slabs of memory with "collections"
+
+    // first step, find out how many slabs of memory there are (each one will get their own collection)
+    // do this by going through the idxVars, finding their implicit hierarchies, and which base pointers they map to
+    map<shared_ptr<BasePointer>, set<shared_ptr<IndexVariable>>> varHierarchies;
+
+    deque<shared_ptr<IndexVariable>> Q;
+    set<shared_ptr<IndexVariable>> covered;
+    for( const auto& idx : idxVars )
     {
-        for( const auto& b : c->getBody() )
+        for( const auto& bp : idx->getBPs() )
         {
-            for( const auto& i : b->instructions )
-            {
-                if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(i->getInst()) )
-                {
-                    for( const auto& iv : IVs )
-                    {
-                        if( iv->isOffset(gep) )
-                        {
-                            ivToGep[iv].insert(gep);
-                        }
-                    }
-                }
-            }
+            varHierarchies[bp].insert(idx);
         }
     }
-    // map IVs to base pointers
-    // we do this by finding IVs and BPs that touch the same GEPs
-    for( const auto& bp : BPs )
+
+    // now just construct the collections
+    for( const auto& bp : varHierarchies )
     {
-        // for each gep that touches the BP, find the var that touches that GEP too
-        set<shared_ptr<InductionVariable>> unorderedVars;
-        // each base pointer has geps that may or may not be in this task
-        // we are only interested in the task geps, so make a set with just them and only pay attention to them
-        set<const llvm::GetElementPtrInst*> taskGeps;
-        for( const auto& gep : bp->getgps() )
-        {
-            if( t->find(DNIDMap.at(gep)) )
-            {
-                taskGeps.insert(gep);
-            }
-        }
-        if( taskGeps.empty() )
-        {
-            PrintVal(bp->getNode()->getVal());
-            throw AtlasException("Base pointer has no geps in the current task!");
-        }
-        for( const auto& gep : taskGeps )
-        {
-            // there are two cases here
-            // first, we are adding an IV to a base pointer, in that case you need to match an IV to it
-            // second, we are adding a constant to a base pointer (commonly found in LLVM's front-end vector-optimized form), then we skip it (FOR NOW 2023-06-20) because that gives us no useful information
-            if( !hasConstantOffset(gep) )
-            {
-                // it is possible for multiple IVs to map to a single gep (see naive GEMM on -O3)
-                // thus we look for all IVs that map to this gep, not just a single one
-                for( const auto& iv : ivToGep )
-                {
-                    // if this iv maps to the same gep, we have a collision
-                    if( iv.second.find( gep ) != iv.second.end() )
-                    {
-                        // push this IV into the unordered set (we figure out order later)
-                        unorderedVars.insert(iv.first);
-                    }
-                }
-                if( unorderedVars.empty() )
-                {
-                    PrintVal(bp->getNode()->getVal());
-                    PrintVal(gep);
-                    for( const auto& iv : IVs )
-                    {
-                        PrintVal(iv->getNode()->getVal());
-                    }
-                    throw AtlasException("Could not find an IV for a dimension of a base pointer!");
-                }
-            }
-            else
-            {
-                // TODO: constant offsets need to be remembered and dealt with somehow
-            }
-        }
-        // now that we have the IVs that map to this BP, we need to order them in the dimension that they indexed the BP
-        // there are commonly two cases here
-        // 1. (optimized code) the vars used the same gep to index a bp
-        //   - then the ordering is specified in the ordering of the operands in the GEP
-        // 2. (unoptimized code) the vars came from different geps
-        //   - then the ordering is implied by the ordering of the geps touching the BP
-        vector<shared_ptr<InductionVariable>> vars;
-        if( taskGeps.size() == 1 )
-        {
-            // optimized case
-            auto targetGep = *taskGeps.begin();
-            for( auto idx = targetGep->idx_begin(); idx != targetGep->idx_end(); idx++ )
-            {
-                // if the index is a constant we don't worry about it
-                if( const auto& con = llvm::dyn_cast<llvm::Constant>(idx) )
-                {
-                    continue;
-                }
-                shared_ptr<InductionVariable> idxOp = nullptr;
-                for( const auto& iv : unorderedVars )
-                {
-                    if( (idx->get() == iv->getNode()->getVal()) || (iv->isOffset(idx->get())) )
-                    {
-                        idxOp = iv;
-                    }
-                }
-                if( idxOp == nullptr )
-                {
-                    PrintVal(targetGep);
-                    for( const auto& iv : unorderedVars )
-                    {
-                        PrintVal(iv->getNode()->getVal());
-                    }
-                    throw AtlasException("Cannot find an IV that maps to this index operand in the target gep!");
-                }
-                vars.push_back(idxOp);
-            }
-        }
-        else
-        {
-            // when there are multiple geps, there are two known cases to handle
-            // 1. the loop has been partially unrolled
-            //    - there are multiple geps that use the same IVs, one that may be getting offset by an affine expression
-            //    - to find this case, we simply introspect the offsets of each gep, and if they both map to the same IVs, we actually have the 1-gep case (above)
-            // 2. the geps are working together to offset the base pointer (commonly found when the optimizer is turned off)
-            //    - the ordering of the geps is implied in the base pointer class. Thus we need to reference the loads/stores members to get the correct ordering
-            // to get the ordering back for the applicable geps, we make a vector of the task geps with the ordering implied from the base pointer loads/stores members
-            vector<const llvm::GetElementPtrInst*> ordering;
-            for( const auto& p : bp->getAccesses() )
-            {
-                if( taskGeps.find(p.first) != taskGeps.end() )
-                {
-                    ordering.push_back(p.first);
-                }
-            }
-            for( const auto& p : bp->getStores() )
-            {
-                if( taskGeps.find(p.first) != taskGeps.end() )
-                {
-                    // we don't want to push duplicate geps from the BP stores into the ordering vector
-                    if( std::find(ordering.begin(), ordering.end(), p.first) == ordering.end() )
-                    {
-                        ordering.push_back(p.first);
-                    }
-                }
-            }
-            // now we go through each gep and map them to the IV(s) in its offsets
-            map<const llvm::GetElementPtrInst*, set<shared_ptr<InductionVariable>>> indexMap;
-            for( const auto& gep : ordering )
-            {
-                vector<const llvm::Value*> gepComponents;
-                gepComponents.push_back(gep->getPointerOperand());
-                for( auto idx = gep->idx_begin(); idx != gep->idx_end(); idx++ )
-                {
-                    gepComponents.push_back(idx->get());
-                }
-                for( const auto& comp : gepComponents )
-                {
-                    for( const auto& iv : unorderedVars )
-                    {
-                        if( iv->isOffset(comp) )
-                        {
-                            indexMap[gep].insert(iv);
-                        }
-                    }
-                }
-            }
-            // cluster the geps that use the same IVs
-            set<set<const llvm::GetElementPtrInst*>> gepGroups;
-            // GEPs belong to exactly one group, so once a gep is covered it cannot form a new group
-            set<const llvm::GetElementPtrInst*> covered;
-            for( const auto& gep : indexMap )
-            {
-                if( covered.find(gep.first) == covered.end() )
-                {
-                    // go find all other geps that map to the same IVs as this one
-                    set<const llvm::GetElementPtrInst*> newGroup;
-                    newGroup.insert(gep.first);
-                    covered.insert(gep.first);
-                    // see if this already belongs to a group
-                    for( const auto& gep2 : indexMap )
-                    {
-                        if( gep.first == gep2.first )
-                        {
-                            continue;
-                        }
-                        if( gep.second == gep2.second )
-                        {
-                            newGroup.insert(gep2.first);
-                            covered.insert(gep2.first);
-                        }
-                    }
-                    gepGroups.insert(newGroup);
-                }
-            }
-            // now that geps with like IVs are grouped together, we can decide between each case
-            // unrolled loop -> there is only one group
-            // series of geps -> there is more than one group
-            if( gepGroups.size() == 1 )
-            {
-                // get the ordering of vars from the gep and push them to the vars vector
-                auto geps = *gepGroups.begin();
-                // we evaluate each gep for its implied IV ordering
-                set<vector<shared_ptr<InductionVariable>>> orders;
-                for( const auto& gep : geps )
-                {
-                    orders.insert( getOrdering(gep, IVs) );
-                }
-                auto ref = *orders.begin();
-#ifdef DEBUG
-                for( const auto& vars : orders )
-                {
-                    for( unsigned i = 0; i < ref.size(); i++ )
-                    {
-                        if( vars[i] != ref[i] )
-                        {
-                            for( const auto& gep : geps )
-                            {
-                                PrintVal(gep);
-                            }
-                            throw AtlasException("Ordering of geps did not agree!");
-                        }
-                    }
-                }
-#endif
-                vars = ref;
-            }
-            else if( gepGroups.size() > 1 )
-            {
-                // in the known case where this occurs, and should occur even with the optimizer on, is StencilChain/Naive/ (which indexes the Pixel array with multiple geps to reduce a multi-dimensional array to its primitive types)
-                // in that case, the gep that doesn't belong is the gep that uses only the base index, not the second one (thus its IVs are a subset of the other groups IVs)
-                // if we can detect this case, sort the groups by their IV count in non-increasing order. For each group with one more GEP, we should get a new IV they use. This is the implied ordering of the IVs
-                vector<set<const llvm::GetElementPtrInst*>> orderedGroups;
-                orderedGroups.reserve(gepGroups.size());
-                for( const auto& entry : gepGroups )
-                {
-                    if( orderedGroups.empty() )
-                    {
-                        orderedGroups.push_back(entry);
-                    }
-                    else
-                    {
-                        auto idx = orderedGroups.begin();
-                        for( const auto& g : orderedGroups )
-                        {
-                            // the size of entry can be found by looking up any of its members in the indexMap and taking that entry's IV count
-                            auto entrySample = indexMap.at(*entry.begin()).size();
-                            auto gSample     = indexMap.at(*g.begin()).size();
-                            if( entrySample > gSample )
-                            {
-                                idx = next(idx);
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        }
-                        orderedGroups.insert(idx, entry);
-                    }
-                }
-                // now we iterate through the orderedGroups each time finding the new IV that is added to each group with the higher IV count
-                vector<shared_ptr<InductionVariable>> seenIVs;
-                for( const auto& g : orderedGroups )
-                {
-                    auto groupIVs = indexMap.at( *g.begin() );
-                    for( const auto& n : groupIVs )
-                    {
-                        if( std::find(seenIVs.begin(), seenIVs.end(), n) == seenIVs.end() )
-                        {
-                            seenIVs.push_back(n);
-                        }
-                    }
-                }
-                vars = seenIVs;
-            }
-            else
-            {
-                PrintVal(bp->getNode()->getVal());
-                for( const auto& ld : bp->getAccesses() )
-                {
-                    PrintVal(ld.first);
-                }
-                for( const auto& st : bp->getStores() )
-                {
-                    PrintVal(st.first);
-                }
-                throw AtlasException("Did not have any groups of geps!");
-            }
-        }
-        // once we find the overlap of geps between IVs and BPs, we construct a collection for it
-        auto newColl = make_shared<Collection>(bp, vars);
-        colls.insert(newColl);
+        colls.insert( make_shared<Collection>(bp.second, bp.first) );
     }
     return colls;
 }
@@ -1899,7 +1631,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             // get index variables
             auto idxVars = getIndexVariables(t, bps, vars);
             // construct collections
-            auto cs   = getCollections(t, vars, bps);
+            auto cs   = getCollections(idxVars);
             // each task should have exactly one expression
             auto expr = getExpression(t, cs, rvs);
 #ifdef DEBUG

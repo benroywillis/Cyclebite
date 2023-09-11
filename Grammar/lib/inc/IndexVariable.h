@@ -44,6 +44,34 @@ namespace Cyclebite::Grammar
         PolySpace space;
     };
 
+    // sorts idxVars in hierarchical order (parent-most first, child-most last)
+    struct idxVarHierarchySort
+    {
+        bool operator()(const std::shared_ptr<IndexVariable>& lhs, const std::shared_ptr<IndexVariable>& rhs) const 
+        {
+            if( lhs->getChild() == rhs )
+            {
+                // this is my child, I get sorted first
+                return true;
+            }
+            else if( (lhs->getParent() == nullptr) && (rhs->getParent() != nullptr) )
+            {
+                // I have no parent and rhs does, I go first
+                return true;
+            }
+            else if( lhs->getChild() )
+            {
+                if( rhs == lhs->getChild()->getChild() )
+                {
+                    // rhs is a child of my child, I go first
+                    return true;
+                }
+            }
+            // I can't determine whether I go before rhs without significant recursion, so just return false 
+            return false;
+        }
+    };
+
     class Task;
     std::set<std::shared_ptr<IndexVariable>> getIndexVariables(const std::shared_ptr<Task>& t, 
                                                                const std::set<std::shared_ptr<BasePointer>>& BPs, 
