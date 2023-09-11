@@ -137,26 +137,31 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             {
                 if( i->isFunction() )
                 {
-                    bool noFunction = true;
                     for( const auto& pred : i->getPredecessors() )
                     {
                         if( const auto& predInst = dynamic_pointer_cast<Graph::Inst>(pred->getSrc()) )
                         {
-                            if( !predInst->isFunction() )
+                            if( !predInst->isFunction() && (predInst->isMemory()) )
                             {
-                                noFunction = false;
-                                break;
+                                startPoints.insert(predInst);
                             }
                         }
-                    }
-                    if( noFunction )
-                    {
-                        startPoints.insert(i);
                     }
                 }
                 else if( i->getOp() == Graph::Operation::store )
                 {
-                    startPoints.insert(i);
+                    // stores have two operands: value and pointer
+                    // we are only interested in the pointer operand, so only pick that one has a starting point
+                    for( const auto& pred : i->getPredecessors() )
+                    {
+                        if( const auto& predInst = dynamic_pointer_cast<Graph::Inst>(pred->getSrc()) )
+                        {
+                            if( predInst->isMemory() )
+                            {
+                                startPoints.insert(predInst);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -173,6 +178,12 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
         Q.push_front(s);
         while( !Q.empty() )
         {
+            if( Q.front()->getOp() == Graph::Operation::gep )
+            {
+                auto currentPos = std::find(ordering.begin(), ordering.end(), current);
+                ordering.insert(currentPos, Q.front());
+                current = Q.front();
+            }
             for( const auto& op : Q.front()->getPredecessors() )
             {
                 if( covered.find(op->getSrc()) != covered.end() )
@@ -196,9 +207,6 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 }
                 else if( opInst->getOp() == Graph::Operation::gep )
                 {
-                    auto currentPos = std::find(ordering.begin(), ordering.end(), current);
-                    ordering.insert(currentPos, opInst);
-                    current = opInst;
                     Q.push_back(opInst);
                     covered.insert(opInst);
                 }
@@ -238,6 +246,10 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
 
         for( const auto& gep : gh )
         {
+            if( covered.find(gep->getInst()) != covered.end() )
+            {
+                continue;
+            }
             deque<const llvm::Value*> Q;
             // records binary operations found to be done on gep indices, used to investigate the dimensionality of the pointer offset being done by the gep
             // the ordering of the ops is done in reverse order (since the DFG traversal is reversed), thus the inner-most dimension is first in the list, outer-most is last 
@@ -245,6 +257,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             // holds the set of values that "source" the indexVariable
             // these are used later to find out how this indexVariable is connected to others
             set<const llvm::Value*> sources;
+            covered.insert(gep->getInst());
             for( const auto& idx : llvm::cast<llvm::GetElementPtrInst>(gep->getInst())->indices() )
             {
                 Q.push_front(idx);
@@ -315,10 +328,10 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                             if( covered.find(op) == covered.end() )
                             {
                                 Q.push_back(op);
+                                covered.insert(op);
                             }
                         }
                     }
-                    Q.pop_front();
                 }
                 // When we reach the end of the idxVar information space, stop
                 //  - possible places:
@@ -340,25 +353,55 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 }
                 Q.pop_front();
             }
-            
-            /*// each binary operation maps to an indexVar
-            // if there are 0, we still make one for the gep
-            if( sources.size() != 1 )
-            {
-                PrintVal(gep);
-                PrintVal(gep->getParent());
-                throw AtlasException("Cannot yet handle the case where an IndexVariable has multiple sources!");
-            }
-            auto source = *sources.begin();*/
+
             if( bins.empty() ) 
             {
                 // there should be a 1:1 map between indexVar and the gep
                 // the ordering of geps has already been encoded in the hierarchy, thus we just push to the hierarchy list the indexVariable the represents this gep and move on
-                hierarchy.push_back( make_shared<IndexVariable>(gep) );
+                auto newIdx = make_shared<IndexVariable>(gep);
+                // if this is the first entry in the gep hierarchy, we are the parent-most, and thus updating the child will point us to the child
+                // else, we need to update both ourselves and our parent
+                if( gh.size() > 1 )
+                {
+                    if( gep != *gh.begin() )
+                    {
+                        auto parentGep = prev( std::find(gh.begin(), gh.end(), gep) );
+                        shared_ptr<IndexVariable> p = nullptr;
+                        for( const auto& idx : idxVars )
+                        {
+                            if( idx->getNode() == *parentGep )
+                            {
+                                p = idx;
+                            }
+                        }
+                        p->setChild(newIdx);
+                        newIdx->setParent(p);
+                    }
+                }
+                idxVars.insert( newIdx);
             }
             else if( bins.size() == 1 )
             {
-
+                // 1:1 mapping between indexVar and this binary operator
+                auto newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bins.begin()->first)) );
+                if( gh.size() > 1 )
+                {
+                    if( gep != *gh.begin() )
+                    {
+                        auto parentGep = prev( std::find(gh.begin(), gh.end(), gep) );
+                        shared_ptr<IndexVariable> p = nullptr;
+                        for( const auto& idx : idxVars )
+                        {
+                            if( idx->getNode() == *parentGep )
+                            {
+                                p = idx;
+                            }
+                        }
+                        p->setChild(newIdx);
+                        newIdx->setParent(p);
+                    }
+                }
+                idxVars.insert(newIdx);
             }
             else
             {
@@ -438,6 +481,11 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             }
         }
     }
+    /*cout << endl;
+    for( const auto& bp : BPs )
+    {
+        PrintVal(bp->getNode()->getVal());
+    }
     cout << endl;
     for( const auto& idx : idxVars )
     {
@@ -451,6 +499,6 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             PrintVal(bp->getNode()->getVal());
         }
         cout << endl;
-    }
+    }*/
     return idxVars;
 }
