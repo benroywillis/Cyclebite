@@ -13,12 +13,15 @@
 using namespace std;
 using namespace Cyclebite::Grammar;
 
+bool Expression::printedName = false;
+
 Expression::Expression( const vector<shared_ptr<Symbol>>& s, const vector<Cyclebite::Graph::Operation>& o ) : Symbol("expr"), ops(o), symbols(s) 
 {
     if( s.empty() )
     {
         throw AtlasException("Expression cannot be empty!");
     }
+    printedName = false;
     /*else if( o.size() != s.size()-1 )
     {
         for( const auto& op : o )
@@ -35,7 +38,12 @@ Expression::Expression( const vector<shared_ptr<Symbol>>& s, const vector<Cycleb
 
 string Expression::dump() const
 {
-    string expr = name + " = ";
+    string expr;
+    if( !printedName )
+    {
+        expr = name + " = ";
+    }
+    printedName = true;
     if( !symbols.empty() )
     {
         auto b = symbols.begin();
