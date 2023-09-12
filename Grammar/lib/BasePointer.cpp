@@ -121,11 +121,6 @@ bool BasePointer::isOffset( const llvm::Value* val ) const
     return false;
 }
 
-/// @brief Determines if the current function is an allocating function
-///
-/// 
-/// @param call 
-/// @return 0 if either the function is not an allocation, or the allocation size is not sufficient to be considered a base pointer. Otherwise return the allocation size. 
 uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
 {
     if( call->getCalledFunction() )
@@ -245,4 +240,58 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
         }
     }
     return 0;
+}
+
+const llvm::Value* Cyclebite::Grammar::getPointerSource(const llvm::Value* ptr)
+{
+    // value to be returned. If no value could be determined, the input argumetn is returned
+    const llvm::Value* source = nullptr;
+    // in this method, we walk back through the DFG until we find a value that either
+    // 1. gets its value from an unknown place (like a dynamic input or function argument)
+    // 2. has a determined value (like a static constant)
+    deque<const llvm::Value*> Q;
+    set<const llvm::Value*> covered;
+    Q.push_front(ptr);
+    covered.insert(ptr);
+    while( !Q.empty() )
+    {
+        if( const auto& alloc = llvm::dyn_cast<llvm::AllocaInst>(Q.front()) )
+        {
+            // this is a source
+            return alloc;
+        }
+        else if( const auto& call = llvm::dyn_cast<llvm::CallBase>(Q.front()) )
+        {
+            if( isAllocatingFunction(call) )
+            {
+                return call;
+            }
+            // otherwise there is no way for us to track a pointer through the operands of a function, so this is a dead end
+        }
+        else if( const auto& con = llvm::dyn_cast<llvm::Constant>(Q.front()) )
+        {
+            if( con->getType()->isPointerTy() )
+            {
+                return con;
+            }
+            // otherwise a constant is a dead end
+        }
+        else if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
+        {
+            Q.push_back(ld->getPointerOperand());
+            covered.insert(ld->getPointerOperand());
+        }
+        else if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
+        {
+            Q.push_back(gep->getPointerOperand());
+            covered.insert(gep->getPointerOperand());
+        }
+        else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
+        {
+            Q.push_back(cast->getOperand(0));
+            covered.insert(cast->getOperand(0));
+        }
+        Q.pop_front();
+    }
+    return source;
 }

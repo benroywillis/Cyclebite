@@ -7,7 +7,14 @@ namespace Cyclebite::Grammar
 {
     /// @brief Sets the threshold, in bytes, that a memory allocation must make in order to be considered a base pointer
     constexpr uint64_t ALLOC_THRESHOLD = 128;
+    /// @brief Decides whether this function allocates memory
+    /// @param call     The call instruction
+    /// @return The number of bytes allocated by the call. If the call instruction does not allocate memory, it returns 0.
     uint32_t isAllocatingFunction(const llvm::CallBase* call);
+    /// @brief Finds the source of a pointer operand
+    /// @param ptr      The pointer to be investigated
+    /// @return The source of the pointer. If no source could be determined, nullptr is returned;
+    const llvm::Value* getPointerSource(const llvm::Value* ptr);
     class BasePointer : public Symbol
     {
     public:
