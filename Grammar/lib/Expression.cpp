@@ -3,6 +3,8 @@
 #include "BasePointer.h"
 #include "ConstantSymbol.h"
 #include "ConstantFunction.h"
+#include "Task.h"
+#include "TaskParameter.h"
 #include "Graph/inc/IO.h"
 #include "Util/Exceptions.h"
 #include "Util/Print.h"
@@ -78,7 +80,7 @@ const set<shared_ptr<Collection>>& Expression::getOutputs() const
     return outputs;
 }
 
-const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const vector<shared_ptr<Graph::Inst>>& insts, const shared_ptr<ReductionVariable>& rv, const set<shared_ptr<Collection>>& colls )
+const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shared_ptr<Task>& t, const vector<shared_ptr<Graph::Inst>>& insts, const shared_ptr<ReductionVariable>& rv, const set<shared_ptr<Collection>>& colls )
 {
     shared_ptr<Expression> expr;
 
@@ -166,7 +168,12 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const vect
                     {
                         vec.push_back(nodeToExpr.at(opNode));
                     }
-
+                    else if( !t->find(opNode) )
+                    {
+                        // this is an out-of-task expression
+                        // make a placeholder and deal with it later
+                        vec.push_back( make_shared<TaskParameter>(opNode, t) );
+                    }
                     else
                     {
                         PrintVal(bin);
@@ -260,6 +267,12 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const vect
                     throw AtlasException("Constant used in an expression is not an integer!");
                 }
             }
+            else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(op) )
+            {
+                // this value comes from somewhere else
+                // assign a placeholder for it
+                vec.push_back( make_shared<TaskParameter>(Graph::DNIDMap.at(arg), t) );
+            }
             else
             {
                 PrintVal(op);
@@ -280,7 +293,52 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const vect
     }
     if( !expr )
     {
-        throw AtlasException("Could not generate an expression!");
+        if( rv && insts.empty() )
+        {
+            vector<shared_ptr<Symbol>> vec;
+            // we have a "counter" expression, where we just load something, add to it, then store it back
+            // thus, there should be a constant in the add. Find it, put it into the vec list, and construct a reduction on it
+            if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(rv->getNode()) )
+            {
+                for( const auto& op : inst->getInst()->operands() )
+                {
+                    if( const auto& con = llvm::dyn_cast<llvm::Constant>(op) )
+                    {
+                        if( con->getType()->isIntegerTy() )
+                        {
+                            vec.push_back( make_shared<ConstantSymbol<int64_t>>( *con->getUniqueInteger().getRawData()) );
+                        }
+                        else if( con->getType()->isFloatTy() )
+                        {
+                            if( const auto& conF = llvm::dyn_cast<llvm::ConstantFP>(con) )
+                            {
+                                vec.push_back( make_shared<ConstantSymbol<float>>( conF->getValueAPF().convertToFloat() ));
+                            }
+                            else
+                            {
+                                throw AtlasException("Could not extract float from constant float!");
+                            }
+                        }
+                        else if( con->getType()->isDoubleTy() )
+                        {
+                            if( const auto& conD = llvm::dyn_cast<llvm::ConstantFP>(con) )
+                            {
+                                vec.push_back( make_shared<ConstantSymbol<double>>( conD->getValueAPF().convertToDouble()) );
+                            }
+                            else
+                            {
+                                throw AtlasException("Could not extract double from constant double!");
+                            }
+                        }
+                    }
+                }
+            }
+            expr = make_shared<Reduction>(rv, vec, ops);
+        }
+        if( !expr )
+        {
+            throw AtlasException("Could not generate an expression!");
+        }
     }
     return expr;
 }

@@ -1440,7 +1440,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     {
         insts = order;
     }
-    return constructExpression(insts, rv, colls);
+    return constructExpression(t, insts, rv, colls);
 }
 
 void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)

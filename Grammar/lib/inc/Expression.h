@@ -34,5 +34,5 @@ namespace Cyclebite::Grammar
         std::vector<std::shared_ptr<Symbol>> symbols;
     };
     class ReductionVariable;
-    const std::shared_ptr<Expression> constructExpression( const std::vector<std::shared_ptr<Graph::Inst>>& insts, const std::shared_ptr<ReductionVariable>& rv, const std::set<std::shared_ptr<Collection>>& colls );
+    const std::shared_ptr<Expression> constructExpression( const std::shared_ptr<Task>& t, const std::vector<std::shared_ptr<Graph::Inst>>& insts, const std::shared_ptr<ReductionVariable>& rv, const std::set<std::shared_ptr<Collection>>& colls );
 } // namespace Cyclebite::Grammar
