@@ -33,4 +33,6 @@ namespace Cyclebite::Grammar
         // contains the symbols, in op order, for the expression. Will always be of size (ops.size() + 1)
         std::vector<std::shared_ptr<Symbol>> symbols;
     };
+    class ReductionVariable;
+    const std::shared_ptr<Expression> constructExpression( const std::vector<std::shared_ptr<Graph::Inst>>& insts, const std::shared_ptr<ReductionVariable>& rv, const std::set<std::shared_ptr<Collection>>& colls );
 } // namespace Cyclebite::Grammar
