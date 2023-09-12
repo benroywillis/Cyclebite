@@ -484,6 +484,21 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                     bpCandidates.insert(arg);
                                 }
                             }
+                            // when constant global structures are allocated, we need to identify their pointers
+                            // ex: StencilChain/Naive (filter weight array)
+                            else if( const auto& glob = llvm::dyn_cast<llvm::Constant>(Q.front()) )
+                            {
+                                if( glob->getType()->isPointerTy() )
+                                {
+                                    // must meet minimum pointer size
+                                    bool canBeNull = false;
+                                    bool canBeFreed = false;
+                                    if( glob->getPointerDereferenceableBytes(n->getInst()->getParent()->getParent()->getParent()->getDataLayout(), canBeNull, canBeFreed) > ALLOC_THRESHOLD )
+                                    {
+                                        bpCandidates.insert(glob);
+                                    }
+                                }
+                            }
                             Q.pop_front();
                         }
                     }
@@ -525,6 +540,19 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                     {
                         covered.insert(user);
                         Q.push_back(user);
+                    }
+                }
+            }
+            else if( const auto& glob = llvm::dyn_cast<llvm::Constant>(Q.front()) )
+            {
+                // a constant pointer points to a static array that holds filter weights
+                // this counts as a collection
+                for( const auto& user : glob->users() )
+                {
+                    if( covered.find(user) == covered.end() )
+                    {
+                        Q.push_back(user);
+                        covered.insert(user);
                     }
                 }
             }
@@ -872,13 +900,16 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                 }
                 Q.pop_front();
             }
-#ifdef DEBUG
             if( !gotPair )
             {
+                // it is possible to encounter a situation where a store is not accompanied by a gep
+                // (see GEMM/Naive/BB20)
+#ifdef DEBUG
                 PrintVal(st);
-                throw AtlasException("Could not map a base pointer store to a gep!");
-            }
+                spdlog::warn("Store pointer was not gep'd");
 #endif
+                storePairs.insert(pair<const llvm::GetElementPtrInst*, const llvm::StoreInst*>(nullptr, st));
+            }
             // second, if this is a store that is fed by the function group, mark it
             bool func = true;
             /*for( const auto& succ : DNIDMap.at(st)->getPredecessors() )
@@ -1051,7 +1082,59 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_
 
     // first step, find out how many slabs of memory there are (each one will get their own collection)
     // do this by going through the idxVars, finding their implicit hierarchies, and which base pointers they map to
-    map<shared_ptr<BasePointer>, set<shared_ptr<IndexVariable>>> varHierarchies;
+    map<shared_ptr<BasePointer>, set<shared_ptr<IndexVariable>>> commonBPs;
+    map<shared_ptr<BasePointer>, set<set<shared_ptr<IndexVariable>>>> varHierarchies;
+
+    for( const auto& idx : idxVars )
+    {
+        for( const auto& bp : idx->getBPs() )
+        {
+            commonBPs[bp].insert(idx);
+        }
+    }
+
+    // now sort the idxVars that map to the same BP into separate groups based on the hierarchies they form
+    for( const auto& bp : commonBPs )
+    {
+        set<shared_ptr<IndexVariable>> covered;
+        for( const auto& idx : bp.second )
+        {
+            if( covered.find(idx) != covered.end() )
+            {
+                continue;
+            }
+            else if( idx->getParent() )
+            {
+                continue;
+            }
+            // basically we are going to "flatten" every avenue that exists through the hierarchy tree
+            set<shared_ptr<IndexVariable>> avenue;
+            deque<shared_ptr<IndexVariable>> Q;
+            Q.push_front(idx);
+            covered.insert(idx);
+            while( !Q.empty() )
+            {
+                avenue.insert(Q.front());
+                if( Q.front()->getChild() )
+                {
+                    Q.push_back(Q.front()->getChild());
+                    covered.insert(Q.front()->getChild());
+                }
+                Q.pop_front();
+            }
+            varHierarchies[bp.first].insert(avenue);
+        }        
+    }
+
+    // now construct collections from the hierarchies that have been grouped
+    for( const auto& bp : varHierarchies )
+    {
+        for( const auto& ivSet : bp.second )
+        {
+            colls.insert( make_shared<Collection>(ivSet, bp.first) );
+        }
+    }
+    /*map<shared_ptr<BasePointer>, set<shared_ptr<IndexVariable>>> varHierarchies;
 
     deque<shared_ptr<IndexVariable>> Q;
     set<shared_ptr<IndexVariable>> covered;
@@ -1067,7 +1150,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_
     for( const auto& bp : varHierarchies )
     {
         colls.insert( make_shared<Collection>(bp.second, bp.first) );
-    }
+    }*/
     return colls;
 }
 
@@ -1410,10 +1493,31 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                         {
                             vec.push_back(found);
                         }
+                        else if( const auto& con = llvm::dyn_cast<llvm::Constant>( getPointerSource(ld->getPointerOperand()) ) )
+                        {
+                            // this may be loading from a constant global structure
+                            // in that case we are interested in finding out which value we are pulling from the structure
+                            // this may or may not be possible, if the indices are or aren't statically determinable
+                            // ex: StencilChain/Naive(BB 170)
+                            if( con->getType()->isPointerTy() )
+                            {
+                                bool canBeNull = false;
+                                bool canBeFreed = false;
+                                if( con->getPointerDereferenceableBytes(node->getInst()->getParent()->getParent()->getParent()->getDataLayout(), canBeNull, canBeFreed) < ALLOC_THRESHOLD )
+                                {
+                                    // the pointer's allocation is not large enough, thus there is no collection that will represent it
+                                    // we still need this value in our expression, whatever it may be, so just make a constant symbol for it
+                                    vec.push_back( make_shared<ConstantSymbol<int>>(0) ); 
+                                }
+                            }
+                        }
                         else 
                         {
                             PrintVal(ld);
-                            PrintVal(opNode->getVal());
+                            for( const auto& coll : colls )
+                            {
+                                PrintVal(coll->getBP()->getNode()->getVal());
+                            }
                             throw AtlasException("Could not find a collection to describe this load!");
                         }
                     }
@@ -1497,10 +1601,31 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                         {
                             vec.push_back(found);
                         }
+                        else if( const auto& con = llvm::dyn_cast<llvm::Constant>( getPointerSource(ld->getPointerOperand()) ) )
+                        {
+                            // this may be loading from a constant global structure
+                            // in that case we are interested in finding out which value we are pulling from the structure
+                            // this may or may not be possible, if the indices are or aren't statically determinable
+                            // ex: StencilChain/Naive(BB 170)
+                            if( con->getType()->isPointerTy() )
+                            {
+                                bool canBeNull = false;
+                                bool canBeFreed = false;
+                                if( con->getPointerDereferenceableBytes(node->getInst()->getParent()->getParent()->getParent()->getDataLayout(), canBeNull, canBeFreed) < ALLOC_THRESHOLD )
+                                {
+                                    // the pointer's allocation is not large enough, thus there is no collection that will represent it
+                                    // we still need this value in our expression, whatever it may be, so just make a constant symbol for it
+                                    vec.push_back( make_shared<ConstantSymbol<int>>(0) ); 
+                                }
+                            }
+                        }
                         else 
                         {
                             PrintVal(ld);
-                            PrintVal(opNode->getVal());
+                            for( const auto& coll : colls )
+                            {
+                                PrintVal(coll->getBP()->getNode()->getVal());
+                            }
                             throw AtlasException("Could not find a collection to describe this load!");
                         }
                     }
@@ -1619,6 +1744,10 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
             expr = make_shared<Expression>(vec, ops);
             nodeToExpr[node] = expr;
         }
+    }
+    if( !expr )
+    {
+        throw AtlasException("Could not generate an expression!");
     }
     return expr;
 }

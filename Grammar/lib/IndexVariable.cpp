@@ -434,7 +434,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         auto newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)), idxVarOrder.back() );
                         idxVarOrder.back()->setChild(newIdx);
                         idxVarOrder.push_back(newIdx);
-                        // don't increment, the loop will do that for us
+                        // don't increment the iterator, the loop will do that for us
                     }
                     else if( bin >= bins.rend() )
                     {

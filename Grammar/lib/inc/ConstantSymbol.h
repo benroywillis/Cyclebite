@@ -13,6 +13,7 @@ namespace Cyclebite::Grammar
     private:
         T bits;
     };
+    template class ConstantSymbol<int>;
     template class ConstantSymbol<int64_t>;
     template class ConstantSymbol<float>;
     template class ConstantSymbol<double>;
