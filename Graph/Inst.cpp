@@ -55,6 +55,11 @@ bool Inst::isFunction() const
     return type == DNC::Function;
 }
 
+bool Inst::isFunctionCall() const
+{
+    return op == Operation::call || op == Operation::invoke;
+}
+
 bool Inst::isBinaryOp() const
 {
     if( op == Operation::add   ||

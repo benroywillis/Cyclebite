@@ -25,6 +25,7 @@ namespace Cyclebite::Graph
         bool isState() const;
         bool isFunction() const;
         bool isMemory() const;
+        bool isFunctionCall() const;
         bool isTerminator() const;
         bool isCaller() const;
         bool isBinaryOp() const;
