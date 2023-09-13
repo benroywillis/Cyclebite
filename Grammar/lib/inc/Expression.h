@@ -14,7 +14,10 @@ namespace Cyclebite::Grammar
     class Expression : public Symbol
     {
     public:
+        /// @brief Standalone constructor. Useful for building expression classes.
         Expression( const std::vector<std::shared_ptr<Symbol>>& s, const std::vector<Cyclebite::Graph::Operation>& o );
+        /// @brief Inheritor constructur 
+        Expression( const std::vector<std::shared_ptr<Symbol>> s, const std::vector<Cyclebite::Graph::Operation> o, const std::string name );
         ~Expression() = default;
         const std::vector<std::shared_ptr<Symbol>>& getSymbols() const;
         const std::set<std::shared_ptr<InductionVariable>>& getVars() const;
