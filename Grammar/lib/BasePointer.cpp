@@ -244,8 +244,6 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
 
 const llvm::Value* Cyclebite::Grammar::getPointerSource(const llvm::Value* ptr)
 {
-    // value to be returned. If no value could be determined, the input argumetn is returned
-    const llvm::Value* source = nullptr;
     // in this method, we walk back through the DFG until we find a value that either
     // 1. gets its value from an unknown place (like a dynamic input or function argument)
     // 2. has a determined value (like a static constant)
@@ -276,6 +274,17 @@ const llvm::Value* Cyclebite::Grammar::getPointerSource(const llvm::Value* ptr)
             }
             // otherwise a constant is a dead end
         }
+        else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(Q.front()) )
+        {
+            // check the significant pointer list
+            if( Graph::DNIDMap.find(arg) != DNIDMap.end() )
+            {
+                if( SignificantMemInst.find( Graph::DNIDMap.at(arg) ) != SignificantMemInst.end() )
+                {
+                    return arg;
+                }
+            }
+        }
         else if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
         {
             Q.push_back(ld->getPointerOperand());
@@ -291,7 +300,23 @@ const llvm::Value* Cyclebite::Grammar::getPointerSource(const llvm::Value* ptr)
             Q.push_back(cast->getOperand(0));
             covered.insert(cast->getOperand(0));
         }
+        else if( const auto& con = llvm::dyn_cast<llvm::Constant>(Q.front()) )
+        {
+            // this may be a global pointer, return that
+            if( con->getType()->isPointerTy() )
+            {
+                return con;
+            }
+            else if( con->getType()->isFunctionTy() )
+            {
+                // sometimes functions can return array types that are later indexed
+                // e.g. Harris/API/nvision (-O2 BBID8, @_ZSt4cerr)
+                // in this case we are interested in returning the function itself... because this is the source of the pointer
+                return con;
+            }
+        }
         Q.pop_front();
     }
-    return source;
+    spdlog::warn("Could not find source of pointer "+PrintVal(ptr, false));
+    return ptr;
 }

@@ -13,7 +13,7 @@ namespace Cyclebite::Grammar
     uint32_t isAllocatingFunction(const llvm::CallBase* call);
     /// @brief Finds the source of a pointer operand
     /// @param ptr      The pointer to be investigated
-    /// @return The source of the pointer. If no source could be determined, nullptr is returned;
+    /// @return The source of the pointer. If no source could be determined, the input arg is returned;
     const llvm::Value* getPointerSource(const llvm::Value* ptr);
     class BasePointer : public Symbol
     {
