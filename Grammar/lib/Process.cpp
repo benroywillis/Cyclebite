@@ -174,8 +174,11 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
                         {
                             if( cycle->find(DNIDMap.at(inst)) )
                             {
-                                Q.push_back(inst);
-                                covered.insert(inst);
+                                if( covered.find(inst) == covered.end() )
+                                {
+                                    Q.push_back(inst);
+                                    covered.insert(inst);
+                                }
                             }
                         }
                     }
