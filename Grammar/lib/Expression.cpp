@@ -278,6 +278,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
     }
     if( newSymbols.empty() )
     {
+        PrintVal(op);
         throw AtlasException("Could not build a symbol for this llvm::value!");
     }
     return newSymbols;
