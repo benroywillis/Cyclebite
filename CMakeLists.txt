@@ -29,7 +29,7 @@ find_package(spdlog CONFIG REQUIRED)
 
 option(ENABLE_LINTER "Run linter" OFF)
 if(${ENABLE_LINTER})
-    find_program(TIDY NAMES clang-tidy-9 clang-tidy)
+    find_program(TIDY NAMES clang-tidy-9 clang-tidy ENV "TIDY")
     if(${TIDY} STREQUAL "TIDY-NOTFOUND")
         message(FATAL_ERROR "clang-tidy not found! Necessary for linting!")
     else()
@@ -80,7 +80,7 @@ add_subdirectory("Grammar")
 # responsible for injecting the tracer. Fairly fragile so be careful
 function(InjectMarkov tar)
     target_compile_options(${tar} PRIVATE "-flto" "-g" "-mavx")
-    set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=lld -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
+    set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=${CMAKE_LINKER} -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
     add_custom_command(OUTPUT ${tar}.markov.bc
         COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -enable-new-pm=0 -load $<TARGET_FILE:AtlasPasses> --Markov $<TARGET_FILE:${tar}> -o ${tar}.markov.bc
         DEPENDS $<TARGET_FILE:${tar}>
@@ -99,7 +99,7 @@ endfunction()
 
 function(InjectMemory tar)
     target_compile_options(${tar} PRIVATE "-flto" "-g" "-mavx")
-    set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=lld -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
+    set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=${CMAKE_LINKER} -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
     add_custom_command(OUTPUT ${tar}.memory.bc
         COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -enable-new-pm=0 -load $<TARGET_FILE:AtlasPasses> --Memory $<TARGET_FILE:${tar}> -o ${tar}.memory.bc
         DEPENDS $<TARGET_FILE:${tar}>
