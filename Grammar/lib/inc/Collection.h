@@ -13,6 +13,9 @@ namespace Cyclebite::Grammar
         const std::shared_ptr<IndexVariable>& operator[](unsigned i) const;
         const std::shared_ptr<BasePointer>& getBP() const;
         const std::vector<std::shared_ptr<IndexVariable>>& getIndices() const;
+        /// @brief  Returns the instruction(s) that return an element from this collection
+        /// @return 
+        const llvm::Value* getElementPointer() const;
         std::string dump() const override;
     protected:
         std::vector<std::shared_ptr<IndexVariable>> vars;

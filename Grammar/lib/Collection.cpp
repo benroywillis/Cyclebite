@@ -1,6 +1,9 @@
 #include "Collection.h"
 #include "IndexVariable.h"
 #include "Util/Exceptions.h"
+#include "llvm/IR/Instructions.h"
+#include "Graph/inc/IO.h"
+#include "BasePointer.h"
 #include <deque>
 
 using namespace Cyclebite::Grammar;
@@ -60,6 +63,89 @@ const shared_ptr<BasePointer>& Collection::getBP() const
 const vector<shared_ptr<IndexVariable>>& Collection::getIndices() const
 {
     return vars;
+}
+
+const llvm::Value* Collection::getElementPointer() const
+{
+    // the child-most index should connect us to the pointer that works with a load
+    // this load should have successor(s) that are not in the memory group
+    deque<const llvm::Instruction*> Q;
+    set<const llvm::Instruction*> covered;
+    // it is possible for our idxVar to be shared among many collections (e.g., when two base pointers are offset in the same way)
+    // thus, we must pick our starting point based on which use of our child-most idxVar is associated with our base pointer
+    if( vars.back()->getNode()->getSuccessors().size() > 1 )
+    {
+        for( const auto& succ : vars.back()->getNode()->getSuccessors() )
+        {
+            if( const auto& inst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(succ->getSnk()) )
+            {
+                if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(inst->getInst()) )
+                {
+                    if( bp->isOffset(gep->getPointerOperand()) )
+                    {
+                        Q.push_front(gep);
+                        covered.insert(gep);
+                    }
+                }
+                else if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(inst->getInst()) )
+                {
+                    if( bp->isOffset(ld->getPointerOperand()) )
+                    {
+                        Q.push_front(ld);
+                        covered.insert(ld);
+                    }
+                }
+            }
+        }
+        if( Q.empty() )
+        {
+            throw AtlasException("Could not find element pointer of this collection!");
+        }
+    }
+    else
+    {
+        Q.push_front(vars.back()->getNode()->getInst());
+        covered.insert(vars.back()->getNode()->getInst());
+    }
+    while( !Q.empty() )
+    {
+        if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
+        {
+            // evaluate its successors, if it has no successors in the memory group this is our guy
+            if( Cyclebite::Graph::DNIDMap.find(ld) != Cyclebite::Graph::DNIDMap.end() )
+            {
+                bool noMemory = true;
+                for( const auto& succ : static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(ld))->getSuccessors() )
+                {
+                    if( const auto& nodeInst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(succ->getSnk()) )
+                    {
+                        if( nodeInst->isMemory() )
+                        {
+                            noMemory = false;
+                            break;
+                        }
+                    }
+                }
+                if( noMemory )
+                {
+                    return ld;
+                }
+            }
+        }
+        for( const auto& user : Q.front()->users() )
+        {
+            if( const auto& userInst = llvm::dyn_cast<llvm::Instruction>(user) )
+            {
+                if( covered.find(userInst) == covered.end() )
+                {
+                    Q.push_back(userInst);
+                    covered.insert(userInst);
+                }
+            }
+        }
+        Q.pop_front();
+    }
+    return nullptr;
 }
 
 string Collection::dump() const

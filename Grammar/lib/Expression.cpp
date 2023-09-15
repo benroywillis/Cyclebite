@@ -114,11 +114,30 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             shared_ptr<Collection> found = nullptr;
             for( const auto& coll : colls )
             {
-                auto lds = coll->getBP()->getlds();
-                if( std::find(lds.begin(), lds.end(), ld) != lds.end() )
+                // collections are distinguished by their indexVariables, not necessarily their base pointer
+                // in order to find the right one, we need to figure out which indexVariable is used in this load
+                if( coll->getElementPointer() == ld )
                 {
+#ifdef DEBUG
+                    if( found )
+                    {
+                        PrintVal(ld);
+                        PrintVal(coll->getBP()->getNode()->getVal());
+                        PrintVal(coll->getElementPointer());
+                        PrintVal(coll->getIndices().back()->getNode()->getInst());
+                        PrintVal(found->getBP()->getNode()->getVal());
+                        PrintVal(found->getElementPointer());
+                        PrintVal(found->getIndices().back()->getNode()->getInst());
+                        throw AtlasException("Mapped more than one collection to a load value!");
+                    }
+                    else
+                    {
+                        found = coll;
+                    }
+#else
                     found = coll;
                     break;
+#endif
                 }
             }
             if( found )
