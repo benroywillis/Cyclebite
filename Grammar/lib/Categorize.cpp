@@ -54,59 +54,67 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
                     }
                     while (!Q.empty())
                     {
-                        for (auto &u : Q.front()->operands())
+                        if (auto ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()))
                         {
-                            auto v = u.get();
-                            if (covered.find(v) != covered.end())
-                            {
-                                continue;
-                            }
-                            else if (auto ld = llvm::dyn_cast<llvm::LoadInst>(v))
-                            {
-                                // regular case when the results of a function group are stored in a pointer (the heap)
-                                lds.insert(ld);
-                            }
-                            else if( auto phi = llvm::dyn_cast<llvm::PHINode>(v) )
-                            {
-                                // in the case where results of a function group are stored in a register, this captures them
-                                lds.insert(phi);
-                            }
-                            else if( auto call = llvm::dyn_cast<llvm::CallBase>(v) )
-                            {
-                                // a node that is only read may be a function that only returned a value, like libc::rand()
-                                // thus, if it is a function we consider it part of the function group
-                                lds.insert(call);
-                                // unlike the other types of lds, for all we know a function does work itself (not just a memory transaction)
-                                // thus it is colored
-                                auto r = colors.insert(make_shared<NodeColor>(call, OpColor::Red));
-                                if (!r.second)
-                                {
-                                    (*r.first)->colors.insert(OpColor::Red);
-                                }
-                                // the call instruction needs to be colored twice to ensure it is in the function group
-                                (*r.first)->colors.insert(OpColor::Blue);
-                                Q.push_back(call);
-                            }
-                            else if (auto st = llvm::dyn_cast<llvm::StoreInst>(v))
-                            {
-                                // a store can't possibly be used in a store... something is wrong
-                                throw AtlasException("Found a store that is an operand to a store!");
-                            }
-                            else if (auto inst = llvm::dyn_cast<llvm::Instruction>(v))
-                            {
-                                auto r = colors.insert(make_shared<NodeColor>(inst, OpColor::Red));
-                                if (!r.second)
-                                {
-                                    (*r.first)->colors.insert(OpColor::Red);
-                                }
-                                Q.push_back(inst);
-                            }
-                            covered.insert(v);
+                            // regular case when the results of a function group are stored in a pointer (the heap)
+                            lds.insert(ld);
                         }
-                        if (!Q.empty())
+                        else if( auto phi = llvm::dyn_cast<llvm::PHINode>(Q.front()) )
                         {
-                            Q.pop_front();
+                            // in the case where results of a function group are stored in a register, this captures them
+                            lds.insert(phi);
                         }
+                        else if( auto call = llvm::dyn_cast<llvm::CallBase>(Q.front()) )
+                        {
+                            // a node that is only read may be a function that only returned a value, like libc::rand()
+                            // thus, if it is a function we consider it part of the function group
+                            lds.insert(call);
+                            // unlike the other types of lds, for all we know a function does work itself (not just a memory transaction)
+                            // thus it is colored
+                            auto r = colors.insert(make_shared<NodeColor>(call, OpColor::Red));
+                            if (!r.second)
+                            {
+                                (*r.first)->colors.insert(OpColor::Red);
+                            }
+                            // the call instruction needs to be colored twice to ensure it is in the function group
+                            (*r.first)->colors.insert(OpColor::Blue);
+                            for( const auto& op : Q.front()->operands() )
+                            {
+                                if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+                                {
+                                    if( covered.find(opInst) == covered.end() )
+                                    {
+                                        Q.push_back(opInst);
+                                        covered.insert(opInst);
+                                    }
+                                }
+                            }
+                        }
+                        else if (auto st = llvm::dyn_cast<llvm::StoreInst>(Q.front()))
+                        {
+                            // a store can't possibly be used in a store... something is wrong
+                            throw AtlasException("Found a store that is an operand to a store!");
+                        }
+                        else if (auto inst = llvm::dyn_cast<llvm::Instruction>(Q.front()))
+                        {
+                            auto r = colors.insert(make_shared<NodeColor>(inst, OpColor::Red));
+                            if (!r.second)
+                            {
+                                (*r.first)->colors.insert(OpColor::Red);
+                            }
+                            for( const auto& op : Q.front()->operands() )
+                            {
+                                if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+                                {
+                                    if( covered.find(opInst) == covered.end() )
+                                    {
+                                        Q.push_back(opInst);
+                                        covered.insert(opInst);
+                                    }
+                                }
+                            }
+                        }
+                        Q.pop_front();
                     }
                     sts.insert(st);
                 }
@@ -174,10 +182,6 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
             if (entry->colors.find(OpColor::Blue) != entry->colors.end())
             {
                 funcInstructions.insert(GetValueID(entry->inst));
-            }
-            else
-            {
-
             }
         }
     }
