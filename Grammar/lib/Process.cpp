@@ -197,7 +197,6 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
     return IVs;
 }
 
-
 set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(const shared_ptr<Task>& t, const set<shared_ptr<InductionVariable>>& vars)
 {
     set<shared_ptr<ReductionVariable>> rvs;

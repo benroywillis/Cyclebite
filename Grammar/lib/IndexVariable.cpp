@@ -236,6 +236,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
     //     - this gives insight into which "dimension" of the polyhedral space this indexVariable works within
     // it is possible for multiple geps to use the same binary operations, thus we make the covered set out here to avoid redundancy
     set<const llvm::Value*> covered;
+    // this map helps us avoid redundant idxVars
+    map<const shared_ptr<Cyclebite::Graph::Inst>, const shared_ptr<IndexVariable>> nodeToIdx;
     for( const auto& gh : gepHierarchies )
     {
         // for each gep in the hierarchy, we figure out 
@@ -251,7 +253,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 continue;
             }
             deque<const llvm::Value*> Q;
-            // records binary operations found to be done on gep indices, used to investigate the dimensionality of the pointer offset being done by the gep
+            // records binary operations found to be done on gep indices
+            // used to investigate the dimensionality of the pointer offset being done by the gep
             // the ordering of the ops is done in reverse order (since the DFG traversal is reversed), thus the inner-most dimension is first in the list, outer-most is last 
             vector<pair<const llvm::BinaryOperator*, AffineOffset>> bins;
             // holds the set of values that "source" the indexVariable
@@ -260,8 +263,11 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             covered.insert(gep->getInst());
             for( const auto& idx : llvm::cast<llvm::GetElementPtrInst>(gep->getInst())->indices() )
             {
-                Q.push_front(idx);
-                covered.insert(idx);
+                if( covered.find(idx) == covered.end() )
+                {
+                    Q.push_front(idx);
+                    covered.insert(idx);
+                }
             }
             while( !Q.empty() )
             {
@@ -356,9 +362,39 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
 
             if( bins.empty() ) 
             {
+                // confirm that this gep is not already explained by existing indexVariables
+                bool found = false;
+                for( const auto& idx : llvm::cast<llvm::GetElementPtrInst>(gep->getInst())->indices() )
+                {
+                    for( const auto& idxVar : idxVars )
+                    {
+                        if( idxVar->getNode()->getInst() == idx.get() )
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if( found )
+                    {
+                        // this gep has already been explained, move on
+                        break;
+                    }
+                }
+                if( found )
+                {
+                    continue;
+                }
                 // there should be a 1:1 map between indexVar and the gep
                 // the ordering of geps has already been encoded in the hierarchy, thus we just push to the hierarchy list the indexVariable the represents this gep and move on
-                auto newIdx = make_shared<IndexVariable>(gep);
+                shared_ptr<IndexVariable> newIdx = nullptr;
+                if( nodeToIdx.find(gep) != nodeToIdx.end() )
+                {
+                    newIdx = nodeToIdx.at(gep);
+                }
+                else
+                {
+                    newIdx = make_shared<IndexVariable>(gep);
+                }
                 // if this is the first entry in the gep hierarchy, we are the parent-most, and thus updating the child will point us to the child
                 // else, we need to update both ourselves and our parent
                 if( gh.size() > 1 )
@@ -391,7 +427,15 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             else if( bins.size() == 1 )
             {
                 // 1:1 mapping between indexVar and this binary operator
-                auto newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bins.begin()->first)) );
+                shared_ptr<IndexVariable> newIdx = nullptr;
+                if( nodeToIdx.find( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(bins.begin()->first)) ) != nodeToIdx.end() )
+                {
+                    newIdx = nodeToIdx.at( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(bins.begin()->first)) );
+                }
+                else
+                {
+                    newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bins.begin()->first)) );
+                }
                 if( gh.size() > 1 )
                 {
                     if( gep != *gh.begin() )
@@ -424,8 +468,31 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 {
                     if( bin == bins.rbegin() )
                     {
-                        auto newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at((*bin).first)) );
-                        auto child  = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(next(bin)->first)), newIdx );
+                        shared_ptr<IndexVariable> newIdx = nullptr;
+                        if( nodeToIdx.find( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(bin->first)) ) != nodeToIdx.end() )
+                        {
+                            newIdx = nodeToIdx.at( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(bin->first)) );
+                        }
+                        else
+                        {
+                            newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)) );
+                        }
+                        shared_ptr<IndexVariable> child = nullptr;
+                        if( nodeToIdx.find( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(next(bin)->first)) ) != nodeToIdx.end() )
+                        {
+                            child = nodeToIdx.at( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(next(bin)->first)) );
+                        }
+                        else
+                        {
+                            child = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(next(bin)->first)), newIdx );
+                        }
+                        if( newIdx->getChild() )
+                        {
+                            if( newIdx->getChild() != child )
+                            {
+                                throw AtlasException("Cannot yet support a parent idxVar with multiple children!");
+                            }
+                        }
                         newIdx->setChild(child);
                         idxVarOrder.push_back(newIdx);
                         idxVarOrder.push_back(child);
@@ -435,7 +502,22 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                     {
                         // case where there are an odd number of entries
                         // then just create the last idxVar and update the hierarchy
-                        auto newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)), idxVarOrder.back() );
+                        shared_ptr<IndexVariable> newIdx = nullptr;
+                        if( nodeToIdx.find( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(bin->first)) ) != nodeToIdx.end() )
+                        {
+                            newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)), idxVarOrder.back() );
+                        }
+                        else
+                        {
+                            newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)) );
+                        }
+                        if( idxVarOrder.back()->getChild() )
+                        {
+                            if( idxVarOrder.back()->getChild() != newIdx )
+                            {
+                                throw AtlasException("Cannot yet suport a parent idxVar with multiple chilren!");
+                            }
+                        }
                         idxVarOrder.back()->setChild(newIdx);
                         idxVarOrder.push_back(newIdx);
                         // don't increment the iterator, the loop will do that for us
@@ -447,8 +529,38 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                     else
                     {
                         // default case
-                        auto newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)), idxVarOrder.back());
-                        auto child = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(next(bin)->first)), newIdx);
+                        shared_ptr<IndexVariable> newIdx = nullptr;
+                        if( nodeToIdx.find( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(bin->first)) ) != nodeToIdx.end() )
+                        {
+                            newIdx = nodeToIdx.at( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(bin->first)) );
+                        }
+                        else
+                        {
+                            newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)), idxVarOrder.back());
+                        }
+                        shared_ptr<IndexVariable> child = nullptr;
+                        if( nodeToIdx.find( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(next(bin)->first)) ) != nodeToIdx.end() )
+                        {
+                            child = nodeToIdx.at( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(next(bin)->first)) );
+                        }
+                        else
+                        {
+                            child = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(next(bin)->first)), newIdx);
+                        }
+                        if( newIdx->getChild() )
+                        {
+                            if( newIdx->getChild() != child )
+                            {
+                                throw AtlasException("Cannot yet support a parent idxVar with multiple children!");
+                            }
+                        }
+                        if( idxVarOrder.back()->getChild() )
+                        {
+                            if( idxVarOrder.back()->getChild() != newIdx )
+                            {
+                                throw AtlasException("Cannot yet suport a parent idxVar with multiple chilren!");
+                            }
+                        }
                         newIdx->setChild(child);
                         idxVarOrder.back()->setChild(newIdx);
                         idxVarOrder.push_back(newIdx);
@@ -489,24 +601,5 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             }
         }
     }
-    /*cout << endl;
-    for( const auto& bp : BPs )
-    {
-        PrintVal(bp->getNode()->getVal());
-    }
-    cout << endl;
-    for( const auto& idx : idxVars )
-    {
-        PrintVal(idx->getNode()->getInst());
-        if( idx->getIV() )
-        {
-            PrintVal(idx->getIV()->getNode()->getVal());
-        }
-        for( const auto& bp : idx->getBPs() )
-        {
-            PrintVal(bp->getNode()->getVal());
-        }
-        cout << endl;
-    }*/
     return idxVars;
 }
