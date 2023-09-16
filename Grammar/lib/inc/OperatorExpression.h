@@ -16,6 +16,7 @@ namespace Cyclebite::Grammar
         std::string dump() const override;
     private:
         Cyclebite::Graph::Operation op;
+    protected:
         std::vector<std::shared_ptr<Symbol>> args;
     };
 } // namespace Cyclebite::Grammar

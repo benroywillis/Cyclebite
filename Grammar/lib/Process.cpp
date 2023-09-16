@@ -5,7 +5,6 @@
 #include "Graph/inc/IO.h"
 #include "IO.h"
 #include "Reduction.h"
-#include "ConstantFunction.h"
 #include "IndexVariable.h"
 #include "Util/Annotate.h"
 #include "Util/Print.h"

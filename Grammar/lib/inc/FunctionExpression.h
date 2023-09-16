@@ -1,13 +1,13 @@
 #pragma once
-#include "Symbol.h"
+#include "OperatorExpression.h"
 #include <llvm/IR/Function.h>
 
 namespace Cyclebite::Grammar
 {
-    class ConstantFunction : public Symbol
+    class FunctionExpression : public OperatorExpression
     {
     public:
-        ConstantFunction(const llvm::Function* f) : Symbol(std::string(f->getName())+"()"), f(f) {}
+        FunctionExpression(const llvm::Function* f, const std::vector<std::shared_ptr<Symbol>>& args) : OperatorExpression( Cyclebite::Graph::Operation::call, args), f(f) {}
         std::string dump() const override;
         const llvm::Function* getFunction() const;
     private:

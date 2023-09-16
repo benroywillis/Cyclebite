@@ -2,7 +2,7 @@
 #include "Reduction.h"
 #include "BasePointer.h"
 #include "ConstantSymbol.h"
-#include "ConstantFunction.h"
+#include "FunctionExpression.h"
 #include "Task.h"
 #include "TaskParameter.h"
 #include "OperatorExpression.h"
@@ -196,7 +196,6 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 PrintVal(opNode->getVal());
                 throw AtlasException("Cannot map this instruction to an expression!");
             }
-
         }
     }
     else if( auto con = llvm::dyn_cast<llvm::Constant>(op) )
@@ -270,11 +269,21 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
         }
         else if( const auto& func = llvm::dyn_cast<llvm::Function>(con) )
         {
-            // we have found a function call that returns a value, more generall a "global object" in the llvm api
-            // here we implement a whitelist that allows certain functions that we know we can handle
-            // for example; rand(), sort(), qsort() and other libc function calls are on the whitelist
-            // for now we just insert the function name and hope for the best
-            newSymbols.push_back(make_shared<ConstantFunction>(func));
+            // we have found a constant function call that returns a value, more generally a "global object" in the llvm api
+            vector<shared_ptr<Symbol>> args;
+            for( const auto& argOp : con->operands() )
+            {
+                if( argOp == func )
+                {
+                    continue;
+                }
+                // call expression builder
+                for( const auto& news : buildExpression(node, t, argOp.get(), nodeToExpr, colls) )
+                {
+                    args.push_back( news );
+                }
+            }
+            newSymbols.push_back(make_shared<FunctionExpression>(func, args));
         }
         else
         {
@@ -335,6 +344,46 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
                         args.push_back( news );
                     }
                 }
+                const llvm::Function* f;
+                if( llvm::cast<llvm::CallBase>(node->getInst())->getCalledFunction() == nullptr )
+                {
+                    // we have to find it in our dynamic information
+                    for( const auto& succ : node->parent->getSuccessors() )
+                    {
+                        auto targetParent = static_pointer_cast<Cyclebite::Graph::ControlNode>(succ->getSnk());
+                        for( const auto& bb : Cyclebite::Graph::BBCBMap )
+                        {
+                            if( bb.second == targetParent )
+                            {
+                                f = bb.first->getParent();
+                                // confirm this function is not the same as the caller function
+                                // this will break under recursion
+                                if( f != node->getInst()->getParent()->getParent() )
+                                {
+                                    break;
+                                }
+                                else
+                                {
+                                    // wrong function, must have searched the wrong node successor
+                                    f = nullptr;
+                                }
+                            }
+                        }
+                        if( f )
+                        {
+                            break;
+                        }
+                    }
+                    if( !f )
+                    {
+                        throw AtlasException("Could not determine the function of a functionexpression!");
+                    }
+                }
+                else
+                {
+                    f = llvm::cast<llvm::CallBase>(node->getInst())->getCalledFunction();
+                }
+                expr = make_shared<FunctionExpression>(f, args);
             }
             else
             {
@@ -346,8 +395,8 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
                         args.push_back( news );
                     }
                 }
+                expr = make_shared<OperatorExpression>(node->getOp(), args);
             }
-            expr = make_shared<OperatorExpression>(node->getOp(), args);
         }
         else
         {
