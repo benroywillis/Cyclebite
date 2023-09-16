@@ -94,7 +94,7 @@ const set<shared_ptr<Collection>>& Expression::getOutputs() const
 vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::Inst>& node,
                                             const shared_ptr<Task>& t,  
                                             const llvm::Value* op, 
-                                            map<shared_ptr<Cyclebite::Graph::DataValue>, shared_ptr<Expression>>& nodeToExpr, 
+                                            map<shared_ptr<Cyclebite::Graph::DataValue>, shared_ptr<Symbol>>& nodeToExpr, 
                                             const set<shared_ptr<Collection>>& colls )
 {
     vector<shared_ptr<Symbol>> newSymbols;
@@ -158,7 +158,9 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     {
                         // the pointer's allocation is not large enough, thus there is no collection that will represent it
                         // we still need this value in our expression, whatever it may be, so just make a constant symbol for it
-                        newSymbols.push_back(make_shared<ConstantSymbol<int>>(0)); 
+                        auto newSymbol = make_shared<ConstantSymbol<int>>(0);
+                        nodeToExpr[ opNode ] = newSymbol;
+                        newSymbols.push_back(newSymbol); 
                     }
                 }
             }
@@ -188,7 +190,9 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             {
                 // this is an out-of-task expression
                 // make a placeholder and deal with it later
-                ( make_shared<TaskParameter>(opNode, t) );
+                auto newSymbol = make_shared<TaskParameter>(opNode, t);
+                nodeToExpr[ opNode ] = newSymbol;
+                newSymbols.push_back(newSymbol);
             }
             else
             {
@@ -283,7 +287,8 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     args.push_back( news );
                 }
             }
-            newSymbols.push_back(make_shared<FunctionExpression>(func, args));
+            auto newSymbol = make_shared<FunctionExpression>(func, args);
+            newSymbols.push_back(newSymbol);
         }
         else
         {
@@ -296,7 +301,9 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
     {
         // this value comes from somewhere else
         // assign a placeholder for it
-        newSymbols.push_back( make_shared<TaskParameter>(Cyclebite::Graph::DNIDMap.at(arg), t) );
+        auto newSymbol = make_shared<TaskParameter>(Cyclebite::Graph::DNIDMap.at(arg), t);
+        nodeToExpr[Cyclebite::Graph::DNIDMap.at(arg)] = newSymbol;
+        newSymbols.push_back( newSymbol );
     }
     else
     {
@@ -317,7 +324,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
     shared_ptr<Expression> expr;
 
     vector<Cyclebite::Graph::Operation> ops;
-    map<shared_ptr<Graph::DataValue>, shared_ptr<Expression>> nodeToExpr;
+    map<shared_ptr<Graph::DataValue>, shared_ptr<Symbol>> nodeToExpr;
     for( const auto& node : insts )
     {
         if( const auto& shuffle = llvm::dyn_cast<llvm::ShuffleVectorInst>(node->getInst()) )
