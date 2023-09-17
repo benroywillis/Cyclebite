@@ -388,6 +388,23 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
                     }
                 }
             }
+            else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(p) )
+            {
+                // collect all store instructions that store state
+                set<llvm::Instruction *> localFanOut;
+                deque<llvm::Instruction *> Q;
+                set<llvm::User *> covered;
+                for (const auto &u : arg->users())
+                {
+                    if (auto st = llvm::dyn_cast<llvm::StoreInst>(u))
+                    {
+                        if (k.second.find(st->getParent()) != k.second.end())
+                        {
+                            stateSts.insert(st);
+                        }
+                    }
+                }
+            }
             else
             {
                 throw AtlasException("Cannot handle the case where a state pointer comes from: " + PrintVal(p, false));
