@@ -18,11 +18,11 @@ using namespace Cyclebite::Grammar;
 
 IndexVariable::IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n, 
                               const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p, 
-                              const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& c ) : Symbol("idx"), node(n), parent(p), child(c) {}
+                              const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c ) : Symbol("idx"), node(n), parent(p), children(c) {}
 
-void IndexVariable::setChild( const shared_ptr<IndexVariable>& c )
+void IndexVariable::addChild( const shared_ptr<IndexVariable>& c )
 {
-    child = c;
+    children.insert(c);
 }
 
 void IndexVariable::setParent( const shared_ptr<IndexVariable>& p)
@@ -82,9 +82,9 @@ const shared_ptr<Cyclebite::Grammar::IndexVariable>& IndexVariable::getParent() 
     return parent;
 }
 
-const shared_ptr<Cyclebite::Grammar::IndexVariable>& IndexVariable::getChild() const
+const set<shared_ptr<Cyclebite::Grammar::IndexVariable>>& IndexVariable::getChildren() const
 {
-    return child;
+    return children;
 }
 
 const shared_ptr<InductionVariable>& IndexVariable::getIV() const
@@ -123,9 +123,10 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
     //       2. stores. Their pointer operands likely used geps 
     // map: find out which geps work together and in which order..
     //  e.g. ld -> gep0 -> ld -> gep1 -> ld -> <function group> 
-    //   - this has gep0 and gep1 working together to offset the original BP, thus 
+    //   - this has gep0 and gep1 working together to offset the original BP
     // when deciding the hierarchical relationship of indexVar's that map 1:1 with geps, we need a strict ordering of offsets
     // thus, we record both which geps have a relationship and in what order those relationships are defined in 
+    // each hierarchy in this set is sorted from parent-most to child-most
     set<vector<shared_ptr<Graph::Inst>>> gepHierarchies;
     // our start points
     set<shared_ptr<Graph::Inst>> startPoints;
@@ -169,17 +170,19 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
     for( const auto& s : startPoints )
     {
         // now try to ascertain which geps are related and in what order they work
-        // "current" is the gep that was last seen. It allows for relationships to be forged between geps
+        // "current" is the gep that was last seen. When a new gep is encountered durin the DFG walk, "current" is its child
         shared_ptr<Graph::Inst> current = nullptr;
-        // ordering is the order of geps (in reverse order) that have been found to work together
+        // ordering of geps that have a relationship, from parent-most (front) to child-most (back)
         vector<shared_ptr<Graph::Inst>> ordering;
         deque<shared_ptr<Graph::Inst>> Q;
         set<shared_ptr<Graph::GraphNode>> covered;
         Q.push_front(s);
+        // this loop walks backwards through the DFG, meaning we see child geps first, then their parent(s) later
         while( !Q.empty() )
         {
             if( Q.front()->getOp() == Graph::Operation::gep )
             {
+                // this logic pushes the discovered gep (Q.front()) before "current", which sorts "ordering" from parent-most to child-most
                 auto currentPos = std::find(ordering.begin(), ordering.end(), current);
                 ordering.insert(currentPos, Q.front());
                 current = Q.front();
@@ -243,9 +246,9 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
         // for each gep in the hierarchy, we figure out 
         // in the case of hierarchical geps, we have to construct all objects first before assigning hierarchical relationships
         // thus, we make a vector of them here and assign their positions later
-        // the vector is reverse-sorted (meaning children are first in the list, parents last) like "gh" is
+        // the vector is reverse-sorted (meaning children are first in the list, parents last) 
         vector<shared_ptr<IndexVariable>> hierarchy;
-
+        // remember gh is in hierarchy order (parent-most first, child-most last)
         for( const auto& gep : gh )
         {
             if( covered.find(gep->getInst()) != covered.end() )
@@ -399,13 +402,17 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 // else, we need to update both ourselves and our parent
                 if( gh.size() > 1 )
                 {
-                    if( gep != *gh.begin() )
+                    if( gep != gh.front())
                     {
+                        // there should be a parent gep to the current one - find it and update it
                         auto parentGep = prev( std::find(gh.begin(), gh.end(), gep) );
                         shared_ptr<IndexVariable> p = nullptr;
                         for( const auto& idx : idxVars )
                         {
-                            if( idx->getNode() == *parentGep )
+                            // if the idxVar is a binaryOp, we won't find it by our parent gep
+                            // thus we have to find it by searching through its geps (which may be the idxVar itself)
+                            auto idxVarGeps = idx->getGeps();
+                            if( idxVarGeps.find(*parentGep) != idxVarGeps.end() )
                             {
                                 p = idx;
                             }
@@ -416,9 +423,14 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                             {
                                 PrintVal(idx->getNode()->getVal());
                             }
+                            for( const auto& gep : gh )
+                            {
+                                PrintVal(gep->getInst());
+                            }
+                            PrintVal(gep->getInst());
                             throw AtlasException("Could not find parent idxVar!");
                         }
-                        p->setChild(newIdx);
+                        p->addChild(newIdx);
                         newIdx->setParent(p);
                     }
                 }
@@ -449,7 +461,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                                 p = idx;
                             }
                         }
-                        p->setChild(newIdx);
+                        p->addChild(newIdx);
                         newIdx->setParent(p);
                     }
                 }
@@ -486,14 +498,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         {
                             child = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(next(bin)->first)), newIdx );
                         }
-                        if( newIdx->getChild() )
-                        {
-                            if( newIdx->getChild() != child )
-                            {
-                                throw AtlasException("Cannot yet support a parent idxVar with multiple children!");
-                            }
-                        }
-                        newIdx->setChild(child);
+                        newIdx->addChild(child);
                         idxVarOrder.push_back(newIdx);
                         idxVarOrder.push_back(child);
                         bin = next(bin);
@@ -511,14 +516,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         {
                             newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)) );
                         }
-                        if( idxVarOrder.back()->getChild() )
-                        {
-                            if( idxVarOrder.back()->getChild() != newIdx )
-                            {
-                                throw AtlasException("Cannot yet suport a parent idxVar with multiple chilren!");
-                            }
-                        }
-                        idxVarOrder.back()->setChild(newIdx);
+                        idxVarOrder.back()->addChild(newIdx);
                         idxVarOrder.push_back(newIdx);
                         // don't increment the iterator, the loop will do that for us
                     }
@@ -547,22 +545,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         {
                             child = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(next(bin)->first)), newIdx);
                         }
-                        if( newIdx->getChild() )
-                        {
-                            if( newIdx->getChild() != child )
-                            {
-                                throw AtlasException("Cannot yet support a parent idxVar with multiple children!");
-                            }
-                        }
-                        if( idxVarOrder.back()->getChild() )
-                        {
-                            if( idxVarOrder.back()->getChild() != newIdx )
-                            {
-                                throw AtlasException("Cannot yet suport a parent idxVar with multiple chilren!");
-                            }
-                        }
-                        newIdx->setChild(child);
-                        idxVarOrder.back()->setChild(newIdx);
+                        newIdx->addChild(child);
+                        idxVarOrder.back()->addChild(newIdx);
                         idxVarOrder.push_back(newIdx);
                         idxVarOrder.push_back(child);
                         bin = next(bin);

@@ -1093,7 +1093,6 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_
             commonBPs[bp].insert(idx);
         }
     }
-
     // now sort the idxVars that map to the same BP into separate groups based on the hierarchies they form
     for( const auto& bp : commonBPs )
     {
@@ -1116,10 +1115,13 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_
             while( !Q.empty() )
             {
                 avenue.insert(Q.front());
-                if( Q.front()->getChild() )
+                for( const auto& c : Q.front()->getChildren() )
                 {
-                    Q.push_back(Q.front()->getChild());
-                    covered.insert(Q.front()->getChild());
+                    if( c->getBPs().find(bp.first) != c->getBPs().end() )
+                    {
+                        Q.push_back(c);
+                        covered.insert(c);
+                    }
                 }
                 Q.pop_front();
             }
@@ -1151,6 +1153,14 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_
     for( const auto& bp : varHierarchies )
     {
         colls.insert( make_shared<Collection>(bp.second, bp.first) );
+    }*/
+    /*for( const auto& coll : colls )
+    {
+        PrintVal(coll->getBP()->getNode()->getVal());
+        for( const auto& idx : coll->getIndices() )
+        {
+            PrintVal(idx->getNode()->getInst());
+        }
     }*/
     return colls;
 }

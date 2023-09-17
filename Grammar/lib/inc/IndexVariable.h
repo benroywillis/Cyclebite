@@ -12,9 +12,9 @@ namespace Cyclebite::Grammar
     public:
         IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n,
                        const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p = nullptr, 
-                       const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& c = nullptr );
+                       const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c = std::set<std::shared_ptr<IndexVariable>>() );
         void setParent( const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p);
-        void setChild( const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& c);
+        void addChild( const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& c);
         void setIV( const std::shared_ptr<Cyclebite::Grammar::InductionVariable>& iv);
         void addBP( const std::shared_ptr<Cyclebite::Grammar::BasePointer>& bp);
         const std::shared_ptr<Cyclebite::Graph::Inst>& getNode() const;
@@ -25,7 +25,7 @@ namespace Cyclebite::Grammar
         /// Note: this method only returns the gep(s) that immediately use this index variable - follow-on geps that may use the result of this gep are not captured 
         const std::set<std::shared_ptr<Cyclebite::Graph::Inst>, Graph::p_GNCompare> getGeps() const;
         const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& getParent() const;
-        const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& getChild() const;
+        const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& getChildren() const;
         const std::shared_ptr<Cyclebite::Grammar::InductionVariable>& getIV() const;
         const std::set<std::shared_ptr<Cyclebite::Grammar::BasePointer>>& getBPs() const;
         const PolySpace getSpace() const;
@@ -39,7 +39,7 @@ namespace Cyclebite::Grammar
         /// the parent idxVar is one dimension above this one
         std::shared_ptr<Cyclebite::Grammar::IndexVariable> parent;
         /// the child idxVar is one dimension below this one
-        std::shared_ptr<Cyclebite::Grammar::IndexVariable> child;        
+        std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>> children;        
         /// the affine dimensions of this index
         PolySpace space;
     };
@@ -49,7 +49,7 @@ namespace Cyclebite::Grammar
     {
         bool operator()(const std::shared_ptr<IndexVariable>& lhs, const std::shared_ptr<IndexVariable>& rhs) const 
         {
-            if( lhs->getChild() == rhs )
+            if( lhs->getChildren().find(rhs) != lhs->getChildren().end() )
             {
                 // this is my child, I get sorted first
                 return true;
@@ -59,12 +59,15 @@ namespace Cyclebite::Grammar
                 // I have no parent and rhs does, I go first
                 return true;
             }
-            else if( lhs->getChild() )
+            else if( !lhs->getChildren().empty() )
             {
-                if( rhs == lhs->getChild()->getChild() )
+                for( const auto& child : lhs->getChildren() )
                 {
-                    // rhs is a child of my child, I go first
-                    return true;
+                    if( child->getChildren().find(rhs) != child->getChildren().end() )
+                    {
+                        // rhs is a child of my child, I go first
+                        return true;
+                    }
                 }
             }
             // I can't determine whether I go before rhs without significant recursion, so just return false 
