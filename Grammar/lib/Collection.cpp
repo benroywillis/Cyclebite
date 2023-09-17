@@ -4,6 +4,7 @@
 #include "llvm/IR/Instructions.h"
 #include "Graph/inc/IO.h"
 #include "BasePointer.h"
+#include "Util/Print.h"
 #include <deque>
 
 using namespace Cyclebite::Grammar;
@@ -32,9 +33,12 @@ Collection::Collection(const std::set<std::shared_ptr<IndexVariable>>& v, const 
         while( !Q.empty() )
         {
             vars.push_back(Q.front());
-            if( Q.front()->getChild() )
+            for( const auto& c : Q.front()->getChildren() )
             {
-                Q.push_back(Q.front()->getChild());
+                if( c->getBPs().find(p) != c->getBPs().end() )
+                {
+                    Q.push_back(c);
+                }
             }
             Q.pop_front();
         }
@@ -99,6 +103,11 @@ const llvm::Value* Collection::getElementPointer() const
         }
         if( Q.empty() )
         {
+            PrintVal(bp->getNode()->getVal());
+            for( const auto& idx : vars )
+            {
+                PrintVal(idx->getNode()->getInst());
+            }
             throw AtlasException("Could not find element pointer of this collection!");
         }
     }
