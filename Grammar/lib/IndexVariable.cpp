@@ -510,11 +510,11 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         shared_ptr<IndexVariable> newIdx = nullptr;
                         if( nodeToIdx.find( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(bin->first)) ) != nodeToIdx.end() )
                         {
-                            newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)), idxVarOrder.back() );
+                            newIdx = nodeToIdx.at( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(bin->first)) );
                         }
                         else
                         {
-                            newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)) );
+                            newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)), idxVarOrder.back() );
                         }
                         idxVarOrder.back()->addChild(newIdx);
                         idxVarOrder.push_back(newIdx);
