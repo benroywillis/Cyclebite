@@ -97,7 +97,21 @@ const set<const llvm::Value*> Collection::getElementPointers() const
                 {
                     if( const auto& nodeInst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
                     {
-                        if( nodeInst->isMemory() )
+                        // there is a corner case where a load can be immediately stored (DWT/PERFECT/BBID205 OPFLAG=-O1)
+                        // in that case we will make an exception for store inst value operands
+                        if( nodeInst->getOp() == Graph::Operation::store )
+                        {
+                            if( llvm::cast<llvm::StoreInst>(nodeInst->getInst())->getValueOperand() == varQ.front()->getInst() )
+                            {
+                                // make an exception
+                            }
+                            else
+                            {
+                                noMemory = false;
+                                break;
+                            }
+                        }
+                        else if( nodeInst->isMemory() )
                         {
                             noMemory = false;
                             break;
