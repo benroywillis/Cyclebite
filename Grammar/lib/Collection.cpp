@@ -155,6 +155,30 @@ const set<const llvm::Value*> Collection::getElementPointers() const
                         }
                     }
                 }
+                // corner case: sometimes a bp will be used to offset another bp (HistEq/PERFECT BBID118 OPFLAG=-O1)
+                else if( llvm::isa<llvm::GetElementPtrInst>(vars.back()->getNode()->getInst()) )
+                {
+                    // vars.back() is actually a gep, meaning will have exactly one offset
+                    // if this offset is an offset of the collection base pointer, it is a valid path to search
+                    bool valid = false;
+                    for( const auto& idx : llvm::cast<llvm::GetElementPtrInst>(varQ.front()->getInst())->indices() )
+                    {
+                        if( bp->isOffset(idx) )
+                        {
+                            valid = true;
+                        }
+                    }
+                    if( valid )
+                    {
+                        for( const auto& succ : varQ.front()->getSuccessors() )
+                        {
+                            if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
+                            {
+                                varQ.push_back(inst);
+                            }
+                        }
+                    }
+                }
             }
         }
         else if( varQ.front()->isCastOp() )
