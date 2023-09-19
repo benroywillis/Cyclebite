@@ -174,7 +174,10 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     {
                         PrintVal(idx->getNode()->getInst());
                     }
-                    PrintVal(coll->getLoad());
+                    if( coll->getLoad() )
+                    {
+                        PrintVal(coll->getLoad());
+                    }
                 }
                 throw AtlasException("Could not find a collection to describe this load!");
             }
