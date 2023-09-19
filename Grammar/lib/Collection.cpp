@@ -37,9 +37,12 @@ Collection::Collection(const std::set<std::shared_ptr<IndexVariable>>& v, const 
             vars.push_back(Q.front());
             for( const auto& c : Q.front()->getChildren() )
             {
-                if( c->getBPs().find(p) != c->getBPs().end() )
+                if( v.find(c) != v.end() )
                 {
-                    Q.push_back(c);
+                    if( c->getBPs().find(p) != c->getBPs().end() )
+                    {
+                        Q.push_back(c);
+                    }
                 }
             }
             Q.pop_front();

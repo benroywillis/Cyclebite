@@ -1094,11 +1094,14 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_
         }
     }
     // now sort the idxVars that map to the same BP into separate groups based on the hierarchies they form
+    // this is a depth-first search: we are looking for all unique avenues from the root(s) of the idxVar tree to the leaves
     for( const auto& bp : commonBPs )
     {
+        // search depth-first through all avenues from the root of the idxVar tree to the leaves
         set<shared_ptr<IndexVariable>> covered;
         for( const auto& idx : bp.second )
         {
+            // we want to find the parent idxVar and walk through the tree from there
             if( covered.find(idx) != covered.end() )
             {
                 continue;
@@ -1107,25 +1110,44 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_
             {
                 continue;
             }
-            // basically we are going to "flatten" every avenue that exists through the hierarchy tree
-            set<shared_ptr<IndexVariable>> avenue;
             deque<shared_ptr<IndexVariable>> Q;
             Q.push_front(idx);
             covered.insert(idx);
             while( !Q.empty() )
             {
-                avenue.insert(Q.front());
-                for( const auto& c : Q.front()->getChildren() )
+                bool pop = true;
+                if( Q.front()->getChildren().empty() )
                 {
-                    if( c->getBPs().find(bp.first) != c->getBPs().end() )
+                    // we have hit a leaf, push the avenue we have observed
+                    set<shared_ptr<IndexVariable>> newAvenue;
+                    for( const auto& p : Q )
                     {
-                        Q.push_back(c);
-                        covered.insert(c);
+                        newAvenue.insert(p);
+                    }
+                    //varHierarchies[bp.first].insert( set<shared_ptr<IndexVariable>>(Q.begin(), Q.end()) );
+                    varHierarchies[bp.first].insert( newAvenue );
+                }
+                else
+                {
+                    for( const auto& c : Q.front()->getChildren() )
+                    {
+                        if( covered.find(c) == covered.end() )
+                        {
+                            if( c->getBPs().find(bp.first) != c->getBPs().end() )
+                            {
+                                Q.push_front(c);
+                                covered.insert(c);
+                                pop = false;
+                                break;
+                            }
+                        }
                     }
                 }
-                Q.pop_front();
+                if( pop )
+                {
+                    Q.pop_front();
+                }
             }
-            varHierarchies[bp.first].insert(avenue);
         }        
     }
 
@@ -1135,6 +1157,13 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_
         for( const auto& ivSet : bp.second )
         {
             colls.insert( make_shared<Collection>(ivSet, bp.first) );
+            /*auto it = colls.insert( make_shared<Collection>(ivSet, bp.first) );
+            PrintVal((*it.first)->getBP()->getNode()->getVal());
+            for( const auto& iv : (*it.first)->getIndices() )
+            {
+                PrintVal(iv->getNode()->getInst());
+            }
+            cout << endl;*/
         }
     }
     /*map<shared_ptr<BasePointer>, set<shared_ptr<IndexVariable>>> varHierarchies;

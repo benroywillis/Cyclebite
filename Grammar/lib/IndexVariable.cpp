@@ -240,7 +240,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
     // it is possible for multiple geps to use the same binary operations, thus we make the covered set out here to avoid redundancy
     set<const llvm::Value*> covered;
     // this map helps us avoid redundant idxVars
-    map<const shared_ptr<Cyclebite::Graph::Inst>, const shared_ptr<IndexVariable>> nodeToIdx;
+    map<const shared_ptr<Cyclebite::Graph::Inst>, shared_ptr<IndexVariable>> nodeToIdx;
     for( const auto& gh : gepHierarchies )
     {
         // for each gep in the hierarchy, we figure out 
@@ -251,26 +251,38 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
         // remember gh is in hierarchy order (parent-most first, child-most last)
         for( const auto& gep : gh )
         {
-            if( covered.find(gep->getInst()) != covered.end() )
-            {
-                continue;
-            }
             deque<const llvm::Value*> Q;
             // records binary operations found to be done on gep indices
             // used to investigate the dimensionality of the pointer offset being done by the gep
             // the ordering of the ops is done in reverse order (since the DFG traversal is reversed), thus the inner-most dimension is first in the list, outer-most is last 
-            vector<pair<const llvm::BinaryOperator*, AffineOffset>> bins;
+            vector<pair<const llvm::Instruction*, AffineOffset>> bins;
             // holds the set of values that "source" the indexVariable
             // these are used later to find out how this indexVariable is connected to others
             set<const llvm::Value*> sources;
             covered.insert(gep->getInst());
             for( const auto& idx : llvm::cast<llvm::GetElementPtrInst>(gep->getInst())->indices() )
             {
-                if( covered.find(idx) == covered.end() )
-                {
-                    Q.push_front(idx);
+                    if( const auto& con = llvm::dyn_cast<llvm::Constant>(idx) )
+                    {
+                        // a constant is likely a simple offset on a structure, that's useful
+                        AffineOffset of;
+                        if( con->getType()->isIntegerTy() )
+                        {
+                            of.constant = (int)*con->getUniqueInteger().getRawData();
+                            of.transform = Cyclebite::Graph::Operation::add;
+                            bins.push_back( pair(gep->getInst(), of) );
+                        }
+                        // floating point offsets shouldn't happen
+                        else 
+                        {
+                            throw AtlasException("Cannot handle a memory offset that isn't an integer!");
+                        }
+                    }
+                    else
+                    {
+                        Q.push_front(idx);
+                    }
                     covered.insert(idx);
-                }
             }
             while( !Q.empty() )
             {
@@ -287,6 +299,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                     if( con->getType()->isIntegerTy() )
                     {
                         of.constant = (int)*con->getUniqueInteger().getRawData();
+                        of.transform = Cyclebite::Graph::Operation::add;
                     }
                     // floating point offsets shouldn't happen
                     else 
@@ -319,11 +332,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         {
                             of.constant = 0; // undeterminable
                             bins.back().second = of;
-                            if( covered.find(pred) == covered.end() )
-                            {
                                 Q.push_back(pred);
                                 covered.insert(pred);
-                            }
                         }
                     }
                 }
@@ -334,11 +344,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                     {
                         if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(op) )
                         {
-                            if( covered.find(op) == covered.end() )
-                            {
                                 Q.push_back(op);
                                 covered.insert(op);
-                            }
                         }
                     }
                 }
@@ -397,6 +404,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 else
                 {
                     newIdx = make_shared<IndexVariable>(gep);
+                    nodeToIdx[ gep ] = newIdx;
                 }
                 // if this is the first entry in the gep hierarchy, we are the parent-most, and thus updating the child will point us to the child
                 // else, we need to update both ourselves and our parent
@@ -447,6 +455,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 else
                 {
                     newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bins.begin()->first)) );
+                    nodeToIdx[ static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bins.begin()->first)) ] = newIdx;
                 }
                 if( gh.size() > 1 )
                 {
@@ -488,6 +497,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         else
                         {
                             newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)) );
+                            nodeToIdx[ static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)) ] = newIdx;
                         }
                         shared_ptr<IndexVariable> child = nullptr;
                         if( nodeToIdx.find( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(next(bin)->first)) ) != nodeToIdx.end() )
@@ -497,6 +507,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         else
                         {
                             child = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(next(bin)->first)), newIdx );
+                            nodeToIdx[ static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(next(bin)->first)) ] = child;
                         }
                         newIdx->addChild(child);
                         idxVarOrder.push_back(newIdx);
@@ -515,6 +526,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         else
                         {
                             newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)), idxVarOrder.back() );
+                            nodeToIdx[ static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)) ] = newIdx;
                         }
                         idxVarOrder.back()->addChild(newIdx);
                         idxVarOrder.push_back(newIdx);
@@ -535,6 +547,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         else
                         {
                             newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)), idxVarOrder.back());
+                            nodeToIdx[ static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(bin->first)) ] = newIdx;
                         }
                         shared_ptr<IndexVariable> child = nullptr;
                         if( nodeToIdx.find( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(next(bin)->first)) ) != nodeToIdx.end() )
@@ -543,7 +556,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         }
                         else
                         {
-                            child = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(next(bin)->first)), newIdx);
+                            child = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(next(bin)->first)), newIdx );
+                            nodeToIdx [ static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(next(bin)->first)) ] = newIdx;
                         }
                         newIdx->addChild(child);
                         idxVarOrder.back()->addChild(newIdx);
