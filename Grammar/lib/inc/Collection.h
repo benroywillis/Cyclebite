@@ -1,6 +1,7 @@
 #pragma once
 #include "IndexVariable.h"
 #include "Symbol.h"
+#include "llvm/IR/Instructions.h"
 
 namespace Cyclebite::Grammar
 {
@@ -15,7 +16,9 @@ namespace Cyclebite::Grammar
         const std::vector<std::shared_ptr<IndexVariable>>& getIndices() const;
         /// @brief  Returns the instruction(s) that return an element from this collection
         /// @return 
-        const llvm::Value* getElementPointer() const;
+        const std::set<const llvm::Value*> getElementPointers() const;
+        const llvm::LoadInst* getLoad() const;
+        const std::set<const llvm::StoreInst*> getStores() const;
         std::string dump() const override;
     protected:
         std::vector<std::shared_ptr<IndexVariable>> vars;

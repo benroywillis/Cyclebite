@@ -74,64 +74,28 @@ const vector<shared_ptr<IndexVariable>>& Collection::getIndices() const
     return vars;
 }
 
-const llvm::Value* Collection::getElementPointer() const
+const set<const llvm::Value*> Collection::getElementPointers() const
 {
+    set<const llvm::Value*> eps;
     // the child-most index should connect us to the pointer that works with a load
     // this load should have successor(s) that are not in the memory group
     deque<const llvm::Instruction*> Q;
     set<const llvm::Instruction*> covered;
     // it is possible for our idxVar to be shared among many collections (e.g., when two base pointers are offset in the same way)
     // thus, we must pick our starting point based on which use of our child-most idxVar is associated with our base pointer
-    if( vars.back()->getNode()->getSuccessors().size() > 1 )
+    // in order to find the starting point for our search, we need to walk the DFG until we find a gep or ld
+    deque<shared_ptr<Graph::Inst>> varQ;
+    varQ.push_front(vars.back()->getNode());
+    while( !varQ.empty() )
     {
-        for( const auto& succ : vars.back()->getNode()->getSuccessors() )
+        if( varQ.front()->getOp() == Graph::Operation::load )
         {
-            if( const auto& inst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(succ->getSnk()) )
-            {
-                if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(inst->getInst()) )
-                {
-                    if( bp->isOffset(gep->getPointerOperand()) )
-                    {
-                        Q.push_front(gep);
-                        covered.insert(gep);
-                    }
-                }
-                else if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(inst->getInst()) )
-                {
-                    if( bp->isOffset(ld->getPointerOperand()) )
-                    {
-                        Q.push_front(ld);
-                        covered.insert(ld);
-                    }
-                }
-            }
-        }
-        if( Q.empty() )
-        {
-            PrintVal(bp->getNode()->getVal());
-            for( const auto& idx : vars )
-            {
-                PrintVal(idx->getNode()->getInst());
-            }
-            throw AtlasException("Could not find element pointer of this collection!");
-        }
-    }
-    else
-    {
-        Q.push_front(vars.back()->getNode()->getInst());
-        covered.insert(vars.back()->getNode()->getInst());
-    }
-    while( !Q.empty() )
-    {
-        if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
-        {
-            // evaluate its successors, if it has no successors in the memory group this is our guy
-            if( Cyclebite::Graph::DNIDMap.find(ld) != Cyclebite::Graph::DNIDMap.end() )
+            if( bp->isOffset( llvm::cast<llvm::LoadInst>(varQ.front()->getInst())->getPointerOperand() ) )
             {
                 bool noMemory = true;
-                for( const auto& succ : static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(ld))->getSuccessors() )
+                for( const auto& succ : varQ.front()->getSuccessors() )
                 {
-                    if( const auto& nodeInst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(succ->getSnk()) )
+                    if( const auto& nodeInst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
                     {
                         if( nodeInst->isMemory() )
                         {
@@ -142,24 +106,107 @@ const llvm::Value* Collection::getElementPointer() const
                 }
                 if( noMemory )
                 {
-                    return ld;
+                    eps.insert(varQ.front()->getInst());
                 }
             }
         }
-        for( const auto& user : Q.front()->users() )
+        else if( varQ.front()->getOp() == Graph::Operation::store )
         {
-            if( const auto& userInst = llvm::dyn_cast<llvm::Instruction>(user) )
+            if( bp->isOffset( llvm::cast<llvm::StoreInst>(varQ.front()->getInst())->getPointerOperand() ) )
             {
-                if( covered.find(userInst) == covered.end() )
+                eps.insert( varQ.front()->getInst() );
+            }
+        }
+        else if( varQ.front()->getOp() == Graph::Operation::gep )
+        {
+            // a gep that is the child of the child-most var is not what we are looking for
+            bool isChild = false;
+            for( const auto& c : vars.back()->getChildren() )
+            {
+                if( c->getNode() == varQ.front() )
                 {
-                    Q.push_back(userInst);
-                    covered.insert(userInst);
+                    isChild = true;
+                    break;
+                }
+            }
+            if( !isChild )
+            {
+                if( bp->isOffset( llvm::cast<llvm::GetElementPtrInst>(varQ.front()->getInst())->getPointerOperand() ) )
+                {
+                    for( const auto& succ : varQ.front()->getSuccessors() )
+                    {
+                        if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
+                        {
+                            varQ.push_back(inst);
+                        }
+                    }
                 }
             }
         }
-        Q.pop_front();
+        else if( varQ.front()->isCastOp() )
+        {
+            for( const auto& succ : varQ.front()->getSuccessors() )
+            {
+                if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
+                {
+                    varQ.push_back(inst);
+                }
+            }
+        }
+        else if( varQ.front() == vars.back()->getNode() )
+        {
+            for( const auto& succ : varQ.front()->getSuccessors() )
+            {
+                if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
+                {
+                    varQ.push_back(inst);
+                }
+            }
+        }
+        varQ.pop_front();
     }
-    return nullptr;
+    if( eps.empty() )
+    {
+        PrintVal(bp->getNode()->getVal());
+        for( const auto& var : vars )
+        {
+            PrintVal(var->getNode()->getInst());
+        }
+        throw AtlasException("Collection has no element pointers!");
+    }
+    return eps;
+}
+
+const llvm::LoadInst* Collection::getLoad() const
+{
+    set<const llvm::LoadInst*> lds;
+    auto eps = getElementPointers();
+    for( const auto& e : eps )
+    {
+        if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(e) )
+        {
+            lds.insert(ld);
+        }
+    }
+    if( lds.size() > 1 )
+    {
+        throw AtlasException("Collection maps to more than one load!");
+    }
+    return *lds.begin();
+}
+
+const set<const llvm::StoreInst*> Collection::getStores() const
+{
+    set<const llvm::StoreInst*> sts;
+    auto eps = getElementPointers();
+    for( const auto& e : eps )
+    {
+        if( const auto& st = llvm::dyn_cast<llvm::StoreInst>(e) )
+        {
+            sts.insert(st);
+        }
+    }
+    return sts;
 }
 
 string Collection::dump() const

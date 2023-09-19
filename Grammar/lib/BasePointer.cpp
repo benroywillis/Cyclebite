@@ -61,62 +61,80 @@ const vector<const llvm::GetElementPtrInst*> BasePointer::getgps() const
 
 bool BasePointer::isOffset( const llvm::Value* val ) const 
 {
-    if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(val) )
+    deque<const llvm::Value*> Q;
+    set<const llvm::Value*> covered;
+    Q.push_front(node->getVal());
+    covered.insert(node->getVal());
+    while( !Q.empty() )
     {
-        deque<const llvm::Value*> Q;
-        set<const llvm::Value*> covered;
-        Q.push_front(node->getVal());
-        covered.insert(node->getVal());
-        while( !Q.empty() )
+        if( Q.front() == val )
         {
-            if( Q.front() == val )
-            {
-                // this is the value we are looking for, return true
-                return true;
-            }
-            if( const auto& st = llvm::dyn_cast<llvm::StoreInst>(Q.front()) )
-            {
-                // there is a corner case where a pointer gets alloc'd on the stack and a malloc'd pointer gets stored to that stack pointer
-                // thus, when the base pointer gets stored to that pointer, we have to track that pointer
-                if( st->getValueOperand() == node->getVal() )
-                {
-                    if( covered.find(st->getPointerOperand()) == covered.end() )
-                    {
-                        Q.push_back(st->getPointerOperand());
-                        covered.insert(st->getPointerOperand());
-                    }
-                }
-            }
-            else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(Q.front()) )
-            {
-                // base pointers can be arguments sometimes, we just look through their users like they are an instructions
-                for( const auto& user : arg->users() )
-                {
-                    if( covered.find(user) == covered.end() )
-                    {
-                        Q.push_back(user);
-                        covered.insert(user);
-                    }
-                }
-            }
-            // default case, if this is an instruction we search through it
-            else if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
-            {
-                for( const auto& user : Q.front()->users() )
-                {
-                    if( covered.find(user) == covered.end() )
-                    {
-                        Q.push_back(user);
-                        covered.insert(user);
-                    }
-                }
-            }
-            else
-            {
-                //throw AtlasException("BP offset method cannot handle this instruction!");
-            }
-            Q.pop_front();
+            // this is the value we are looking for, return true
+            return true;
         }
+        if( const auto& st = llvm::dyn_cast<llvm::StoreInst>(Q.front()) )
+        {
+            // there is a corner case where a pointer gets alloc'd on the stack and a malloc'd pointer gets stored to that stack pointer
+            // thus, when the base pointer gets stored to that pointer, we have to track that pointer
+            if( st->getValueOperand() == node->getVal() )
+            {
+                if( covered.find(st->getPointerOperand()) == covered.end() )
+                {
+                    Q.push_back(st->getPointerOperand());
+                    covered.insert(st->getPointerOperand());
+                }
+            }
+        }
+        else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
+        {
+            // when stores put our base pointer into an alloc, it may first cast that alloc before storing our BP to it
+            // thus, we need to add the operand of the cast to the queue
+            for( const auto& op : cast->operands() )
+            {
+                if( covered.find(op) == covered.end() )
+                {
+                    Q.push_back(op);
+                    covered.insert(op);
+                }
+            }
+            for( const auto& user : cast->users() )
+            {
+                if( covered.find(user) == covered.end() )
+                {
+                    Q.push_back(user);
+                    covered.insert(user);
+                }
+            }
+        }
+        else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(Q.front()) )
+        {
+            // base pointers can be arguments sometimes, we just look through their users like they are an instructions
+            for( const auto& user : arg->users() )
+            {
+                if( covered.find(user) == covered.end() )
+                {
+                    Q.push_back(user);
+                    covered.insert(user);
+                }
+            }
+        }
+        // default case, if this is an instruction we search through it
+        else if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
+        {
+            for( const auto& user : Q.front()->users() )
+            {
+                if( covered.find(user) == covered.end() )
+                {
+                    Q.push_back(user);
+                    covered.insert(user);
+                }
+            }
+        }
+        else
+        {
+            //throw AtlasException("BP offset method cannot handle this instruction!");
+        }
+        Q.pop_front();
     }
     return false;
 }

@@ -116,17 +116,17 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             {
                 // collections are distinguished by their indexVariables, not necessarily their base pointer
                 // in order to find the right one, we need to figure out which indexVariable is used in this load
-                if( coll->getElementPointer() == ld )
+                if( coll->getLoad() == ld )
                 {
 #ifdef DEBUG
                     if( found )
                     {
                         PrintVal(ld);
                         PrintVal(coll->getBP()->getNode()->getVal());
-                        PrintVal(coll->getElementPointer());
+                        PrintVal(coll->getLoad());
                         PrintVal(coll->getIndices().back()->getNode()->getInst());
                         PrintVal(found->getBP()->getNode()->getVal());
-                        PrintVal(found->getElementPointer());
+                        PrintVal(found->getLoad());
                         PrintVal(found->getIndices().back()->getNode()->getInst());
                         throw AtlasException("Mapped more than one collection to a load value!");
                     }
@@ -170,6 +170,11 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 for( const auto& coll : colls )
                 {
                     PrintVal(coll->getBP()->getNode()->getVal());
+                    for( const auto& idx : coll->getIndices() )
+                    {
+                        PrintVal(idx->getNode()->getInst());
+                    }
+                    PrintVal(coll->getLoad());
                 }
                 throw AtlasException("Could not find a collection to describe this load!");
             }

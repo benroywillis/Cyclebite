@@ -18,7 +18,8 @@ using namespace Cyclebite::Grammar;
 
 IndexVariable::IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n, 
                               const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p, 
-                              const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c ) : Symbol("idx"), node(n), parent(p), children(c) {}
+                              const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c,
+                              bool il ) : Symbol("idx"), node(n), parent(p), children(c), IL(il) {}
 
 void IndexVariable::addChild( const shared_ptr<IndexVariable>& c )
 {
@@ -38,6 +39,11 @@ void IndexVariable::setIV( const shared_ptr<InductionVariable>& indVar )
 void IndexVariable::addBP( const shared_ptr<BasePointer>& baseP )
 {
     bps.insert(baseP);
+}
+
+void IndexVariable::setLoaded( bool loaded )
+{
+    IL = loaded;
 }
 
 const shared_ptr<Cyclebite::Graph::Inst>& IndexVariable::getNode() const
@@ -105,6 +111,11 @@ string IndexVariable::dump() const
 const PolySpace IndexVariable::getSpace() const
 {
     return space;
+}
+
+bool IndexVariable::isLoaded() const
+{
+    return IL;
 }
 
 set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const shared_ptr<Task>& t, const set<shared_ptr<BasePointer>>& BPs, const set<shared_ptr<InductionVariable>>& vars)
@@ -332,8 +343,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         {
                             of.constant = 0; // undeterminable
                             bins.back().second = of;
-                                Q.push_back(pred);
-                                covered.insert(pred);
+                            Q.push_back(pred);
+                            covered.insert(pred);
                         }
                     }
                 }
@@ -344,8 +355,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                     {
                         if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(op) )
                         {
-                                Q.push_back(op);
-                                covered.insert(op);
+                            Q.push_back(op);
+                            covered.insert(op);
                         }
                     }
                 }
@@ -465,13 +476,19 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         shared_ptr<IndexVariable> p = nullptr;
                         for( const auto& idx : idxVars )
                         {
-                            if( idx->getNode() == *parentGep )
+                            // if the idxVar is a binaryOp, we won't find it by our parent gep
+                            // thus we have to find it by searching through its geps (which may be the idxVar itself)
+                            auto idxVarGeps = idx->getGeps();
+                            if( idxVarGeps.find(*parentGep) != idxVarGeps.end() )
                             {
                                 p = idx;
-                            }
+                            };
                         }
-                        p->addChild(newIdx);
-                        newIdx->setParent(p);
+                        if( p )
+                        {
+                            p->addChild(newIdx);
+                            newIdx->setParent(p);
+                        }
                     }
                 }
                 idxVars.insert(newIdx);
@@ -596,6 +613,102 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 {
                     idx->addBP(bp);
                 }
+            }
+        }
+    }
+    // determine if a non-leaf node in the idxVar tree is by itself loaded
+    for( const auto& idx : idxVars )
+    {
+        if( !idx->getChildren().empty() )
+        {
+            // we evaluate its uses. Each one must satisfy the following:
+            // 1. it must have a gep that has no offset (or be a gep itself)
+            // 2. the gep must be used by a load 
+            // 3. the load must not have any memory-group uses
+            bool noBadUses = true;
+            set<const llvm::GetElementPtrInst*> geps;
+            set<const llvm::LoadInst*> lds;
+            if( const auto& g = llvm::dyn_cast<llvm::GetElementPtrInst>(idx->getNode()->getInst()) )
+            {
+                geps.insert( g );
+            }
+            else
+            {
+                for( const auto& use : idx->getNode()->getInst()->users() )
+                {
+                    if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use) )
+                    {
+                        if( const auto& g = llvm::dyn_cast<llvm::GetElementPtrInst>(use) )
+                        {
+                            geps.insert( g );
+                        }
+                        else
+                        {
+                            deque<const llvm::Instruction*> Q;
+                            Q.push_front(useInst);
+                            while( !Q.empty() )
+                            {
+                                if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
+                                {
+                                    for( const auto& castUse : cast->users() )
+                                    {
+                                        if( const auto& castUseInst = llvm::dyn_cast<llvm::Instruction>(castUse) )
+                                        {
+                                            Q.push_back(castUseInst);
+                                        }
+                                    }
+                                }
+                                else if( const auto& g = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
+                                {
+                                    geps.insert(g);
+                                }
+                                Q.pop_front();
+                            }
+                        }
+                    }
+                }
+            }
+            for( const auto& gep : geps )
+            {
+                for( const auto& use : gep->users() )
+                {
+                    if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(use) )
+                    {
+                        lds.insert(ld);
+                    }
+                }
+            }
+            if( lds.empty() )
+            {
+                // geps may lead to function calls, and in that case we want a collection for the memory that has been offset
+                //idx->setLoaded(true);
+                noBadUses = false;
+            }
+            else
+            {
+                for( const auto& ld : lds )
+                {
+                    for( const auto& use : ld->users() )
+                    {
+                        if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use) )
+                        {
+                            auto node = static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(useInst));
+                            if( node->isMemory() )
+                            {
+                                noBadUses = false;
+                                break;
+                            }
+                        }
+                    }
+                    if( !noBadUses )
+                    {
+                        break;
+                    }
+                }
+            }
+            if( noBadUses )
+            {
+                idx->setLoaded(true);
             }
         }
     }

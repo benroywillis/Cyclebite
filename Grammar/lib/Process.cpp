@@ -1097,6 +1097,8 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_
     // this is a depth-first search: we are looking for all unique avenues from the root(s) of the idxVar tree to the leaves
     for( const auto& bp : commonBPs )
     {
+        // remembers all non-leaf nodes that are loaded and have had a collection built for them
+        set<shared_ptr<IndexVariable>> loadedAccounted;
         // search depth-first through all avenues from the root of the idxVar tree to the leaves
         set<shared_ptr<IndexVariable>> covered;
         for( const auto& idx : bp.second )
@@ -1119,16 +1121,58 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_
                 if( Q.front()->getChildren().empty() )
                 {
                     // we have hit a leaf, push the avenue we have observed
-                    set<shared_ptr<IndexVariable>> newAvenue;
+                    /*set<shared_ptr<IndexVariable>> newAvenue;
                     for( const auto& p : Q )
                     {
                         newAvenue.insert(p);
                     }
-                    //varHierarchies[bp.first].insert( set<shared_ptr<IndexVariable>>(Q.begin(), Q.end()) );
-                    varHierarchies[bp.first].insert( newAvenue );
+                    varHierarchies[bp.first].insert( newAvenue );*/
+                    varHierarchies[bp.first].insert( set<shared_ptr<IndexVariable>>(Q.begin(), Q.end()) );
                 }
                 else
                 {
+                    if( Q.front()->isLoaded() )
+                    {
+                        if( loadedAccounted.find(Q.front()) == loadedAccounted.end() )
+                        {
+                            // there is an interesting corner case here where some base pointers are not offset by this particular combination of idxVars
+                            // when a non-leaf idxVar is used to offset many base pointers, but it itself is used in a non-const-offset gep, it may only be offsetting a subset of these base pointers
+                            // e.g.: StencilChain/Naive BB83 (OPFLAG=-O1)
+                            // thus here, we implement a check to confirm this bp is offset by this combination of idxVars
+                            // find the gep(s) that use the child-most idxVar but are not children of the child-most idxVar
+                            set<const llvm::GetElementPtrInst*> targets;
+                            for( const auto& gep : Q.front()->getGeps() )
+                            {
+                                bool isChild = false;
+                                for( const auto& child : Q.front()->getChildren() )
+                                {
+                                    if( child->getNode() == gep )
+                                    {
+                                        isChild = true;
+                                        break;
+                                    }
+                                }
+                                if( !isChild )
+                                {
+                                    targets.insert(llvm::cast<llvm::GetElementPtrInst>(gep->getInst()));
+                                }
+                            }
+                            // now that we have the non-child geps, confirm whether this bp is offset by them
+                            bool hasOffset = false;
+                            for( const auto& gep : targets )
+                            {
+                                if( bp.first->isOffset(gep) )
+                                {
+                                    hasOffset = true;
+                                }
+                            }
+                            if( hasOffset )
+                            {
+                                varHierarchies[bp.first].insert( set<shared_ptr<IndexVariable>>(Q.begin(), Q.end()) );
+                                loadedAccounted.insert(Q.front());
+                            }
+                        }
+                    }
                     for( const auto& c : Q.front()->getChildren() )
                     {
                         if( covered.find(c) == covered.end() )
