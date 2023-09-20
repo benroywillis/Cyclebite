@@ -1574,6 +1574,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             }
             spdlog::info("Expression:");
             spdlog::info(expr->dump());
+            spdlog::info("Grammar Success");
             cout << endl;
 #endif
         }

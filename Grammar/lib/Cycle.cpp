@@ -114,7 +114,6 @@ set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json&
                     else if( auto sel = llvm::dyn_cast<llvm::SelectInst>(i->getInst()) )
                     {
                         // do something
-                        spdlog::critical("Cannot yet support select instructions for cycle iteration conditions!");
                         throw AtlasException("Cannot yet support select instructions for cycle iteration conditions!");
                     }
                     else if( auto ret = llvm::dyn_cast<llvm::ReturnInst>(i->getInst()) )
@@ -179,7 +178,6 @@ set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json&
         }
         else
         {
-            spdlog::critical("Could not find iteratorCmp for a cycle!");
             throw AtlasException("Could not find iteratorCmp for a cycle!");
         }
     }
