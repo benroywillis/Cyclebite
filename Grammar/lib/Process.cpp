@@ -271,6 +271,34 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                             reductionCandidates.insert(DNIDMap.at(phi));
                         }
                     }
+                    // sometimes llvm will insert intrinsics into the code that hide reductions
+                    // llvm.fmuladd is an example
+                    // so look for an llvm intrinsic that can create a reduction
+                    else if( const auto& intrin = llvm::dyn_cast<llvm::IntrinsicInst>(Q.front()) )
+                    {
+                        auto intrinName = string(llvm::Intrinsic::getBaseName(intrin->getIntrinsicID()));
+                        spdlog::info(intrinName);
+                        if( intrinName == "llvm.fmuladd" )
+                        {
+                            // confirm the phi is the third argument in the function call - this is a 
+                            if( intrin->getNumOperands() == 4 ) // three arg operands + the function
+                            {
+                                if( phi == intrin->getOperand(2) )
+                                {
+                                    // confirmed, this phi is a reduction candidate
+                                    seen.insert(intrin);
+                                    seen.insert(phi);
+                                    reductionOp = DNIDMap.at(intrin);
+                                    reductionCandidates.insert(DNIDMap.at(phi));
+                                }
+                            }
+                        }
+                        else
+                        {
+                            spdlog::warn("Cannot yet handle this intrinsic when evaluating reduction variables:");
+                            PrintVal(intrin);
+                        }
+                    }
                 }
                 else if( auto ld = llvm::dyn_cast<llvm::LoadInst>(use.get()) )
                 {
@@ -319,6 +347,15 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     }
                     seen.insert(ld);
                 }
+                else if( const auto& call = llvm::dyn_cast<llvm::CallBase>(use.get()) )
+                {
+                    // if this is an llvm intrinsic, it may be an fmuladd that implies a reduction
+                    if( seen.find(call) == seen.end() )
+                    {
+                        Q.push_back(call);
+                        seen.insert(call);
+                    }
+                }
                 else if( auto st = llvm::dyn_cast<llvm::StoreInst>(use.get()) )
                 {
                     // shouldn't encounter this case, we started from the store and walked backwards
@@ -344,13 +381,12 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
             if( skip ) { continue; }
             shared_ptr<InductionVariable> iv = nullptr;
             // the store value operand is within the cycle that contains the RV
-            // to find the induction variable associated with that candidate, the 
             if( const auto& v = llvm::dyn_cast<llvm::Instruction>(s->getValueOperand()) )
             {
                 auto b = static_pointer_cast<Inst>(DNIDMap.at(v));
                 for( const auto& var : vars )
                 {
-                    if( var->getCycle()->find(b->parent) )
+                    if( var->getCycle()->find(b) )
                     {
                         iv = var;
                     }
@@ -366,6 +402,7 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                 PrintVal(can->getVal());
                 throw AtlasException("Cannot map this reduction variable to an induction variable!");
             }
+            PrintVal(reductionOp->getVal());
             rvs.insert( make_shared<ReductionVariable>(iv, reductionOp) );
         }
     }
@@ -1494,6 +1531,14 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     // a reduction should be a cycle starting at a phi, followed by ops (binary or cast), that ultimately feed a reduction variable
     // we must separate the phi from the binary ops from the RV, then construct the expression for the reduction (which is just the binary ops), then add the reduction to it (which sets the operator next to the equal sign e.g. "+=")
     shared_ptr<ReductionVariable> rv = nullptr;
+    for( const auto& val : order )
+    {
+        PrintVal(val->getInst());
+    }
+    for( const auto& rv : rvs )
+    {
+        PrintVal(rv->getNode()->getVal());
+    }
     if( !rvs.empty() )
     {
         map<shared_ptr<DataValue>, shared_ptr<ReductionVariable>> dnToRv;
@@ -1501,7 +1546,9 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
         {
             for( const auto& rv : rvs )
             {
-                if( rv->getNode() == node )
+                // TODO: having to use the llvm objects here implies there is more than one node for a single llvm::value
+                // this will likely lead to more bugs and should be investigated
+                if( rv->getNode()->getVal() == node->getInst() )
                 {
                     dnToRv[node] = rv;
                     break;
