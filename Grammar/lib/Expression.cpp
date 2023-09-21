@@ -100,11 +100,19 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
     vector<shared_ptr<Symbol>> newSymbols;
     if( const auto inst = llvm::dyn_cast<llvm::Instruction>(op) )
     {
-        auto opNode = Cyclebite::Graph::DNIDMap.at(inst);
-        if( nodeToExpr.find(Cyclebite::Graph::DNIDMap.at(inst)) != nodeToExpr.end() )
+        const auto opNode = Cyclebite::Graph::DNIDMap.at(op);
+        if( nodeToExpr.find(opNode) != nodeToExpr.end() )
         {
             // this value comes from a previous function group operator, thus it should be a symbol in the expression
-            newSymbols.push_back(nodeToExpr.at(Cyclebite::Graph::DNIDMap.at(inst)));
+            newSymbols.push_back(nodeToExpr.at(opNode));
+        }
+        else if( !t->find(opNode) )
+        {
+            // this is an out-of-task expression
+            // make a placeholder and deal with it later
+            auto newSymbol = make_shared<TaskParameter>(opNode, t);
+            nodeToExpr[ opNode ] = newSymbol;
+            newSymbols.push_back(newSymbol);
         }
         else if( const auto ld = llvm::dyn_cast<llvm::LoadInst>(inst) )
         {
@@ -121,6 +129,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
 #ifdef DEBUG
                     if( found )
                     {
+                        cout << endl;
                         PrintVal(ld);
                         PrintVal(coll->getBP()->getNode()->getVal());
                         PrintVal(coll->getLoad());
@@ -188,26 +197,17 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
         }
         else if( const auto bin = llvm::dyn_cast<llvm::BinaryOperator>(inst) )
         {
-            // a binary op in a series of ops
-            // there should be an expression for the input(s) of this op
-            if( nodeToExpr.find(opNode) != nodeToExpr.end() )
-            {
-                newSymbols.push_back(nodeToExpr.at(opNode));
-            }
-            else if( !t->find(opNode) )
-            {
-                // this is an out-of-task expression
-                // make a placeholder and deal with it later
-                auto newSymbol = make_shared<TaskParameter>(opNode, t);
-                nodeToExpr[ opNode ] = newSymbol;
-                newSymbols.push_back(newSymbol);
-            }
-            else
-            {
-                PrintVal(bin);
-                PrintVal(opNode->getVal());
-                throw AtlasException("Cannot map this instruction to an expression!");
-            }
+            // an in-task binary op should already have an expression in nodeToExpr, throw an error
+            PrintVal(bin);
+            PrintVal(opNode->getVal());
+            throw AtlasException("Cannot map this instruction to an expression!");
+        }
+        else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(op) )
+        {
+            // phis imply a loop-loop dependence or predication
+            // if this loop-loop dependence maps to a reduction variable, we know what to do 
+            PrintVal(phi);
+            throw AtlasException("phi node use implies predication or loop-loop dependence!");
         }
     }
     else if( auto con = llvm::dyn_cast<llvm::Constant>(op) )
@@ -313,12 +313,6 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
         nodeToExpr[Cyclebite::Graph::DNIDMap.at(arg)] = newSymbol;
         newSymbols.push_back( newSymbol );
     }
-    else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(op) )
-    {
-        // phis imply a loop-loop dependence or predication
-        // if this loop-loop dependence maps to a reduction variable, we know what to do 
-        throw AtlasException("phi node use implies predication or loop-loop dependence!");
-    }
     else
     {
         PrintVal(op);
@@ -343,7 +337,14 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
     {
         // the reduction variable's phi should be put into nodeToExpr
         // but not its node - the node is the literal reduction and this is implicit in the reduction expression
-        nodeToExpr[Graph::DNIDMap.at(rv->getPhi())] = rv;
+        if( rv->getPhi() )
+        {
+            nodeToExpr[Graph::DNIDMap.at(rv->getPhi())] = rv;
+        }
+        else
+        {
+            nodeToExpr[rv->getNode()] = rv;
+        }
     }
     for( const auto& node : insts )
     {
