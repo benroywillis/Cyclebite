@@ -31,7 +31,9 @@ Collection::Collection(const std::set<std::shared_ptr<IndexVariable>>& v, const 
             }
         }
         deque<shared_ptr<IndexVariable>> Q;
+        set<shared_ptr<IndexVariable>> covered;
         Q.push_front(parentMost);
+        covered.insert(parentMost);
         while( !Q.empty() )
         {
             vars.push_back(Q.front());
@@ -41,7 +43,11 @@ Collection::Collection(const std::set<std::shared_ptr<IndexVariable>>& v, const 
                 {
                     if( c->getBPs().find(p) != c->getBPs().end() )
                     {
-                        Q.push_back(c);
+                        if( covered.find(c) == covered.end() )
+                        {
+                            Q.push_back(c);
+                            covered.insert(c);
+                        }
                     }
                 }
             }
