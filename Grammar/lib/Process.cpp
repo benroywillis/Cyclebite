@@ -347,14 +347,24 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     }
                     seen.insert(ld);
                 }
-                else if( const auto& call = llvm::dyn_cast<llvm::CallBase>(use.get()) )
+                // sometimes llvm will insert intrinsics into the code that hide reductions
+                // llvm.fmuladd is an example
+                // so look for an llvm intrinsic that can create a reduction
+                else if( const auto& intrin = llvm::dyn_cast<llvm::IntrinsicInst>(use.get()) )
                 {
-                    // if this is an llvm intrinsic, it may be an fmuladd that implies a reduction
-                    if( seen.find(call) == seen.end() )
+                    auto intrinName = string(llvm::Intrinsic::getBaseName(intrin->getIntrinsicID()));
+                    if( intrinName == "llvm.fmuladd" )
                     {
-                        Q.push_back(call);
-                        seen.insert(call);
+                        // this is a reductionOp candidate
+                        reductionOp = Graph::DNIDMap.at(intrin);
                     }
+                    else
+                    {
+                        spdlog::warn("Cannot yet handle this intrinsic when evaluating reduction variables:");
+                        PrintVal(intrin);
+                    }
+                    Q.push_back(intrin);
+                    seen.insert(intrin);
                 }
                 else if( auto st = llvm::dyn_cast<llvm::StoreInst>(use.get()) )
                 {
@@ -1561,10 +1571,12 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
             {
                 rv = dnToRv.at(node);
             }
-            else
+            /*else
             {
                 insts.push_back(node);
-            }
+            }*/
+            insts.push_back(node);
+
         }
     }
     else
