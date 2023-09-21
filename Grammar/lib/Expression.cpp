@@ -313,6 +313,12 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
         nodeToExpr[Cyclebite::Graph::DNIDMap.at(arg)] = newSymbol;
         newSymbols.push_back( newSymbol );
     }
+    else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(op) )
+    {
+        // phis imply a loop-loop dependence or predication
+        // if this loop-loop dependence maps to a reduction variable, we know what to do 
+        throw AtlasException("phi node use implies predication or loop-loop dependence!");
+    }
     else
     {
         PrintVal(op);
@@ -333,6 +339,12 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
 
     vector<Cyclebite::Graph::Operation> ops;
     map<shared_ptr<Graph::DataValue>, shared_ptr<Symbol>> nodeToExpr;
+    if( rv )
+    {
+        // the reduction variable's phi should be put into nodeToExpr
+        // but not its node - the node is the literal reduction and this is implicit in the reduction expression
+        nodeToExpr[Graph::DNIDMap.at(rv->getPhi())] = rv;
+    }
     for( const auto& node : insts )
     {
         if( const auto& shuffle = llvm::dyn_cast<llvm::ShuffleVectorInst>(node->getInst()) )

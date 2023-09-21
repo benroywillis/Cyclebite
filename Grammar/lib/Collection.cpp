@@ -25,7 +25,7 @@ Collection::Collection(const std::set<std::shared_ptr<IndexVariable>>& v, const 
                 {
                     PrintVal(parentMost->getNode()->getInst());
                     PrintVal(idx->getNode()->getInst());
-                    throw AtlasException("Found more than one parent-most index variables in this collection!");
+                    throw AtlasException("Found more than one parent-most index variable in this collection!");
                 }
                 parentMost = idx;
             }

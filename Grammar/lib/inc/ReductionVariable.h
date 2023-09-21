@@ -12,6 +12,8 @@ namespace Cyclebite::Grammar
         std::string dump() const override;
         Cyclebite::Graph::Operation getOp() const;
         const std::shared_ptr<Cyclebite::Graph::DataValue>& getNode() const;
+        /// Returns the phi node this reduction variable transacts with, if any
+        const llvm::PHINode* getPhi() const;
     private:
         std::shared_ptr<InductionVariable> iv;
         std::shared_ptr<Cyclebite::Graph::DataValue> node;
