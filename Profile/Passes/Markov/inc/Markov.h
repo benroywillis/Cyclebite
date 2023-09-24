@@ -20,7 +20,7 @@ namespace Cyclebite::Profile::Passes
 {
     struct Markov : llvm::PassInfoMixin<Markov> 
     {
-        llvm::PreservedAnalyses run(llvm::Function& M, llvm::FunctionAnalysisManager& );
+        llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager& );
         // without setting this to true, all modules with "optnone" attribute are skipped
         static bool isRequired() { return true; }
     };
