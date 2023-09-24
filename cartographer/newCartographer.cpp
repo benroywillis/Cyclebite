@@ -67,7 +67,7 @@ int main(int argc, char **argv)
     // map IDs to blocks and values
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;
-    InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
     // construct program control graph and call graph
     ControlGraph cg;
     Cyclebite::Graph::CallGraph dynamicCG;

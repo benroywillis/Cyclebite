@@ -286,7 +286,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         // floating point offsets shouldn't happen
                         else 
                         {
-                            throw AtlasException("Cannot handle a memory offset that isn't an integer!");
+                            throw CyclebiteException("Cannot handle a memory offset that isn't an integer!");
                         }
                     }
                     else
@@ -315,7 +315,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                     // floating point offsets shouldn't happen
                     else 
                     {
-                        throw AtlasException("Cannot handle a memory offset that isn't an integer!");
+                        throw CyclebiteException("Cannot handle a memory offset that isn't an integer!");
                     }
                 }
                 else if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(Q.front()) )
@@ -335,7 +335,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                             // floating point offsets shouldn't happen
                             else 
                             {
-                                throw AtlasException("Cannot handle a memory offset that isn't an integer!");
+                                throw CyclebiteException("Cannot handle a memory offset that isn't an integer!");
                             }   
                             bins.back().second = of;
                         }
@@ -447,7 +447,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                                 PrintVal(gep->getInst());
                             }
                             PrintVal(gep->getInst());
-                            throw AtlasException("Could not find parent idxVar!");
+                            throw CyclebiteException("Could not find parent idxVar!");
                         }
                         p->addChild(newIdx);
                         newIdx->setParent(p);

@@ -9,6 +9,7 @@
 #include "Graph/inc/IO.h"
 #include "Util/Exceptions.h"
 #include "Util/Print.h"
+#include "llvm/IR/Constants.h"
 #include <iostream>
 
 using namespace std;
@@ -20,7 +21,7 @@ Expression::Expression( const vector<shared_ptr<Symbol>>& s, const vector<Cycleb
 {
     if( s.empty() )
     {
-        throw AtlasException("Expression cannot be empty!");
+        throw CyclebiteException("Expression cannot be empty!");
     }
     printedName = false;
     /*else if( o.size() != s.size()-1 )
@@ -33,7 +34,7 @@ Expression::Expression( const vector<shared_ptr<Symbol>>& s, const vector<Cycleb
         {
             sym->dump();
         }
-        throw AtlasException("There should be "+to_string(symbols.size()-1)+" operations for an expression with "+to_string(symbols.size())+" symbols! Operation count: "+to_string(o.size()));
+        throw CyclebiteException("There should be "+to_string(symbols.size()-1)+" operations for an expression with "+to_string(symbols.size())+" symbols! Operation count: "+to_string(o.size()));
     }*/
 }
 
@@ -137,7 +138,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                         PrintVal(found->getBP()->getNode()->getVal());
                         PrintVal(found->getLoad());
                         PrintVal(found->getIndices().back()->getNode()->getInst());
-                        throw AtlasException("Mapped more than one collection to a load value!");
+                        throw CyclebiteException("Mapped more than one collection to a load value!");
                     }
                     else
                     {
@@ -188,7 +189,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                         PrintVal(coll->getLoad());
                     }
                 }
-                throw AtlasException("Could not find a collection to describe this load!");
+                throw CyclebiteException("Could not find a collection to describe this load!");
             }
         }
         else if( const auto st = llvm::dyn_cast<llvm::StoreInst>(inst) )
@@ -200,14 +201,14 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             // an in-task binary op should already have an expression in nodeToExpr, throw an error
             PrintVal(bin);
             PrintVal(opNode->getVal());
-            throw AtlasException("Cannot map this instruction to an expression!");
+            throw CyclebiteException("Cannot map this instruction to an expression!");
         }
         else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(op) )
         {
             // phis imply a loop-loop dependence or predication
             // if this loop-loop dependence maps to a reduction variable, we know what to do 
             PrintVal(phi);
-            throw AtlasException("phi node use implies predication or loop-loop dependence!");
+            throw CyclebiteException("phi node use implies predication or loop-loop dependence!");
         }
     }
     else if( auto con = llvm::dyn_cast<llvm::Constant>(op) )
@@ -224,7 +225,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             }
             else
             {
-                throw AtlasException("Could not extract float from constant float!");
+                throw CyclebiteException("Could not extract float from constant float!");
             }
         }
         else if( con->getType()->isDoubleTy() )
@@ -235,7 +236,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             }
             else
             {
-                throw AtlasException("Could not extract double from constant double!");
+                throw CyclebiteException("Could not extract double from constant double!");
             }
         }
         else if( const auto& undef = llvm::dyn_cast<llvm::UndefValue>(op) )
@@ -245,7 +246,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             // we don't support this yet
             PrintVal(con);
             PrintVal(node->getInst());
-            throw AtlasException("Cannot support undefined constants yet");
+            throw CyclebiteException("Cannot support undefined constants yet");
         }
         else if( const auto& convec = llvm::dyn_cast<llvm::ConstantVector>(op) )
         {
@@ -263,7 +264,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     }
                     else
                     {
-                        throw AtlasException("Could not extract float from constant float!");
+                        throw CyclebiteException("Could not extract float from constant float!");
                     }
                 }
                 else if( convec->getOperand(i)->getType()->isDoubleTy() )
@@ -274,7 +275,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     }
                     else
                     {
-                        throw AtlasException("Could not extract double from constant double!");
+                        throw CyclebiteException("Could not extract double from constant double!");
                     }
                 }
             }
@@ -302,7 +303,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
         {
             PrintVal(op);
             PrintVal(node->getVal());
-            throw AtlasException("Constant used in an expression is not an integer!");
+            throw CyclebiteException("Constant used in an expression is not an integer!");
         }
     }
     else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(op) )
@@ -317,12 +318,12 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
     {
         PrintVal(op);
         PrintVal(node->getVal());
-        throw AtlasException("Cannot recognize this operand type when building an expression!");
+        throw CyclebiteException("Cannot recognize this operand type when building an expression!");
     }
     if( newSymbols.empty() )
     {
         PrintVal(op);
-        throw AtlasException("Could not build a symbol for this llvm::value!");
+        throw CyclebiteException("Could not build a symbol for this llvm::value!");
     }
     return newSymbols;
 }
@@ -355,7 +356,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
             // we don't support shufflevectors yet because they usually contain more than one operation at once, and may be transformed later
             // example: StencilChain/Naive/DFG_Kernel15.svg (shufflevector transforms i8 to i32, then i32 is converted to float before the MAC takes place)
             PrintVal(node->getInst());
-            throw AtlasException("Cannot support shufflevector instructions yet!");
+            throw CyclebiteException("Cannot support shufflevector instructions yet!");
         }
         vector<shared_ptr<Symbol>> vec;
         if( node->isFunctionCall() || node->isCastOp() )
@@ -404,7 +405,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
                     }
                     if( !f )
                     {
-                        throw AtlasException("Could not determine the function of a functionexpression!");
+                        throw CyclebiteException("Could not determine the function of a functionexpression!");
                     }
                 }
                 else
@@ -473,7 +474,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
                             }
                             else
                             {
-                                throw AtlasException("Could not extract float from constant float!");
+                                throw CyclebiteException("Could not extract float from constant float!");
                             }
                         }
                         else if( con->getType()->isDoubleTy() )
@@ -484,7 +485,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
                             }
                             else
                             {
-                                throw AtlasException("Could not extract double from constant double!");
+                                throw CyclebiteException("Could not extract double from constant double!");
                             }
                         }
                     }
@@ -494,7 +495,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
         }
         if( !expr )
         {
-            throw AtlasException("Could not generate an expression!");
+            throw CyclebiteException("Could not generate an expression!");
         }
     }
     return expr;

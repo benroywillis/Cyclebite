@@ -14,7 +14,6 @@
 using namespace std;
 using namespace llvm;
 using namespace Cyclebite::Graph;
-using json = nlohmann::json;
 
 cl::opt<string> KernelFileName("k", cl::desc("Specify input kernel json filename"), cl::value_desc("kernel filename"));
 cl::opt<string> BitcodeFileName("b", cl::desc("Specify input bitcode filename"), cl::value_desc("bitcode filename"));
@@ -34,11 +33,11 @@ int main(int argc, char *argv[])
     LLVMContext context;
     SMDiagnostic smerror;
     auto SourceBitcode = parseIRFile(BitcodeFileName, smerror, context);
-    Format(SourceBitcode.get());
+    Cyclebite::Util::Format(SourceBitcode.get());
     // construct its callgraph
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;
-    InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
     // construct static call graph from the input bitcode
     llvm::CallGraph staticCG(*SourceBitcode);
     // construct program control graph and call graph
@@ -57,7 +56,7 @@ int main(int argc, char *argv[])
     }
     // loop information
     ifstream loopfile;
-    json loopjson;
+    nlohmann::json loopjson;
     try
     {
         loopfile.open(LoopFileName);
@@ -102,7 +101,7 @@ int main(int argc, char *argv[])
     DataGraph dGraph;
     if (BuildDFG(SourceBitcode.get(), dynamicCG, blockToNode, programFlow, dGraph, specials, IDToBlock))
     {
-        throw AtlasException("Failed to build DFG!");
+        throw CyclebiteException("Failed to build DFG!");
     }
 
     ofstream DFGDot("DFG.dot");

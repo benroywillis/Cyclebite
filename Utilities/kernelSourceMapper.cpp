@@ -12,7 +12,6 @@
 #include <spdlog/spdlog.h>
 
 using namespace llvm;
-using json = nlohmann::json;
 using namespace std;
 
 cl::opt<std::string> InputFilename("i", cl::desc("Input bitcode. Must be compiled with maximum debug symbols to optimize the result of this tool."), cl::value_desc("input.bc"), cl::Required);
@@ -35,11 +34,11 @@ int main(int argc, char **argv)
     std::unique_ptr<Module> SourceBitcode = parseIRFile(InputFilename, smerror, context);
 
     // Don't clean the debug info, but format it like the rest of the tools
-    Format(SourceBitcode.get(), false);
+    Cyclebite::Util::Format(SourceBitcode.get(), false);
 
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;
-    InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
 
     ifstream inputJson;
     nlohmann::json j;
@@ -56,7 +55,7 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    json kernelMap;
+    nlohmann::json kernelMap;
     for (auto &[key, value] : j["Kernels"].items())
     {
         map<string, set<int>> sourceLines;
@@ -99,7 +98,7 @@ int main(int argc, char **argv)
                         string dir = string(scope->getFile()->getDirectory());
                         dir.append("/");
                         dir.append(scope->getFile()->getFilename());
-                        kernelMap["Blocks"][to_string(GetBlockID(cast<BasicBlock>(b)))][dir].push_back(LOC.getLine());
+                        kernelMap["Blocks"][to_string(Cyclebite::Util::GetBlockID(cast<BasicBlock>(b)))][dir].push_back(LOC.getLine());
                     }
                 }
             }

@@ -33,7 +33,7 @@ void DisectConstant( vector<shared_ptr<Symbol>>& vec, const llvm::Constant* con)
         }
         else
         {
-            throw AtlasException("Could not extract float from constant float!");
+            throw CyclebiteException("Could not extract float from constant float!");
         }
     }
     else if( con->getType()->isDoubleTy() )
@@ -44,13 +44,13 @@ void DisectConstant( vector<shared_ptr<Symbol>>& vec, const llvm::Constant* con)
         }
         else
         {
-            throw AtlasException("Could not extract double from constant double!");
+            throw CyclebiteException("Could not extract double from constant double!");
         }
     }
     else
     {
         PrintVal(con);
-        throw AtlasException("Cannot recognize this constant type!");
+        throw CyclebiteException("Cannot recognize this constant type!");
     }
 }
 
@@ -140,7 +140,7 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
             }
             if( vars.empty() )
             {
-                throw AtlasException("Could not find any IVs for this cycle!");
+                throw CyclebiteException("Could not find any IVs for this cycle!");
             }
             for( const auto& var : vars )
             {
@@ -324,7 +324,7 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                             }
                             if( !c )
                             {
-                                throw AtlasException("Could not find the cycle of the reductionOp when finding reduction variable candidates!");
+                                throw CyclebiteException("Could not find the cycle of the reductionOp when finding reduction variable candidates!");
                             }
                             const shared_ptr<DataValue> ptr = DNIDMap.at(ld->getPointerOperand());
                             for( const auto& iv : vars )
@@ -405,12 +405,12 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
             else
             {
                 PrintVal(s);
-                throw AtlasException("Store instruction of an induction variable is not an instruction!");
+                throw CyclebiteException("Store instruction of an induction variable is not an instruction!");
             }
             if( iv == nullptr )
             {
                 PrintVal(can->getVal());
-                throw AtlasException("Cannot map this reduction variable to an induction variable!");
+                throw CyclebiteException("Cannot map this reduction variable to an induction variable!");
             }
             PrintVal(reductionOp->getVal());
             rvs.insert( make_shared<ReductionVariable>(iv, reductionOp) );
@@ -708,7 +708,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
         if( geps.empty() )
         {
             PrintVal(bp);
-            throw AtlasException("Could not map any geps to a base pointer candidate!");
+            throw CyclebiteException("Could not map any geps to a base pointer candidate!");
         }
 #endif
         // now we group the loads and stores together with their respective geps in the order they appear
@@ -788,7 +788,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                 // in that case, the load never uses a gep... it just loads the pointer
                 // so just ignore it for now
                 //PrintVal(ld);
-                //throw AtlasException("Could not map a base pointer load to a gep!");
+                //throw CyclebiteException("Could not map a base pointer load to a gep!");
                 continue;
             }
 #endif
@@ -874,7 +874,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
             if( targetPair.first == nullptr || targetPair.second == nullptr )
             {
                 PrintVal(gep);
-                throw AtlasException("Found a gep that doesn't map to a load instruction!");
+                throw CyclebiteException("Found a gep that doesn't map to a load instruction!");
             }
             loads.push_back(targetPair);
         }
@@ -1057,7 +1057,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
             {
                 PrintVal(bp);
                 PrintVal(gep);
-                throw AtlasException("Found a gep that doesn't map to a store instruction!");
+                throw CyclebiteException("Found a gep that doesn't map to a store instruction!");
             }
             stores.push_back(targetPair);
         }
@@ -1065,7 +1065,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
     }
     if( bps.empty() )
     {
-        throw AtlasException("Could not find any base pointers in this task!");
+        throw CyclebiteException("Could not find any base pointers in this task!");
     }
     return bps;
 }
@@ -1107,13 +1107,13 @@ vector<shared_ptr<InductionVariable>> getOrdering( const llvm::GetElementPtrInst
             else if( const auto& glob = llvm::dyn_cast<llvm::GlobalValue>(*idx) )
             {
                 // not sure what to do here
-                throw AtlasException("Found a global in a gep!");
+                throw CyclebiteException("Found a global in a gep!");
             }
         }
         if( !found )
         {
             PrintVal(gep);
-            throw AtlasException("Cannot map a gep index to an induction variable!");
+            throw CyclebiteException("Cannot map a gep index to an induction variable!");
         }
     }
     return order;
@@ -1445,7 +1445,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                 PrintVal(n->getVal());
             }
 #endif
-            throw AtlasException("Cannot handle the case where a cycle in the DFG contains multiple phis!");
+            throw CyclebiteException("Cannot handle the case where a cycle in the DFG contains multiple phis!");
         }
     }
     else
@@ -1473,7 +1473,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     }
     if( !first )
     {
-        throw AtlasException("Could not find first instruction in the instruction group!");
+        throw CyclebiteException("Could not find first instruction in the instruction group!");
     }
 
     // now we need to find the order of operations
@@ -1506,7 +1506,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                         auto pos = std::find(order.begin(), order.end(), DNIDMap.at(instQ.front()));
                         if( pos == order.end() )
                         {
-                            throw AtlasException("Cannot resolve where to insert function inst operand in the ordered list!");
+                            throw CyclebiteException("Cannot resolve where to insert function inst operand in the ordered list!");
                         }
                         order.insert(pos, static_pointer_cast<Inst>(DNIDMap.at(opInst)));
                         instCovered.insert(opInst);
@@ -1637,7 +1637,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             cout << endl;
 #endif
         }
-        catch(AtlasException& e)
+        catch(CyclebiteException& e)
         {
             spdlog::critical(e.what());
 #ifdef DEBUG

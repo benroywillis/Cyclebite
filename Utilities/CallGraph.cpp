@@ -15,7 +15,6 @@
 
 using namespace llvm;
 using namespace std;
-using json = nlohmann::json;
 
 cl::opt<std::string> InputFilename("i", cl::desc("Specify input bitcode"), cl::value_desc("bitcode filename"), cl::Required);
 cl::opt<std::string> BlockInfo("j", cl::desc("Specify BlockInfo json"), cl::value_desc("BlockInfo filename"), cl::Required);
@@ -32,18 +31,17 @@ int main(int argc, char **argv)
     }
 
     // Annotate its bitcodes and values
-    CleanModule(SourceBitcode.get());
-    Format(SourceBitcode.get());
+    Cyclebite::Util::Format(SourceBitcode.get());
 
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;
     map<BasicBlock *, Function *> BlockToFPtr;
-    InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
 
     // Call graph, doesn't include function pointers
     auto CG = getCallGraph(SourceBitcode.get(), blockCallers, BlockToFPtr, IDToBlock);
 
-    json outputJson;
+    nlohmann::json outputJson;
     for (const auto &node : CG)
     {
         if (node.first == nullptr)

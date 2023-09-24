@@ -25,7 +25,7 @@ Collection::Collection(const std::set<std::shared_ptr<IndexVariable>>& v, const 
                 {
                     PrintVal(parentMost->getNode()->getInst());
                     PrintVal(idx->getNode()->getInst());
-                    throw AtlasException("Found more than one parent-most index variable in this collection!");
+                    throw CyclebiteException("Found more than one parent-most index variable in this collection!");
                 }
                 parentMost = idx;
             }
@@ -216,7 +216,7 @@ const set<const llvm::Value*> Collection::getElementPointers() const
         {
             PrintVal(var->getNode()->getInst());
         }
-        throw AtlasException("Collection has no element pointers!");
+        throw CyclebiteException("Collection has no element pointers!");
     }
     return eps;
 }
@@ -234,7 +234,7 @@ const llvm::LoadInst* Collection::getLoad() const
     }
     if( lds.size() > 1 )
     {
-        throw AtlasException("Collection maps to more than one load!");
+        throw CyclebiteException("Collection maps to more than one load!");
     }
     return *lds.begin();
 }

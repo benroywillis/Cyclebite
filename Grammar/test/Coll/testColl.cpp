@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
         specialInstructions["IV"] = findState(kernelSets);
         specialInstructions["BP"] = findMemory(kernelSets);
     }
-    catch (AtlasException& e)
+    catch (CyclebiteException& e)
     {
         spdlog::critical(e.what());
         return EXIT_FAILURE;
@@ -164,7 +164,7 @@ int main(int argc, char *argv[])
 
     if (BuildDFG(SourceBitcode.get(), dynamicCG, blockToNode, programFlow, dGraph, specialInstructions, IDToBlock))
     {
-        throw AtlasException("Failed to build DFG!");
+        throw CyclebiteException("Failed to build DFG!");
     }
     auto taskCycles = getTasks(instanceJson, kernelJson, IDToBlock);
 
@@ -184,7 +184,7 @@ int main(int argc, char *argv[])
                 spdlog::info(c->dump());
             }
 		}
-		catch( AtlasException& e )
+		catch( CyclebiteException& e )
 		{
 			spdlog::critical(e.what());
 		}

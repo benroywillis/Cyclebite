@@ -32,11 +32,11 @@ int main(int argc, char *argv[])
     LLVMContext context;
     SMDiagnostic smerror;
     auto SourceBitcode = parseIRFile(BitcodeFileName, smerror, context);
-    Format(SourceBitcode.get());
+    Cyclebite::Util::Format(SourceBitcode.get());
     // construct its callgraph
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;
-    InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
     // Construct bitcode CallGraph
     //map<BasicBlock *, Function *> BlockToFPtr;
     //auto CG = getCallGraph(SourceBitcode.get(), blockCallers, BlockToFPtr, IDToBlock);
@@ -47,14 +47,14 @@ int main(int argc, char *argv[])
         auto err = BuildCFG(graph, ProfileFileName, false);
         if (err)
         {
-            throw AtlasException("Failed to read input profile file!");
+            throw CyclebiteException("Failed to read input profile file!");
         }
         if (graph.empty())
         {
-            throw AtlasException("No nodes could be read from the input profile!");
+            throw CyclebiteException("No nodes could be read from the input profile!");
         }
     }
-    catch (AtlasException &e)
+    catch (CyclebiteException &e)
     {
         spdlog::critical(e.what());
         return EXIT_FAILURE;

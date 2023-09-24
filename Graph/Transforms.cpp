@@ -32,7 +32,7 @@ set<const llvm::BasicBlock *> Cyclebite::Graph::deadCode;
 shared_ptr<GraphNode> Cyclebite::Graph::BlockToNode(const Graph &graph, const llvm::BasicBlock *block, const std::map<vector<uint32_t>, uint64_t> &NIDMap)
 {
     vector<uint32_t> bbID;
-    bbID.push_back((uint32_t)GetBlockID(llvm::cast<llvm::BasicBlock>(block)));
+    bbID.push_back((uint32_t)Cyclebite::Util::GetBlockID(llvm::cast<llvm::BasicBlock>(block)));
     if (NIDMap.find(bbID) != NIDMap.end())
     {
         if (graph.find_node(NIDMap.at(bbID)))
@@ -76,14 +76,14 @@ shared_ptr<GraphNode> Cyclebite::Graph::BlockToNode(const Graph &graph, const ll
                     }
                 }
             }
-            throw AtlasException("Could not find a node that maps to basic block ID " + to_string(*bbID.begin()));
+            throw CyclebiteException("Could not find a node that maps to basic block ID " + to_string(*bbID.begin()));
         }
     }
     else
     {
         if (deadCode.find(block) == deadCode.end())
         {
-            spdlog::warn("BB" + to_string(GetBlockID(block)) + " is dead.");
+            spdlog::warn("BB" + to_string(Cyclebite::Util::GetBlockID(block)) + " is dead.");
             deadCode.insert(block);
         }
         return nullptr;
@@ -109,7 +109,7 @@ llvm::BasicBlock *Cyclebite::Graph::NodeToBlock(const std::shared_ptr<ControlNod
             if (auto VN2 = dynamic_pointer_cast<VirtualNode>(exitEdge->getWeightedSrc()))
             {
                 // we have to recurse
-                throw AtlasException("Recursive NodeToBlock method not implemented!");
+                throw CyclebiteException("Recursive NodeToBlock method not implemented!");
             }
             else
             {
@@ -123,7 +123,7 @@ llvm::BasicBlock *Cyclebite::Graph::NodeToBlock(const std::shared_ptr<ControlNod
             if (VN->getEntrances().empty())
             {
                 auto subVN = static_pointer_cast<VirtualNode>(*(VN->getSubgraph().begin()));
-                throw AtlasException("Virtual Node has no entrances or exits!");
+                throw CyclebiteException("Virtual Node has no entrances or exits!");
             }
             else
             {
@@ -148,7 +148,7 @@ llvm::BasicBlock *Cyclebite::Graph::NodeToBlock(const std::shared_ptr<ControlNod
     }
     else
     {
-        throw AtlasException("ControlNode does not have any original blocks!");
+        throw CyclebiteException("ControlNode does not have any original blocks!");
     }
 }
 
@@ -175,7 +175,7 @@ void Cyclebite::Graph::SumToOne(const std::set<std::shared_ptr<GraphNode>, p_GNC
         }
         if ( sum < 0.999 || sum > 1.001 )
         {
-            throw AtlasException("Outgoing edges do not sum to one!");
+            throw CyclebiteException("Outgoing edges do not sum to one!");
         }
     }
 }
@@ -191,7 +191,7 @@ void Cyclebite::Graph::Checks(const ControlGraph &transformed, string step, bool
     // 1.
     if (transformed.empty())
     {
-        throw AtlasException(step + ": Transformed graph is empty!");
+        throw CyclebiteException(step + ": Transformed graph is empty!");
     }
     // 2.
     for (const auto &node : transformed.nodes())
@@ -204,15 +204,15 @@ void Cyclebite::Graph::Checks(const ControlGraph &transformed, string step, bool
             }
             if (!transformed.find(pred))
             {
-                throw AtlasException(step + ": Predecessor edge missing!");
+                throw CyclebiteException(step + ": Predecessor edge missing!");
             }
             if (!transformed.find(pred->getSrc()))
             {
-                throw AtlasException(step + ": Predecessor source missing!");
+                throw CyclebiteException(step + ": Predecessor source missing!");
             }
             if (!transformed.find(pred->getSnk()))
             {
-                throw AtlasException(step + ": Predecessor sink missing!");
+                throw CyclebiteException(step + ": Predecessor sink missing!");
             }
         }
         for (const auto &succ : node->getSuccessors())
@@ -223,15 +223,15 @@ void Cyclebite::Graph::Checks(const ControlGraph &transformed, string step, bool
             }
             if (!transformed.find(succ))
             {
-                throw AtlasException(step + ": Successor missing!");
+                throw CyclebiteException(step + ": Successor missing!");
             }
             if (!transformed.find(succ->getSrc()))
             {
-                throw AtlasException(step + ": Successor source missing!");
+                throw CyclebiteException(step + ": Successor source missing!");
             }
             if (!transformed.find(succ->getSnk()))
             {
-                throw AtlasException(step + ": Successor sink missing!");
+                throw CyclebiteException(step + ": Successor sink missing!");
             }
         }
     }
@@ -256,7 +256,7 @@ void Cyclebite::Graph::Checks(const ControlGraph &transformed, string step, bool
     {
         if (covered.find(node) == covered.end())
         {
-            throw AtlasException("Node is unreachable!");
+            throw CyclebiteException("Node is unreachable!");
         }
     }
     // 4.
@@ -284,7 +284,7 @@ void Cyclebite::Graph::Checks(const ControlGraph &transformed, string step, bool
     {
         if (covered.find(node) == covered.end())
         {
-            throw AtlasException("Node cannot reach program terminator!");
+            throw CyclebiteException("Node cannot reach program terminator!");
         }
     }
     // 5.
@@ -307,7 +307,7 @@ void Cyclebite::Graph::Checks(const ControlGraph &transformed, string step, bool
             }
             if (sum < 0.9999 || sum > 1.0001)
             {
-                throw AtlasException(step + ": Outgoing edges do not sum to 1!");
+                throw CyclebiteException(step + ": Outgoing edges do not sum to 1!");
             }
         }
     }
@@ -400,7 +400,7 @@ ControlGraph SubgraphBFS(const std::shared_ptr<ControlNode> &entrance, const std
         }
         if (++searchIterations > 1000000)
         {
-            throw AtlasException("Function subgraph BFS exceeded 1,000,000 iterations!");
+            throw CyclebiteException("Function subgraph BFS exceeded 1,000,000 iterations!");
         }
     }
     set<shared_ptr<UnconditionalEdge>, GECompare> subEdges;
@@ -449,11 +449,11 @@ void removeUnreachableNodes(ControlGraph &funcGraph, const shared_ptr<CallEdge> 
         {
             if( entrance->rets.f )
             {
-                throw AtlasException("Shared function "+string(entrance->rets.f->getName())+"'s subgraph exits the program!");
+                throw CyclebiteException("Shared function "+string(entrance->rets.f->getName())+"'s subgraph exits the program!");
             }
             else
             {
-                throw AtlasException("Found a null shared function subgraph that exits the program!");
+                throw CyclebiteException("Found a null shared function subgraph that exits the program!");
             }
         }
     }
@@ -688,7 +688,7 @@ void Cyclebite::Graph::VirtualizeSubgraph(Graph &graph, std::shared_ptr<VirtualN
 {
     if( subgraph.getNodes().empty() || subgraph.getEdges().empty() )
     {
-        throw AtlasException("Subgraph for virtualization is empty!");
+        throw CyclebiteException("Subgraph for virtualization is empty!");
     }
     VN->addNodes(subgraph.getControlNodes());
     VN->addEdges(subgraph.getControlEdges());
@@ -847,7 +847,7 @@ set<std::shared_ptr<VirtualEdge>, GECompare> VirtualizeFunctionSubgraph(Graph &g
             }
             if (!VNpred || !VNsucc)
             {
-                throw AtlasException("Could not find a virtual node that represents a node in the function subgraph!");
+                throw CyclebiteException("Could not find a virtual node that represents a node in the function subgraph!");
             }
             auto newEdge = make_shared<VirtualEdge>(e->getFreq(), VNpred, VNsucc, replaceEdges);
             EdgeToVE[e].insert(newEdge);
@@ -877,7 +877,7 @@ set<std::shared_ptr<VirtualEdge>, GECompare> VirtualizeFunctionSubgraph(Graph &g
                     }
                     if (!VNpred)
                     {
-                        throw AtlasException("Could not find a virtual node that represents a node in the function subgraph!");
+                        throw CyclebiteException("Could not find a virtual node that represents a node in the function subgraph!");
                     }
                     auto newEdge = make_shared<VirtualEdge>(p->getFreq(), VNpred, s, replaceEdges);
                     EdgeToVE[p].insert(newEdge);
@@ -940,7 +940,7 @@ set<std::shared_ptr<VirtualEdge>, GECompare> VirtualizeFunctionSubgraph(Graph &g
                     }
                     if (!VNsucc)
                     {
-                        throw AtlasException("Could not find a virtual node that represents a node in the function subgraph!");
+                        throw CyclebiteException("Could not find a virtual node that represents a node in the function subgraph!");
                     }
                     outgoingFreq += succ->getFreq();
                     auto newEdge = make_shared<VirtualEdge>(succ->getFreq(), s, VNsucc, replaceEdges);
@@ -1249,7 +1249,7 @@ ControlGraph Cyclebite::Graph::BranchToSelectTransforms(const ControlGraph &grap
         }
         else
         {
-            throw AtlasException("Found a midnode that is not in the control flow graph!");
+            throw CyclebiteException("Found a midnode that is not in the control flow graph!");
         }
     }
     if (midNodeSuccessors.size() == 1) // corner case where the exit of the subgraph has no successors (it is the last node to execute in the program). In this case we have to check if the entrance is a predecessor of the lone midNodeTarget
@@ -1273,7 +1273,7 @@ ControlGraph Cyclebite::Graph::BranchToSelectTransforms(const ControlGraph &grap
         }
         else
         {
-            throw AtlasException("Could not find midNode successor in control flow graph!");
+            throw CyclebiteException("Could not find midNode successor in control flow graph!");
         }
     }
     // else we may have a neighbor of the entrance that is the exit
@@ -1579,7 +1579,7 @@ bool hasDirectRecursion(const std::shared_ptr<ControlNode> &node, const std::map
     }
     else
     {
-        throw AtlasException("Could not map a function block to a node during simple recursion evaluation!");
+        throw CyclebiteException("Could not map a function block to a node during simple recursion evaluation!");
     }
 }
 
@@ -1678,7 +1678,7 @@ bool hasIndirectRecursion(const std::shared_ptr<ControlNode> &node, const std::m
     }
     else
     {
-        throw AtlasException("Could not map a function block to a node during indirect recursion evaluation!");
+        throw CyclebiteException("Could not map a function block to a node during indirect recursion evaluation!");
     }
 }
 
@@ -1915,7 +1915,7 @@ deque<set<shared_ptr<CallGraphEdge>, GECompare>> ScheduleInlineTransforms(const 
                     }
                     if (!found)
                     {
-                        throw AtlasException("Inlinable embedded function edge " + string(emb->getParent()->getFunction()->getName()) + " -> " + string(emb->getChild()->getFunction()->getName()) + " has not been scheduled yet for parent " + string(Q.back()->getFunction()->getName()) + "!");
+                        throw CyclebiteException("Inlinable embedded function edge " + string(emb->getParent()->getFunction()->getName()) + " -> " + string(emb->getChild()->getFunction()->getName()) + " has not been scheduled yet for parent " + string(Q.back()->getFunction()->getName()) + "!");
                     }
                 }
             }
@@ -1986,7 +1986,7 @@ deque<set<shared_ptr<CallGraphEdge>, GECompare>> ScheduleInlineTransforms(const 
         }
         if (++schedulingIterations > 100000)
         {
-            throw AtlasException("Inline scheduling algorithm iteration is greater than 100,000 with function " + string(Q.back()->getFunction()->getName()) + " at the back!");
+            throw CyclebiteException("Inline scheduling algorithm iteration is greater than 100,000 with function " + string(Q.back()->getFunction()->getName()) + " at the back!");
         }
     }
 #ifdef DEBUG
@@ -2006,7 +2006,7 @@ deque<set<shared_ptr<CallGraphEdge>, GECompare>> ScheduleInlineTransforms(const 
             }
             if (!found)
             {
-                throw AtlasException("Function inline schedule does not include inlinable callgraphedge from parent " + string(edge->getParent()->getFunction()->getName()) + " to child " + string(edge->getParent()->getFunction()->getName()) + "!");
+                throw CyclebiteException("Function inline schedule does not include inlinable callgraphedge from parent " + string(edge->getParent()->getFunction()->getName()) + " to child " + string(edge->getParent()->getFunction()->getName()) + "!");
             }
         }
     }
@@ -2988,7 +2988,7 @@ void Cyclebite::Graph::ApplyCFGTransforms(ControlGraph &graph, const Cyclebite::
         totalTime = CalculateTime(&start, &end);
         spdlog::info("CFGTRANSFORMTIME: " + to_string(totalTime));
     }
-    catch (AtlasException &e)
+    catch (CyclebiteException &e)
     {
         spdlog::critical(e.what());
         exit(EXIT_FAILURE);
@@ -3380,7 +3380,7 @@ void Cyclebite::Graph::FindAllRecursiveFunctions(const llvm::CallGraph &CG, cons
         {
             for (auto fi = it->second->getFunction()->begin(); fi != it->second->getFunction()->end(); fi++)
             {
-                auto node = BlockToNode(graph, IDToBlock.at(GetBlockID(llvm::cast<llvm::BasicBlock>(fi))), NIDMap);
+                auto node = BlockToNode(graph, IDToBlock.at(Cyclebite::Util::GetBlockID(llvm::cast<llvm::BasicBlock>(fi))), NIDMap);
                 if (node != nullptr)
                 {
                     totalLiveFunctions++;
@@ -3434,7 +3434,7 @@ void Cyclebite::Graph::FindAllRecursiveFunctions(const Cyclebite::Graph::CallGra
         totalFunctions++;
         for (auto fi = node->getFunction()->begin(); fi != node->getFunction()->end(); fi++)
         {
-            auto node = BlockToNode(graph, IDToBlock.at(GetBlockID(llvm::cast<llvm::BasicBlock>(fi))), NIDMap);
+            auto node = BlockToNode(graph, IDToBlock.at(Cyclebite::Util::GetBlockID(llvm::cast<llvm::BasicBlock>(fi))), NIDMap);
             if (node != nullptr)
             {
                 totalLiveFunctions++;

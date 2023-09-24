@@ -150,7 +150,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         if( bins.size() != 1 )
         {
             PrintVal(node->getVal());
-            throw AtlasException("Cannot yet handle an induction variable that is operated on by none or multiple operators!");
+            throw CyclebiteException("Cannot yet handle an induction variable that is operated on by none or multiple operators!");
         }
     }
     auto bin = *bins.begin();
@@ -166,7 +166,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
             }
             break;
         default:
-            throw AtlasException("Cannot yet handle opcode "+to_string(bin->getOpcode())+" that offsets an IV!");
+            throw CyclebiteException("Cannot yet handle opcode "+to_string(bin->getOpcode())+" that offsets an IV!");
     }
     // find out how the IV is initialized through its stores or phis
     int initValue = static_cast<int>(IV_BOUNDARIES::INVALID);
@@ -193,7 +193,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
             {
                 PrintVal(phi);
             }
-            throw AtlasException("Cannot handle an IV that is touched by more than one phi!");
+            throw CyclebiteException("Cannot handle an IV that is touched by more than one phi!");
         }
         // the phi should have two cases, one where the IV gets a value and one where the IV gets a constant
         // we want the constant case (the init value)
@@ -224,7 +224,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     if( initValue == static_cast<int>(IV_BOUNDARIES::INVALID) )
     {
         PrintVal(node->getVal());
-        throw AtlasException("Could not find initialization value for IV!");
+        throw CyclebiteException("Could not find initialization value for IV!");
     }
     // quick check here to make sure the sign we extract from the comparator makes sense
     // llvm::cmpinst* compare op0 to op1, that is, if cmp->getPredicate is gte, it is asking if op0 >= op1
@@ -237,7 +237,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         PrintVal(cycle->getIteratorInst()->getCondition());
         PrintVal(cycle->getIteratorInst());
 #endif
-        throw AtlasException("Cycle iterator inst was not fed by a condition!");
+        throw CyclebiteException("Cycle iterator inst was not fed by a condition!");
     }
     // here we figure out what the means for the induction variable
     // for example, if the IV is in position 0 of the comparator, then the comparator's operation does not need to be inverted (e.g., IV < thresh means the lt can be taken literally)
@@ -266,7 +266,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         PrintVal(node->getVal());
         PrintVal(targetCmp);
 #endif
-        throw AtlasException("Could not find a valid boundary for an induction variable!");
+        throw CyclebiteException("Could not find a valid boundary for an induction variable!");
     }
     switch(targetCmp->getPredicate())
     {
@@ -383,7 +383,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
             }
             break;
         default:
-            throw AtlasException("Cannot handle an induction variable whose comparator opcode is "+to_string(targetCmp->getPredicate()));
+            throw CyclebiteException("Cannot handle an induction variable whose comparator opcode is "+to_string(targetCmp->getPredicate()));
     }
     // sanity check, does the polyhedral space make sense
 /*    switch(targetCmp->getPredicate())
@@ -394,38 +394,38 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
             if( (space.stride < 0) && (cmpBoundary >= initValue) )
             {
                 spdlog::critical("Found IV boundaries that will not iterate!");
-                throw AtlasException("Found IV boundaries that will not iterate!");
+                throw CyclebiteException("Found IV boundaries that will not iterate!");
             }
             else if( (space.stride > 0) && (cmpBoundary <= initValue) )
             {
                 spdlog::critical("Found IV boundaries that will not terminate!");
-                throw AtlasException("Found IV boundaries that will not terminate!");
+                throw CyclebiteException("Found IV boundaries that will not terminate!");
             }
             break;
         case 35: // integer unsigned greater or equal
             if( (space.stride < 0) && (cmpBoundary > initValue) )
             {
                 spdlog::critical("Found IV boundaries that will not iterate!");
-                throw AtlasException("Found IV boundaries that will not iterate!");
+                throw CyclebiteException("Found IV boundaries that will not iterate!");
             }            
             else if( (space.stride > 0) && (cmpBoundary < initValue) )
             {
                 spdlog::critical("Found IV boundaries that will not terminate!");
-                throw AtlasException("Found IV boundaries that will not terminate!");
+                throw CyclebiteException("Found IV boundaries that will not terminate!");
             }
             break;
         case 36: // integer unsigned less than
             if( (space.stride > 0) && (cmpBoundary <= initValue) )
             {
                 spdlog::critical("Found IV boundaries that will not allow for iteration!");
-                throw AtlasException("Found IV boundaries that will not allow for iteration!");
+                throw CyclebiteException("Found IV boundaries that will not allow for iteration!");
             }
             break;
         case 37: // integer unsigned less or equal
             if( (space.stride > 0) && (cmpBoundary < initValue) )
             {
                 spdlog::critical("Found IV boundaries that will not allow for iteration!");
-                throw AtlasException("Found IV boundaries that will not allow for iteration!");
+                throw CyclebiteException("Found IV boundaries that will not allow for iteration!");
             }
             break;
         case 38: // integer signed greater than
@@ -434,7 +434,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         case 41: // integer signed less or equal
         default:
             spdlog::critical("Cannot handle an induction variable whose comparator opcode is "+to_string(targetCmp->getPredicate()));
-            throw AtlasException("Cannot handle an induction variable whose comparator opcode is "+to_string(targetCmp->getPredicate()));
+            throw CyclebiteException("Cannot handle an induction variable whose comparator opcode is "+to_string(targetCmp->getPredicate()));
     }*/
 
     // build out loop body

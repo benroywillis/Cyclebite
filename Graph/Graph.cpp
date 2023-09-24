@@ -138,7 +138,7 @@ const std::shared_ptr<GraphNode> &Graph::operator[](const std::shared_ptr<GraphN
     auto it = nodeSet.find(s);
     if (it == nodeSet.end())
     {
-        throw AtlasException("Node not found in graph!");
+        throw CyclebiteException("Node not found in graph!");
     }
     return *it;
 }
@@ -148,7 +148,7 @@ const std::shared_ptr<GraphEdge> &Graph::operator[](const std::shared_ptr<GraphE
     auto it = edgeSet.find(f);
     if (it == edgeSet.end())
     {
-        throw AtlasException("Edge not found in graph!");
+        throw CyclebiteException("Edge not found in graph!");
     }
     return *it;
 }
