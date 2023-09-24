@@ -4,7 +4,7 @@ project(Cyclebite VERSION 1.1.0)
 SET(CMAKE_CXX_STANDARD 17)
 SET(CMAKE_C_STANDARD 11)
 
-find_package(LLVM 14 REQUIRED CONFIG)
+find_package(LLVM 17 REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 llvm_map_components_to_libnames(llvm_libs support core irreader bitreader bitwriter transformutils lto)
@@ -82,7 +82,8 @@ function(InjectMarkov tar)
     target_compile_options(${tar} PRIVATE "-flto" "-g" "-mavx")
     set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=${CMAKE_LINKER} -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
     add_custom_command(OUTPUT ${tar}.markov.bc
-        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -enable-new-pm=0 -load $<TARGET_FILE:AtlasPasses> --Markov $<TARGET_FILE:${tar}> -o ${tar}.markov.bc
+        #COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -enable-new-pm=0 -load $<TARGET_FILE:AtlasPasses> --Markov $<TARGET_FILE:${tar}> -o ${tar}.markov.bc
+        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt --load-pass-plugin=$<TARGET_FILE:MarkovPass> --passes=Markov $<TARGET_FILE:${tar}> -o ${tar}.markov.bc
         DEPENDS $<TARGET_FILE:${tar}>
     )
     set_source_files_properties(
@@ -101,7 +102,8 @@ function(InjectMemory tar)
     target_compile_options(${tar} PRIVATE "-flto" "-g" "-mavx")
     set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=${CMAKE_LINKER} -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
     add_custom_command(OUTPUT ${tar}.memory.bc
-        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -enable-new-pm=0 -load $<TARGET_FILE:AtlasPasses> --Memory $<TARGET_FILE:${tar}> -o ${tar}.memory.bc
+        #COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -enable-new-pm=0 -load $<TARGET_FILE:AtlasPasses> --Memory $<TARGET_FILE:${tar}> -o ${tar}.memory.bc
+        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt --load-pass-plugin=$<TARGET_FILE:MemoryPass> --passes=Memory $<TARGET_FILE:${tar}> -o ${tar}.memory.bc
         DEPENDS $<TARGET_FILE:${tar}>
     )
     set_source_files_properties(
