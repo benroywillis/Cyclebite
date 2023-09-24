@@ -1,5 +1,5 @@
 add_library(MemoryPass MODULE)
-target_sources(MemoryPass PRIVATE Memory.cpp)
+target_sources(MemoryPass PRIVATE Memory.cpp ../Utilities/Functions.cpp)
 target_link_libraries(MemoryPass PRIVATE nlohmann_json Util)
 target_compile_definitions(MemoryPass PRIVATE ${LLVM_DEFINITIONS})
 set_target_properties(MemoryPass PROPERTIES PREFIX "" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")

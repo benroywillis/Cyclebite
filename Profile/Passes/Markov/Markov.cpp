@@ -270,7 +270,6 @@ llvm::PreservedAnalyses Cyclebite::Profile::Passes::Markov::run(llvm::Module& M,
     uint64_t blockCount = Util::GetBlockCount(M);
     ConstantInt *i = ConstantInt::get(Type::getInt64Ty(M.getContext()), blockCount);
     new GlobalVariable(M, i->getType(), false, llvm::GlobalValue::LinkageTypes::ExternalLinkage, i, "MarkovBlockCount");
-
     Util::Format(M);
     for( auto& F : M )
     {
