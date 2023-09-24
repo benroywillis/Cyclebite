@@ -51,7 +51,7 @@ namespace Cyclebite::Profile::Passes
 } // namespace Cyclebite::Profile::Passes
 */
 
-#include "Annotate.h"
+#include "inc/Annotate.h"
 #include "Util/Format.h"
 #include <spdlog/spdlog.h>
 
@@ -60,11 +60,11 @@ using namespace Cyclebite;
 
 PreservedAnalyses Profile::Passes::Annotate::Annotate::run(Module& M, ModuleAnalysisManager& ) 
 {
-    uint64_t blockCount = Util::GetBlockCount(&M);
+    uint64_t blockCount = Util::GetBlockCount(M);
     ConstantInt *i = ConstantInt::get(Type::getInt64Ty(M.getContext()), blockCount);
     new GlobalVariable(M, i->getType(), false, llvm::GlobalValue::LinkageTypes::ExternalLinkage, i, "MarkovBlockCount");
 
-    Util::Format(&M);
+    Util::Format(M);
     return PreservedAnalyses::none();
 }
 
