@@ -678,12 +678,49 @@ llvm::PreservedAnalyses Cyclebite::Profile::Passes::Memory::run(llvm::Module& M,
                         {
                             IRBuilder<> builder(call);
                             std::vector<Value *> values;
-                            values.push_back(call);
-                            // grab the size parameter so we can construct a memory tuple from this
-                            auto size = call->getOperand(0);
-                            auto castCode = CastInst::getCastOpcode(size, true, PointerType::get(Type::getInt64Ty(fi->getContext()), 0), true);
-                            Value *size_cast = builder.CreateCast(castCode, size, Type::getInt64Ty(fi->getContext()));
-                            values.push_back(size_cast);
+                            // there is a corner case here where the pointer returned by the allocating function feeds into a phi
+                            // it only happens on invoke calls because the backend call has to be injected after the call executes (regular calls can just inject into the same basic block)
+                            // if this is the case, we need to feed the phi into the backend call, not the pointer itself
+                            bool fromPhi = false;
+                            if( const auto& inv = llvm::dyn_cast<llvm::InvokeInst>(call) )
+                            {
+                                // we only pay attention to the normal destination - the exception destination likely doesn't have a pointer worth tracking
+                                for( auto iphi = inv->getNormalDest()->begin(); iphi != inv->getNormalDest()->end(); iphi++ )
+                                {
+                                    if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(iphi) )
+                                    {
+                                        for( unsigned i = 0; i < phi->getNumIncomingValues(); i++ )
+                                        {
+                                            if( phi->getIncomingValue(i) == call )
+                                            {
+                                                // the pointer is in the phi, thus we have to inject the phi into the args to the backend call
+                                                values.push_back(phi);
+                                                // push back a constant 0 because we didn't get any allocation
+                                                values.push_back( llvm::ConstantInt::get(Type::getInt64Ty(fi->getContext()), 0) );
+                                                fromPhi = true;
+                                                break;
+                                            }
+                                        }
+                                        if( fromPhi )
+                                        {
+                                            break;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        continue;
+                                    }
+                                }
+                            }
+                            if( !fromPhi )
+                            {
+                                values.push_back(call);
+                                // grab the size parameter so we can construct a memory tuple from this
+                                auto size = call->getOperand(0);
+                                auto castCode = CastInst::getCastOpcode(size, true, PointerType::get(Type::getInt64Ty(fi->getContext()), 0), true);
+                                Value *size_cast = builder.CreateCast(castCode, size, Type::getInt64Ty(fi->getContext()));
+                                values.push_back(size_cast);
+                            }
                             auto backendCall = builder.CreateCall(MemoryMalloc, values);
                             // there are two injection cases
                             // 1. this is an invoke, then we just inject after
