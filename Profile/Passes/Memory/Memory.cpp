@@ -1,9 +1,7 @@
-#include "Memory.h"
+/*#include "Memory.h"
 #include "Annotate.h"
 #include "Util/Annotate.h"
-#include "CommandArgs.h"
 #include "Functions.h"
-#include "MarkovIO.h"
 #include "llvm/IR/DataLayout.h"
 #include <fstream>
 #include <llvm/IR/Function.h>
@@ -31,7 +29,7 @@ namespace Cyclebite::Profile::Passes
         for (auto fi = F.begin(); fi != F.end(); fi++)
         {
             auto BB = cast<BasicBlock>(fi);
-            int64_t blockId = GetBlockID(BB);
+            int64_t blockId = Cyclebite::Util::GetBlockID(BB);
             auto firstInsertion = BB->getFirstInsertionPt();
             auto *firstInst = cast<Instruction>(firstInsertion);
             IRBuilder<> firstBuilder(firstInst);
@@ -131,7 +129,7 @@ namespace Cyclebite::Profile::Passes
                     Value *addrCast = builder.CreateCast(castCode, addr, Type::getInt8PtrTy(fi->getContext()));
                     values.push_back(addrCast);
                     // valueID
-                    Value* valueID = ConstantInt::get(Type::getInt64Ty(fi->getContext()), (uint64_t)GetValueID(load));
+                    Value* valueID = ConstantInt::get(Type::getInt64Ty(fi->getContext()), (uint64_t)Cyclebite::Util::GetValueID(load));
                     values.push_back(valueID);
                     // data size
                     Value *dataSizeValue = ConstantInt::get(Type::getInt64Ty(fi->getContext()), dataSize);
@@ -150,7 +148,7 @@ namespace Cyclebite::Profile::Passes
                     Value *addrCast = builder.CreateCast(castCode, addr, Type::getInt8PtrTy(fi->getContext()));
                     values.push_back(addrCast);
                     // valueID
-                    Value* valueID = ConstantInt::get(Type::getInt64Ty(fi->getContext()), (uint64_t)GetValueID(store));
+                    Value* valueID = ConstantInt::get(Type::getInt64Ty(fi->getContext()), (uint64_t)Cyclebite::Util::GetValueID(store));
                     values.push_back(valueID);
                     // data size
                     Value *dataSizeValue = ConstantInt::get(Type::getInt64Ty(fi->getContext()), dataSize);
@@ -304,7 +302,7 @@ namespace Cyclebite::Profile::Passes
                             backendCall->setDebugLoc(NULL);
                         }
                         // libc malloc or stl new operator (two stl flavors)
-                        else if( isAllocatingFunction(call) )
+                        else if( Cyclebite::Util::isAllocatingFunction(call) )
                         {
                             IRBuilder<> builder(call);
                             std::vector<Value *> values;
@@ -331,7 +329,7 @@ namespace Cyclebite::Profile::Passes
                             backendCall->setDebugLoc(NULL);
                         }
                         // libc free() or stl delete operator
-                        else if( isFreeingFunction(call) )
+                        else if( Cyclebite::Util::isFreeingFunction(call) )
                         {
                             IRBuilder<> builder(call);
                             std::vector<Value *> values;
@@ -365,10 +363,46 @@ namespace Cyclebite::Profile::Passes
 
     void Memory::getAnalysisUsage(AnalysisUsage &AU) const
     {
-        AU.addRequired<Cyclebite::Profile::Passes::EncodedAnnotate>();
-        AU.addRequired<Cyclebite::Profile::Passes::MarkovIO>();
+        AU.addRequired<Cyclebite::Profile::Passes::Annotate>();
     }
 
     char Memory::ID = 0;
     static RegisterPass<Memory> Y("Memory", "Injects memory profiling to the binary", true, false);
 } // namespace Cyclebite::Profile::Passes
+*/
+#include "inc/Memory.h"
+#include <spdlog/spdlog.h>
+
+using namespace llvm;
+
+llvm::PreservedAnalyses Cyclebite::Profile::Passes::Memory::run(llvm::Function& M, llvm::FunctionAnalysisManager& )
+{
+    spdlog::info("Hello from Memory!");
+    return PreservedAnalyses::all();
+}
+
+// new pass manager registration
+PassPluginLibraryInfo getMemoryPluginInfo() 
+{
+    return {LLVM_PLUGIN_API_VERSION, "Memory", LLVM_VERSION_STRING, 
+        [](PassBuilder &PB) 
+        {
+            PB.registerPipelineParsingCallback( 
+                [](StringRef Name, FunctionPassManager& FPM, ArrayRef<PassBuilder::PipelineElement>) 
+                {
+                    if (Name == "Memory") {
+                        FPM.addPass(Cyclebite::Profile::Passes::Memory());
+                        return true;
+                    }
+                    return false;
+                }
+            );
+        }
+    };
+}
+
+// guarantees this pass will be visible to opt when called
+extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() 
+{
+    return getMemoryPluginInfo();
+}

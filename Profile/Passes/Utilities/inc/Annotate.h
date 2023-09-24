@@ -1,17 +1,13 @@
 #pragma once
-#include <llvm/IR/BasicBlock.h>
-#include <llvm/IR/Function.h>
-#include <llvm/Pass.h>
-
-using namespace llvm;
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Passes/PassPlugin.h"
 
 namespace Cyclebite::Profile::Passes
 {
-    struct EncodedAnnotate : public ModulePass
+    struct Annotate : llvm::PassInfoMixin<Annotate> 
     {
-        static char ID;
-        EncodedAnnotate() : ModulePass(ID) {}
-        bool runOnModule(Module &M) override;
-        void getAnalysisUsage(AnalysisUsage &AU) const override;
+        llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager& );
+        // without setting this to true, all modules with "optnone" attribute are skipped
+        static bool isRequired();
     };
 } // namespace Cyclebite::Profile::Passes

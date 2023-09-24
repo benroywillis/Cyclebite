@@ -1,7 +1,6 @@
-#include "Markov.h"
+/*#include "Markov.h"
 #include "Util/Annotate.h"
 #include "Functions.h"
-#include "LoopInfoDump.h"
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Instruction.h>
@@ -14,8 +13,6 @@
 #include <vector>
 #include <deque>
 
-using namespace llvm;
-
 std::set<BasicBlock *> exitCovered;
 
 namespace Cyclebite::Profile::Passes
@@ -25,7 +22,7 @@ namespace Cyclebite::Profile::Passes
         for (auto fi = F.begin(); fi != F.end(); fi++)
         {
             auto *BB = cast<BasicBlock>(fi);
-            int64_t id = GetBlockID(BB);
+            int64_t id = Cyclebite::Util::GetBlockID(BB);
             auto firstInsertion = cast<Instruction>(BB->getFirstInsertionPt());
             IRBuilder<> firstBuilder(firstInsertion);
 
@@ -62,7 +59,7 @@ namespace Cyclebite::Profile::Passes
                     std::vector<Value *> args;
                     // get blockCount and make it a value in the LLVM Module
                     IRBuilder<> initBuilder(firstInsertion);
-                    uint64_t blockCount = GetBlockCount(F.getParent());
+                    uint64_t blockCount = Cyclebite::Util::GetBlockCount(F.getParent());
                     Value *countValue = ConstantInt::get(Type::getInt64Ty(BB->getContext()), blockCount);
                     args.push_back(countValue);
                     // get the BBID and make it a value in the LLVM Module
@@ -253,3 +250,40 @@ namespace Cyclebite::Profile::Passes
     char Markov::ID = 0;
     static RegisterPass<Markov> Y("Markov", "Adds Markov Dumping to the binary", true, false);
 } // namespace Cyclebite::Profile::Passes
+*/
+#include "inc/Markov.h"
+#include <spdlog/spdlog.h>
+
+using namespace llvm;
+
+llvm::PreservedAnalyses Cyclebite::Profile::Passes::Markov::run(llvm::Function& M, llvm::FunctionAnalysisManager& )
+{
+    spdlog::info("Hello from Markov!");
+    return PreservedAnalyses::all();
+}
+
+// new pass manager registration
+llvm::PassPluginLibraryInfo getMarkovPluginInfo() 
+{
+    return {LLVM_PLUGIN_API_VERSION, "Markov", LLVM_VERSION_STRING, 
+        [](PassBuilder &PB) 
+        {
+            PB.registerPipelineParsingCallback( 
+                [](StringRef Name, FunctionPassManager& FPM, ArrayRef<PassBuilder::PipelineElement>) 
+                {
+                    if (Name == "Markov") {
+                        FPM.addPass(Cyclebite::Profile::Passes::Markov());
+                        return true;
+                    }
+                    return false;
+                }
+            );
+        }
+    };
+}
+
+// guarantees this pass will be visible to opt when called
+extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() 
+{
+    return getMarkovPluginInfo();
+}

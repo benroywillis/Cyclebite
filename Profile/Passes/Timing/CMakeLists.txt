@@ -1,0 +1,7 @@
+add_library(TimingPass MODULE)
+target_sources(TimingPass PRIVATE Timing.cpp ../Utilities/Functions.cpp)
+target_link_libraries(TimingPass PRIVATE nlohmann_json Util)
+target_compile_definitions(TimingPass PRIVATE ${LLVM_DEFINITIONS})
+set_target_properties(TimingPass PROPERTIES PREFIX "" LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+target_include_directories(TimingPass PRIVATE ${UTILITIES_INC})
+install(TARGETS TimingPass LIBRARY DESTINATION lib)

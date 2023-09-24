@@ -3,25 +3,25 @@
 
 namespace Cyclebite::Profile::Passes
 {
-    struct Precision : public FunctionPass
+    struct Timing : public FunctionPass
     {
         static char ID;
-        Precision() : FunctionPass(ID) {}
+        Timing() : FunctionPass(ID) {}
         bool runOnFunction(Function &F) override;
         void getAnalysisUsage(AnalysisUsage &AU) const override;
         bool doInitialization(Module &M) override;
     };
-} // namespace Cyclebite
+} // namespace Cyclebite::Profile::Passes
 */
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
 
 namespace Cyclebite::Profile::Passes
 {
-    struct Precision : llvm::PassInfoMixin<Precision> 
+    struct Timing : llvm::PassInfoMixin<Timing> 
     {
-        llvm::PreservedAnalyses run(llvm::Function& M, llvm::FunctionAnalysisManager& );
+        llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager& );
         // without setting this to true, all modules with "optnone" attribute are skipped
-        static bool isRequired();
+        static bool isRequired() { return true; };
     };
 } // namespace Cyclebite::Profile::Passes
