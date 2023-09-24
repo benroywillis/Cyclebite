@@ -34,7 +34,7 @@ int main(int argc, char **argv)
     std::unique_ptr<Module> SourceBitcode = parseIRFile(InputFilename, smerror, context);
 
     // Don't clean the debug info, but format it like the rest of the tools
-    Cyclebite::Util::Format(SourceBitcode.get(), false);
+    Cyclebite::Util::Format(*SourceBitcode, false);
 
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;

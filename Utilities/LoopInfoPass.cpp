@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
     LLVMContext context;
     SMDiagnostic smerror;
     auto sourceBitcode = parseIRFile(InputFile, smerror, context);
-    Cyclebite::Util::Format(sourceBitcode.get());
+    Cyclebite::Util::Format(*sourceBitcode);
 
     // run loop analysis pass
     /* this stuff uses the new pass manager and segfaults when main returns

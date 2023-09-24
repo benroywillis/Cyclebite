@@ -31,7 +31,7 @@ int main(int argc, char **argv)
     }
 
     // Annotate its bitcodes and values
-    Cyclebite::Util::Format(SourceBitcode.get());
+    Cyclebite::Util::Format(*SourceBitcode.get());
 
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;

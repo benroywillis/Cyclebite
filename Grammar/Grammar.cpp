@@ -104,7 +104,7 @@ int main(int argc, char *argv[])
     LLVMContext context;
     SMDiagnostic smerror;
     auto SourceBitcode = parseIRFile(BitcodeFileName, smerror, context);
-    Cyclebite::Util::Format(SourceBitcode.get());
+    Cyclebite::Util::Format(*SourceBitcode);
     // construct its callgraph
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;

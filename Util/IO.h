@@ -25,7 +25,7 @@ inline std::unique_ptr<llvm::Module> ReadBitcode(const std::string &InputFilenam
     {
         spdlog::critical("Failed to open bitcode file: " + InputFilename);
     }
-    Cyclebite::Util::Format(SourceBitcode.get());
+    Cyclebite::Util::Format(*SourceBitcode);
     return SourceBitcode;
 }
 

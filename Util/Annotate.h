@@ -142,37 +142,31 @@ namespace Cyclebite::Util
         return IDState::Uninitialized;
     }
 
-    inline void Annotate(llvm::Function *F, uint64_t &startingIndex, uint64_t &valIndex)
+
+    inline void Annotate(llvm::Module& M)
     {
-        for (llvm::Function::iterator BB = F->begin(), E = F->end(); BB != E; ++BB)
+        static uint64_t CyclebiteIndex = 0;
+        static uint64_t CyclebiteValueIndex = 0;
+        for (auto& F : M)
         {
-            SetBlockID(llvm::cast<llvm::BasicBlock>(BB), (int64_t)startingIndex);
-            startingIndex++;
-            for (auto bb = BB->begin(); bb != BB->end(); bb++)
+            for (auto bb = F.begin(); bb != F.end(); bb++)
             {
-                SetValueIDs(llvm::cast<llvm::Value>(bb), valIndex);
+                SetBlockID(llvm::cast<llvm::BasicBlock>(bb), (int64_t)CyclebiteIndex);
+                CyclebiteIndex++;
+                for (auto ii = bb->begin(); ii != bb->end(); ii++)
+                {
+                    SetValueIDs(llvm::cast<llvm::Value>(ii), CyclebiteValueIndex);
+                }
             }
         }
     }
 
-    inline uint64_t CyclebiteIndex = 0;
-    inline uint64_t CyclebiteValueIndex = 0;
-
-    inline void Annotate(llvm::Module *M)
-    {
-        for (auto mi = M->begin(); mi != M->end(); mi++)
-        {
-            llvm::Function *F = llvm::cast<llvm::Function>(mi);
-            Annotate(F, CyclebiteIndex, CyclebiteValueIndex);
-        }
-    }
-
     /// @brief Wipes away all debug info instructions and metadata for instructions, functions and global variables
-    inline void CleanModule(llvm::Module *M)
+    inline void CleanModule(llvm::Module& M)
     {
-        for (auto mi = M->begin(); mi != M->end(); mi++)
+        for (auto& F : M)
         {
-            for (auto &fi : *mi)
+            for (auto &fi : F)
             {
                 std::vector<llvm::Instruction *> toRemove;
                 for (auto bi = fi.begin(); bi != fi.end(); bi++)
@@ -197,16 +191,15 @@ namespace Cyclebite::Util
                     r->eraseFromParent();
                 }
             }
-            auto *F = llvm::cast<llvm::Function>(mi);
             llvm::SmallVector<std::pair<unsigned, llvm::MDNode *>, 1> MDs;
-            F->getAllMetadata(MDs);
+            F.getAllMetadata(MDs);
             for (auto MD : MDs)
             {
-                F->setMetadata(MD.first, nullptr);
+                F.setMetadata(MD.first, nullptr);
             }
         }
 
-        for (auto gi = M->global_begin(); gi != M->global_end(); gi++)
+        for (auto gi = M.global_begin(); gi != M.global_end(); gi++)
         {
             auto gv = llvm::cast<llvm::GlobalVariable>(gi);
             llvm::SmallVector<std::pair<unsigned, llvm::MDNode *>, 1> MDs;
@@ -549,12 +542,12 @@ namespace Cyclebite::Util
         return result;
     }
 
-    inline uint64_t GetBlockCount(llvm::Module *M)
+    inline uint64_t GetBlockCount(const llvm::Module& M)
     {
         uint64_t result = 0;
-        for (auto mi = M->begin(); mi != M->end(); mi++)
+        for (auto& F : M)
         {
-            for (auto &fi : *mi)
+            for (auto &fi : F)
             {
                 if (llvm::isa<llvm::BasicBlock>(fi))
                 {
@@ -565,11 +558,11 @@ namespace Cyclebite::Util
         return result;
     }
 
-    inline void VerifyModule(llvm::Module *M)
+    inline void VerifyModule(llvm::Module& M)
     {
         std::string str;
         llvm::raw_string_ostream rso(str);
-        bool broken = verifyModule(*M, &rso);
+        bool broken = verifyModule(M, &rso);
         if (broken)
         {
             auto err = rso.str();

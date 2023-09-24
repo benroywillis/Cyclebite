@@ -35,7 +35,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
     // Annotate its bitcodes and values
-    Cyclebite::Util::Format(SourceBitcode.get());
+    Cyclebite::Util::Format(*SourceBitcode);
     // construct its callgraph
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;
