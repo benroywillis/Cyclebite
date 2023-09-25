@@ -212,7 +212,7 @@ set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotLoops(
     }
     catch (std::exception &e)
     {
-        spdlog::critical("Couldn't open loop file " + string(loopfilename) + ": " + string(e.what()));
+        spdlog::warn("Couldn't open loop file " + string(loopfilename) + ": " + string(e.what())+". Hotloop analysis is not possible without this file.");
         return kernels;
     }
 
