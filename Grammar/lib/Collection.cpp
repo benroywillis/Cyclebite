@@ -234,6 +234,15 @@ const llvm::LoadInst* Collection::getLoad() const
     }
     if( lds.size() > 1 )
     {
+        PrintVal(bp->getNode()->getVal());
+        for( const auto& var : vars )
+        {
+            PrintVal(var->getNode()->getInst());
+        }
+        for( const auto& ld : lds )
+        {
+            PrintVal(ld);
+        }
         throw CyclebiteException("Collection maps to more than one load!");
     }
     return *lds.begin();

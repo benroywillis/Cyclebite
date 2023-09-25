@@ -210,7 +210,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 }
                 else if( !t->find(static_pointer_cast<Graph::DataValue>(op->getSrc())) )
                 {
-                    continue;
+                    // ben 2023-09-25 there are base pointer offsets within serial code that we need to track
+                    //continue;
                 }
                 const auto& opInst = static_pointer_cast<Graph::Inst>(op->getSrc());
                 if( opInst->getOp() == Graph::Operation::load )
@@ -232,7 +233,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 }
                 else if( opInst->isCastOp() )
                 {
-                    // we don't recorde these but they may lead us to other things
+                    // we don't record these but they may lead us to other things
                     Q.push_back(opInst);
                     covered.insert(opInst);
                 }
@@ -380,7 +381,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 }
                 Q.pop_front();
             }
-
+            // next, we build out all idxVars that can be discovered from the indices of this gep
+            deque<shared_ptr<IndexVariable>> idxVarOrder;
             if( bins.empty() ) 
             {
                 // confirm that this gep is not already explained by existing indexVariables
@@ -453,7 +455,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         newIdx->setParent(p);
                     }
                 }
-                idxVars.insert( newIdx);
+                idxVarOrder.push_back( newIdx );
             }
             else if( bins.size() == 1 )
             {
@@ -491,7 +493,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         }
                     }
                 }
-                idxVars.insert(newIdx);
+                idxVarOrder.push_back(newIdx);
             }
             else
             {
@@ -501,7 +503,6 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 // 2. add: warrants an index variable
                 // 3. or (in the case of optimizer loop unrolling): does not warrant an index variable
                 //    - when the add is summing two integers together, and both inputs come from the 
-                deque<shared_ptr<IndexVariable>> idxVarOrder;
                 for( auto bin = bins.rbegin(); bin <= prev(bins.rend()); bin++ )
                 {
                     if( bin == bins.rbegin() )
@@ -583,10 +584,92 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         bin = next(bin);
                     }
                 }
-                for( const auto& idx : idxVarOrder )
+            }
+            // after the gep indices are done, we investigate the pointer operand of the gep
+            // the pointer of the gep currently being investigated may be getting offset by another gep
+            // but we haven't accounted for this yet, thus we investigate the pointer here and draw an edge between the idxVar(s) made from the indices and the idxVars that offset our gep's pointer 
+            deque<const llvm::Instruction*> instQ;
+            set<const llvm::Instruction*> instCovered;
+            if( const auto& inst = llvm::dyn_cast<llvm::Instruction>( llvm::cast<llvm::GetElementPtrInst>(gep->getInst())->getPointerOperand()) )
+            {
+                instQ.push_front(inst);
+                instCovered.insert(inst);
+            }
+            // set of geps that may be unconnected parents to the gep under investigation
+            set<shared_ptr<IndexVariable>> parents;
+            while( !instQ.empty() )
+            {
+                if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(instQ.front()) )
                 {
-                    idxVars.insert(idx);
+                    // if the gep under investigation maps to a parent through its pointer, that parent should already exist (since we evaluate geps in parent-to-child order)
+                    for( const auto& idx : idxVars )
+                    {
+                        if( idx->getNode()->getInst() == gep )
+                        {
+                            parents.insert(idx);
+                        }
+                    }
                 }
+                else
+                {
+                    for( const auto& op : instQ.front()->operands() )
+                    {
+                        if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(op) )
+                        {
+                            if( instCovered.find(inst) == instCovered.end() )
+                            {
+                                instQ.push_back(inst);
+                                instCovered.insert(inst);
+                            }
+                        }
+                    }
+                }
+                instQ.pop_front();
+            }
+            if( parents.size() > 1 )
+            {
+                PrintVal(gep->getInst());
+                for( const auto& p : parents )
+                {
+                    PrintVal(p->getNode()->getInst());
+                }
+                throw CyclebiteException("Cannot yet handle the case where an idxVar has multiple parents!");
+            }
+            for( auto& p : parents )
+            {
+                // these are the parents of the parent-most idxVar(s) in idxVarOrder
+                shared_ptr<IndexVariable> parentMost = nullptr;
+                for( const auto& idxVar : idxVarOrder )
+                {
+                    if( !idxVar->getParent() )
+                    {
+                        if( parentMost )
+                        {
+                            throw CyclebiteException("Found more than one parent-most idxVar for a single gep!");
+                        }
+                        parentMost = idxVar;
+                    }
+                }
+                if( !parentMost )
+                {
+                    // this means we already covered the edge, so continue
+                    continue;
+                }
+                if( parentMost->getParent() )
+                {
+                    if( parentMost->getParent() != p )
+                    {
+                        throw CyclebiteException("Parent-most idxVar of a gep already has a parent, but also maps to a parent gep through its pointer operand!");
+                    }
+                }
+                parentMost->setParent(p);
+                p->addChild(parentMost);
+            }
+
+            // add all the new idxVars to the set
+            for( const auto& idx : idxVarOrder )
+            {
+                idxVars.insert(idx);
             }
         }
     }

@@ -277,7 +277,6 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     else if( const auto& intrin = llvm::dyn_cast<llvm::IntrinsicInst>(Q.front()) )
                     {
                         auto intrinName = string(llvm::Intrinsic::getBaseName(intrin->getIntrinsicID()));
-                        spdlog::info(intrinName);
                         if( intrinName == "llvm.fmuladd" )
                         {
                             // confirm the phi is the third argument in the function call - this is a 
