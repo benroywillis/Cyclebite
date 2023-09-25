@@ -280,3 +280,169 @@ string Collection::dump() const
     }
     return expr;
 }
+
+set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_ptr<IndexVariable>>& idxVars)
+{
+    // all collections that are forged in this method
+    set<shared_ptr<Collection>> colls;
+
+    // the idxVars already encode which base pointer(s) they map to, what their hierarchical order is, and which induction variable they may be using
+    // but, this does not give us a clean, concise expression for the slabs of memory that are being indexed by the idxVars
+    // thus, we describe these slabs of memory with "collections"
+
+    // first step, find out how many slabs of memory there are (each one will get their own collection)
+    // do this by going through the idxVars, finding their implicit hierarchies, and which base pointers they map to
+    map<shared_ptr<BasePointer>, set<shared_ptr<IndexVariable>>> commonBPs;
+    map<shared_ptr<BasePointer>, set<set<shared_ptr<IndexVariable>>>> varHierarchies;
+
+    for( const auto& idx : idxVars )
+    {
+        for( const auto& bp : idx->getBPs() )
+        {
+            commonBPs[bp].insert(idx);
+        }
+    }
+    // now sort the idxVars that map to the same BP into separate groups based on the hierarchies they form
+    // this is a depth-first search: we are looking for all unique avenues from the root(s) of the idxVar tree to the leaves
+    for( const auto& bp : commonBPs )
+    {
+        // remembers all non-leaf nodes that are loaded and have had a collection built for them
+        set<shared_ptr<IndexVariable>> loadedAccounted;
+        // search depth-first through all avenues from the root of the idxVar tree to the leaves
+        set<shared_ptr<IndexVariable>> covered;
+        for( const auto& idx : bp.second )
+        {
+            // we want to find the parent idxVar and walk through the tree from there
+            if( covered.find(idx) != covered.end() )
+            {
+                continue;
+            }
+            else if( idx->getParent() )
+            {
+                continue;
+            }
+            deque<shared_ptr<IndexVariable>> Q;
+            Q.push_front(idx);
+            covered.insert(idx);
+            while( !Q.empty() )
+            {
+                bool pop = true;
+                if( Q.front()->getChildren().empty() )
+                {
+                    // we have hit a leaf, push the avenue we have observed
+                    /*set<shared_ptr<IndexVariable>> newAvenue;
+                    for( const auto& p : Q )
+                    {
+                        newAvenue.insert(p);
+                    }
+                    varHierarchies[bp.first].insert( newAvenue );*/
+                    varHierarchies[bp.first].insert( set<shared_ptr<IndexVariable>>(Q.begin(), Q.end()) );
+                }
+                else
+                {
+                    if( Q.front()->isLoaded() )
+                    {
+                        if( loadedAccounted.find(Q.front()) == loadedAccounted.end() )
+                        {
+                            // there is an interesting corner case here where some base pointers are not offset by this particular combination of idxVars
+                            // when a non-leaf idxVar is used to offset many base pointers, but it itself is used in a non-const-offset gep, it may only be offsetting a subset of these base pointers
+                            // e.g.: StencilChain/Naive BB83 (OPFLAG=-O1)
+                            // thus here, we implement a check to confirm this bp is offset by this combination of idxVars
+                            // find the gep(s) that use the child-most idxVar but are not children of the child-most idxVar
+                            set<const llvm::GetElementPtrInst*> targets;
+                            for( const auto& gep : Q.front()->getGeps() )
+                            {
+                                bool isChild = false;
+                                for( const auto& child : Q.front()->getChildren() )
+                                {
+                                    if( child->getNode() == gep )
+                                    {
+                                        isChild = true;
+                                        break;
+                                    }
+                                }
+                                if( !isChild )
+                                {
+                                    targets.insert(llvm::cast<llvm::GetElementPtrInst>(gep->getInst()));
+                                }
+                            }
+                            // now that we have the non-child geps, confirm whether this bp is offset by them
+                            bool hasOffset = false;
+                            for( const auto& gep : targets )
+                            {
+                                if( bp.first->isOffset(gep) )
+                                {
+                                    hasOffset = true;
+                                }
+                            }
+                            if( hasOffset )
+                            {
+                                varHierarchies[bp.first].insert( set<shared_ptr<IndexVariable>>(Q.begin(), Q.end()) );
+                                loadedAccounted.insert(Q.front());
+                            }
+                        }
+                    }
+                    for( const auto& c : Q.front()->getChildren() )
+                    {
+                        if( covered.find(c) == covered.end() )
+                        {
+                            if( c->getBPs().find(bp.first) != c->getBPs().end() )
+                            {
+                                Q.push_front(c);
+                                covered.insert(c);
+                                pop = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if( pop )
+                {
+                    Q.pop_front();
+                }
+            }
+        }        
+    }
+
+    // now construct collections from the hierarchies that have been grouped
+    for( const auto& bp : varHierarchies )
+    {
+        for( const auto& ivSet : bp.second )
+        {
+            colls.insert( make_shared<Collection>(ivSet, bp.first) );
+            /*auto it = colls.insert( make_shared<Collection>(ivSet, bp.first) );
+            PrintVal((*it.first)->getBP()->getNode()->getVal());
+            for( const auto& iv : (*it.first)->getIndices() )
+            {
+                PrintVal(iv->getNode()->getInst());
+            }
+            cout << endl;*/
+        }
+    }
+    /*map<shared_ptr<BasePointer>, set<shared_ptr<IndexVariable>>> varHierarchies;
+
+    deque<shared_ptr<IndexVariable>> Q;
+    set<shared_ptr<IndexVariable>> covered;
+    for( const auto& idx : idxVars )
+    {
+        for( const auto& bp : idx->getBPs() )
+        {
+            varHierarchies[bp].insert(idx);
+        }
+    }
+
+    // now just construct the collections
+    for( const auto& bp : varHierarchies )
+    {
+        colls.insert( make_shared<Collection>(bp.second, bp.first) );
+    }*/
+    /*for( const auto& coll : colls )
+    {
+        PrintVal(coll->getBP()->getNode()->getVal());
+        for( const auto& idx : coll->getIndices() )
+        {
+            PrintVal(idx->getNode()->getInst());
+        }
+    }*/
+    return colls;
+}

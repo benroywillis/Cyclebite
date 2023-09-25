@@ -24,4 +24,5 @@ namespace Cyclebite::Grammar
         std::vector<std::shared_ptr<IndexVariable>> vars;
         std::shared_ptr<BasePointer> bp;
     };
+    std::set<std::shared_ptr<Collection>> getCollections(const std::set<std::shared_ptr<IndexVariable>>& idxVars);
 } // namespace Cyclebite::Grammar
