@@ -412,7 +412,6 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                 PrintVal(can->getVal());
                 throw CyclebiteException("Cannot map this reduction variable to an induction variable!");
             }
-            PrintVal(reductionOp->getVal());
             rvs.insert( make_shared<ReductionVariable>(iv, reductionOp) );
         }
     }
@@ -1541,14 +1540,6 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     // a reduction should be a cycle starting at a phi, followed by ops (binary or cast), that ultimately feed a reduction variable
     // we must separate the phi from the binary ops from the RV, then construct the expression for the reduction (which is just the binary ops), then add the reduction to it (which sets the operator next to the equal sign e.g. "+=")
     shared_ptr<ReductionVariable> rv = nullptr;
-    for( const auto& val : order )
-    {
-        PrintVal(val->getInst());
-    }
-    for( const auto& rv : rvs )
-    {
-        PrintVal(rv->getNode()->getVal());
-    }
     if( !rvs.empty() )
     {
         map<shared_ptr<DataValue>, shared_ptr<ReductionVariable>> dnToRv;

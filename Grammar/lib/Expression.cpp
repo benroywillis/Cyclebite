@@ -206,7 +206,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
         else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(op) )
         {
             // phis imply a loop-loop dependence or predication
-            // if this loop-loop dependence maps to a reduction variable, we know what to do 
+            // if twe have made it this far, this phi doesn't map to an RV.. so at this point it is an error
             PrintVal(phi);
             throw CyclebiteException("phi node use implies predication or loop-loop dependence!");
         }
@@ -342,10 +342,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
         {
             nodeToExpr[Graph::DNIDMap.at(rv->getPhi())] = rv;
         }
-        else
-        {
-            nodeToExpr[rv->getNode()] = rv;
-        }
+        nodeToExpr[rv->getNode()] = rv;
     }
     for( const auto& node : insts )
     {
