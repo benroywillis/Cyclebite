@@ -274,27 +274,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             covered.insert(gep->getInst());
             for( const auto& idx : llvm::cast<llvm::GetElementPtrInst>(gep->getInst())->indices() )
             {
-                    if( const auto& con = llvm::dyn_cast<llvm::Constant>(idx) )
-                    {
-                        // a constant is likely a simple offset on a structure, that's useful
-                        AffineOffset of;
-                        if( con->getType()->isIntegerTy() )
-                        {
-                            of.constant = (int)*con->getUniqueInteger().getRawData();
-                            of.transform = Cyclebite::Graph::Operation::add;
-                            bins.push_back( pair(gep->getInst(), of) );
-                        }
-                        // floating point offsets shouldn't happen
-                        else 
-                        {
-                            throw CyclebiteException("Cannot handle a memory offset that isn't an integer!");
-                        }
-                    }
-                    else
-                    {
-                        Q.push_front(idx);
-                    }
-                    covered.insert(idx);
+                Q.push_front(idx);
+                covered.insert(idx);
             }
             while( !Q.empty() )
             {
@@ -361,23 +342,32 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         }
                     }
                 }
-                // When we reach the end of the idxVar information space, stop
-                //  - possible places:
-                //    -> another gep, this represents another dimension and therefore another idxVar
-                //    -> PHI node, possibly maps to an induction variable
-                //    -> ld, pointer possibly maps to a BP
-                else if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
-                {
-                    // may map to something else, but we're done
-                    sources.insert(gep);
-                }
-                else if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
-                {
-                    sources.insert(ld);
-                }
                 else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(Q.front()) )
                 {
-                    sources.insert(phi);
+                    // may map to an induction variable
+                    AffineOffset of;
+                    // when induction variables are combined into a single gep to make a multi-dimensional access, we need to capture this with an idxVar for each index
+                    shared_ptr<InductionVariable> var = nullptr;
+                    for( const auto& v : vars )
+                    {
+                        if( v->getNode()->getVal() == phi )
+                        {
+                            var = v;
+                            break;
+                        }
+                    }
+                    if( var )
+                    {
+                        of.constant = (int)var->getSpace().stride;
+                        of.transform = var->getSpace().min < var->getSpace().max ? Graph::Operation::add : Graph::Operation::sub;
+                    }
+                    else
+                    {
+                        // we don't know what the affine offset is (for sure), so just push + 1
+                        of.constant = 1;
+                        of.transform = Cyclebite::Graph::Operation::add;
+                    }
+                    bins.push_back( pair(phi, of) );
                 }
                 Q.pop_front();
             }
