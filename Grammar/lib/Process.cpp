@@ -1424,37 +1424,52 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
 #endif
             // get all induction variables
             auto vars = getInductionVariables(t);
-            // get all reduction variables
-            auto rvs = getReductionVariables(t, vars);
-            // get all base pointers
-            auto bps  = getBasePointers(t);
-            // get index variables
-            auto idxVars = getIndexVariables(t, bps, vars);
-            // construct collections
-            auto cs   = getCollections(idxVars);
-            // each task should have exactly one expression
-            auto expr = getExpression(t, cs, rvs);
 #ifdef DEBUG
             spdlog::info("Vars:");
             for( const auto& var : vars )
             {
                 spdlog::info(var->dump()+" -> "+PrintVal(var->getNode()->getVal(), false));
-            }
+            }            // get all reduction variables
+#endif
+
+            auto rvs = getReductionVariables(t, vars);
+#ifdef DEBUG
             spdlog::info("Reductions");
             for( const auto& rv : rvs )
             {
                 spdlog::info(rv->dump()+" -> "+PrintVal(rv->getNode()->getVal(), false));
             }
+#endif
+            // get all base pointers
+            auto bps  = getBasePointers(t);
+#ifdef DEBUG
             spdlog::info("Base Pointers");
             for( const auto& bp : bps )
             {
                 spdlog::info(bp->dump()+" -> "+PrintVal(bp->getNode()->getVal(), false));
             }
+#endif
+            // get index variables
+            auto idxVars = getIndexVariables(t, bps, vars);
+#ifdef DEBUG
+            spdlog::info("Index Variables:");
+            for( const auto& idx : idxVars )
+            {
+                spdlog::info(idx->dump()+" -> "+PrintVal(idx->getNode()->getInst(), false));
+            }
+#endif
+            // construct collections
+            auto cs   = getCollections(idxVars);
+#ifdef DEBUG
             spdlog::info("Collections:");
             for( const auto& c : cs )
             {
                 spdlog::info(c->dump());
             }
+#endif
+            // each task should have exactly one expression
+            auto expr = getExpression(t, cs, rvs);
+#ifdef DEBUG
             spdlog::info("Expression:");
             spdlog::info(expr->dump());
             spdlog::info("Grammar Success");
