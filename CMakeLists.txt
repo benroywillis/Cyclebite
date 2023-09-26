@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 project(Cyclebite VERSION 1.1.0)
 
-SET(CMAKE_CXX_STANDARD 17)
+SET(CMAKE_CXX_STANDARD 20)
 SET(CMAKE_C_STANDARD 11)
 
 find_package(LLVM 17 REQUIRED CONFIG)
