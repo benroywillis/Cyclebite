@@ -54,11 +54,25 @@ namespace Cyclebite::Profile::Backend::Memory
         uint64_t bittenBytes = 0;
         for( const auto& e : epochs )
         {
-            bittenBytes += sizeof(Epoch) + sizeof(e->memoryData.rTuples.size())*sizeof(MemTuple) + sizeof(e->memoryData.wTuples.size())*sizeof(MemTuple);
+            bittenBytes += sizeof(Epoch) + 
+                           e->blocks.size() * sizeof(int64_t) +
+                           e->free_ptrs.size() * sizeof(int64_t) + 
+                           e->malloc_ptrs.size() * sizeof(int64_t) + 
+                           e->memoryData.rTuples.size()*sizeof(MemTuple) + 
+                           e->memoryData.wTuples.size()*sizeof(MemTuple);
+            for( const auto& ent : e->entrances )
+            {
+                bittenBytes += sizeof(ent.first) + ent.second.size() * sizeof(int64_t);
+            }
+            for( const auto& ex : e->exits )
+            {
+                bittenBytes += sizeof(ex.first) + ex.second.size() * sizeof(int64_t);
+            }
         }
         if( bittenBytes > bytesBitten )
         {
             bytesBitten = bittenBytes;
+            spdlog::info("New amount of bytes bitten: "+to_string(bytesBitten));
         }
     }
 
@@ -67,13 +81,12 @@ namespace Cyclebite::Profile::Backend::Memory
         void __Cyclebite__Profile__Backend__MemoryDestroy()
         {
             clock_gettime(CLOCK_MONOTONIC, &end);
+            epochs.insert(currentEpoch);
             updateBittenBytes();
             spdlog::info( "MEMORYPROFILETIME: "+to_string(CalculateTime(&start, &end))+"s");
             spdlog::info( "MEMORYPROFILESPACE: "+to_string(bytesBitten));
-            updateBittenBytes();
             memoryActive = false;
             // this is an implicit exit, so store the current iteration information to where it belongs
-            epochs.insert(currentEpoch);
             ProcessEpochBoundaries();
             GenerateMemoryRegions();
             GenerateTaskGraph();
