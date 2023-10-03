@@ -87,10 +87,10 @@ const set<const llvm::Value*> Collection::getElementPointers() const
     // this load should have successor(s) that are not in the memory group
     deque<const llvm::Instruction*> Q;
     set<const llvm::Instruction*> covered;
-    // it is possible for our idxVar to be shared among many collections (e.g., when two base pointers are offset in the same way)
-    // thus, we must pick our starting point based on which use of our child-most idxVar is associated with our base pointer
     // in order to find the starting point for our search, we need to walk the DFG until we find a gep or ld
     deque<shared_ptr<Graph::Inst>> varQ;
+    // it is possible for our idxVar to be shared among many collections (e.g., when two base pointers are offset in the same way)
+    // thus, we must pick our starting point based on which use of our child-most idxVar is associated with our base pointer
     varQ.push_front(vars.back()->getNode());
     while( !varQ.empty() )
     {
@@ -139,7 +139,7 @@ const set<const llvm::Value*> Collection::getElementPointers() const
         }
         else if( varQ.front()->getOp() == Graph::Operation::gep )
         {
-            // a gep that is the child of the child-most var is not what we are looking for
+            // a gep that is a child of the child-most var is not what we are looking for
             bool isChild = false;
             for( const auto& c : vars.back()->getChildren() )
             {
@@ -151,6 +151,7 @@ const set<const llvm::Value*> Collection::getElementPointers() const
             }
             if( !isChild )
             {
+                // then we determine if the base pointer of this collection is touched by this GEP
                 if( bp->isOffset( llvm::cast<llvm::GetElementPtrInst>(varQ.front()->getInst())->getPointerOperand() ) )
                 {
                     for( const auto& succ : varQ.front()->getSuccessors() )

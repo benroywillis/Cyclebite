@@ -344,6 +344,9 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 }
                 else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(Q.front()) )
                 {
+                    // if this is the index itself, it is an index variable
+                    // if the phi is transformed by binary ops from above, it is not an idxVar
+                    //if( )
                     // may map to an induction variable
                     AffineOffset of;
                     // when induction variables are combined into a single gep to make a multi-dimensional access, we need to capture this with an idxVar for each index
