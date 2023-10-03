@@ -132,7 +132,7 @@ bool BasePointer::isOffset( const llvm::Value* val ) const
         }
         else
         {
-            //throw AtlasException("BP offset method cannot handle this instruction!");
+            //throw CyclebiteException("BP offset method cannot handle this instruction!");
         }
         Q.pop_front();
     }
@@ -167,7 +167,7 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
             }
             else
             {
-                throw AtlasException("Cannot determine allocator function size argument!");
+                throw CyclebiteException("Cannot determine allocator function size argument!");
             }
             // if it is not, we investigate the ld/st instructions that touch it to see if they are significant memory instructions. If it has at least one, we return the minimum threshold, if it doesn't we return 0
             std::deque<const llvm::Value*> Q;

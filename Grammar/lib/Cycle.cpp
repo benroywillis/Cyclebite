@@ -114,7 +114,7 @@ set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json&
                     else if( auto sel = llvm::dyn_cast<llvm::SelectInst>(i->getInst()) )
                     {
                         // do something
-                        throw AtlasException("Cannot yet support select instructions for cycle iteration conditions!");
+                        throw CyclebiteException("Cannot yet support select instructions for cycle iteration conditions!");
                     }
                     else if( auto ret = llvm::dyn_cast<llvm::ReturnInst>(i->getInst()) )
                     {
@@ -130,7 +130,7 @@ set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json&
                                 {
                                     PrintVal(ret);
                                     // we are in trouble. There' no way for us to know what the condition is that leads to this exit, thus we don't have a known method of finding the iteratorCondition of this cycle
-                                    throw AtlasException("Cannot yet support function return instructions when finding cycle iteration condition!");
+                                    throw CyclebiteException("Cannot yet support function return instructions when finding cycle iteration condition!");
                                 }
                             }
                         }*/
@@ -178,7 +178,7 @@ set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json&
         }
         else
         {
-            throw AtlasException("Could not find iteratorCmp for a cycle!");
+            throw CyclebiteException("Could not find iteratorCmp for a cycle!");
         }
     }
     return cycles;

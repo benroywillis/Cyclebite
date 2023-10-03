@@ -33,7 +33,7 @@ void DisectConstant( vector<shared_ptr<Symbol>>& vec, const llvm::Constant* con)
         }
         else
         {
-            throw AtlasException("Could not extract float from constant float!");
+            throw CyclebiteException("Could not extract float from constant float!");
         }
     }
     else if( con->getType()->isDoubleTy() )
@@ -44,13 +44,13 @@ void DisectConstant( vector<shared_ptr<Symbol>>& vec, const llvm::Constant* con)
         }
         else
         {
-            throw AtlasException("Could not extract double from constant double!");
+            throw CyclebiteException("Could not extract double from constant double!");
         }
     }
     else
     {
         PrintVal(con);
-        throw AtlasException("Cannot recognize this constant type!");
+        throw CyclebiteException("Cannot recognize this constant type!");
     }
 }
 
@@ -140,7 +140,7 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
             }
             if( vars.empty() )
             {
-                throw AtlasException("Could not find any IVs for this cycle!");
+                throw CyclebiteException("Could not find any IVs for this cycle!");
             }
             for( const auto& var : vars )
             {
@@ -277,7 +277,6 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     else if( const auto& intrin = llvm::dyn_cast<llvm::IntrinsicInst>(Q.front()) )
                     {
                         auto intrinName = string(llvm::Intrinsic::getBaseName(intrin->getIntrinsicID()));
-                        spdlog::info(intrinName);
                         if( intrinName == "llvm.fmuladd" )
                         {
                             // confirm the phi is the third argument in the function call - this is a 
@@ -324,7 +323,7 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                             }
                             if( !c )
                             {
-                                throw AtlasException("Could not find the cycle of the reductionOp when finding reduction variable candidates!");
+                                throw CyclebiteException("Could not find the cycle of the reductionOp when finding reduction variable candidates!");
                             }
                             const shared_ptr<DataValue> ptr = DNIDMap.at(ld->getPointerOperand());
                             for( const auto& iv : vars )
@@ -405,14 +404,13 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
             else
             {
                 PrintVal(s);
-                throw AtlasException("Store instruction of an induction variable is not an instruction!");
+                throw CyclebiteException("Store instruction of an induction variable is not an instruction!");
             }
             if( iv == nullptr )
             {
                 PrintVal(can->getVal());
-                throw AtlasException("Cannot map this reduction variable to an induction variable!");
+                throw CyclebiteException("Cannot map this reduction variable to an induction variable!");
             }
-            PrintVal(reductionOp->getVal());
             rvs.insert( make_shared<ReductionVariable>(iv, reductionOp) );
         }
     }
@@ -708,7 +706,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
         if( geps.empty() )
         {
             PrintVal(bp);
-            throw AtlasException("Could not map any geps to a base pointer candidate!");
+            throw CyclebiteException("Could not map any geps to a base pointer candidate!");
         }
 #endif
         // now we group the loads and stores together with their respective geps in the order they appear
@@ -788,7 +786,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                 // in that case, the load never uses a gep... it just loads the pointer
                 // so just ignore it for now
                 //PrintVal(ld);
-                //throw AtlasException("Could not map a base pointer load to a gep!");
+                //throw CyclebiteException("Could not map a base pointer load to a gep!");
                 continue;
             }
 #endif
@@ -874,7 +872,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
             if( targetPair.first == nullptr || targetPair.second == nullptr )
             {
                 PrintVal(gep);
-                throw AtlasException("Found a gep that doesn't map to a load instruction!");
+                throw CyclebiteException("Found a gep that doesn't map to a load instruction!");
             }
             loads.push_back(targetPair);
         }
@@ -1057,7 +1055,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
             {
                 PrintVal(bp);
                 PrintVal(gep);
-                throw AtlasException("Found a gep that doesn't map to a store instruction!");
+                throw CyclebiteException("Found a gep that doesn't map to a store instruction!");
             }
             stores.push_back(targetPair);
         }
@@ -1065,7 +1063,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
     }
     if( bps.empty() )
     {
-        throw AtlasException("Could not find any base pointers in this task!");
+        throw CyclebiteException("Could not find any base pointers in this task!");
     }
     return bps;
 }
@@ -1107,182 +1105,16 @@ vector<shared_ptr<InductionVariable>> getOrdering( const llvm::GetElementPtrInst
             else if( const auto& glob = llvm::dyn_cast<llvm::GlobalValue>(*idx) )
             {
                 // not sure what to do here
-                throw AtlasException("Found a global in a gep!");
+                throw CyclebiteException("Found a global in a gep!");
             }
         }
         if( !found )
         {
             PrintVal(gep);
-            throw AtlasException("Cannot map a gep index to an induction variable!");
+            throw CyclebiteException("Cannot map a gep index to an induction variable!");
         }
     }
     return order;
-}
-
-set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const set<shared_ptr<IndexVariable>>& idxVars)
-{
-    // all collections that are forged in this method
-    set<shared_ptr<Collection>> colls;
-
-    // the idxVars already encode which base pointer(s) they map to, what their hierarchical order is, and which induction variable they may be using
-    // but, this does not give us a clean, concise expression for the slabs of memory that are being indexed by the idxVars
-    // thus, we describe these slabs of memory with "collections"
-
-    // first step, find out how many slabs of memory there are (each one will get their own collection)
-    // do this by going through the idxVars, finding their implicit hierarchies, and which base pointers they map to
-    map<shared_ptr<BasePointer>, set<shared_ptr<IndexVariable>>> commonBPs;
-    map<shared_ptr<BasePointer>, set<set<shared_ptr<IndexVariable>>>> varHierarchies;
-
-    for( const auto& idx : idxVars )
-    {
-        for( const auto& bp : idx->getBPs() )
-        {
-            commonBPs[bp].insert(idx);
-        }
-    }
-    // now sort the idxVars that map to the same BP into separate groups based on the hierarchies they form
-    // this is a depth-first search: we are looking for all unique avenues from the root(s) of the idxVar tree to the leaves
-    for( const auto& bp : commonBPs )
-    {
-        // remembers all non-leaf nodes that are loaded and have had a collection built for them
-        set<shared_ptr<IndexVariable>> loadedAccounted;
-        // search depth-first through all avenues from the root of the idxVar tree to the leaves
-        set<shared_ptr<IndexVariable>> covered;
-        for( const auto& idx : bp.second )
-        {
-            // we want to find the parent idxVar and walk through the tree from there
-            if( covered.find(idx) != covered.end() )
-            {
-                continue;
-            }
-            else if( idx->getParent() )
-            {
-                continue;
-            }
-            deque<shared_ptr<IndexVariable>> Q;
-            Q.push_front(idx);
-            covered.insert(idx);
-            while( !Q.empty() )
-            {
-                bool pop = true;
-                if( Q.front()->getChildren().empty() )
-                {
-                    // we have hit a leaf, push the avenue we have observed
-                    /*set<shared_ptr<IndexVariable>> newAvenue;
-                    for( const auto& p : Q )
-                    {
-                        newAvenue.insert(p);
-                    }
-                    varHierarchies[bp.first].insert( newAvenue );*/
-                    varHierarchies[bp.first].insert( set<shared_ptr<IndexVariable>>(Q.begin(), Q.end()) );
-                }
-                else
-                {
-                    if( Q.front()->isLoaded() )
-                    {
-                        if( loadedAccounted.find(Q.front()) == loadedAccounted.end() )
-                        {
-                            // there is an interesting corner case here where some base pointers are not offset by this particular combination of idxVars
-                            // when a non-leaf idxVar is used to offset many base pointers, but it itself is used in a non-const-offset gep, it may only be offsetting a subset of these base pointers
-                            // e.g.: StencilChain/Naive BB83 (OPFLAG=-O1)
-                            // thus here, we implement a check to confirm this bp is offset by this combination of idxVars
-                            // find the gep(s) that use the child-most idxVar but are not children of the child-most idxVar
-                            set<const llvm::GetElementPtrInst*> targets;
-                            for( const auto& gep : Q.front()->getGeps() )
-                            {
-                                bool isChild = false;
-                                for( const auto& child : Q.front()->getChildren() )
-                                {
-                                    if( child->getNode() == gep )
-                                    {
-                                        isChild = true;
-                                        break;
-                                    }
-                                }
-                                if( !isChild )
-                                {
-                                    targets.insert(llvm::cast<llvm::GetElementPtrInst>(gep->getInst()));
-                                }
-                            }
-                            // now that we have the non-child geps, confirm whether this bp is offset by them
-                            bool hasOffset = false;
-                            for( const auto& gep : targets )
-                            {
-                                if( bp.first->isOffset(gep) )
-                                {
-                                    hasOffset = true;
-                                }
-                            }
-                            if( hasOffset )
-                            {
-                                varHierarchies[bp.first].insert( set<shared_ptr<IndexVariable>>(Q.begin(), Q.end()) );
-                                loadedAccounted.insert(Q.front());
-                            }
-                        }
-                    }
-                    for( const auto& c : Q.front()->getChildren() )
-                    {
-                        if( covered.find(c) == covered.end() )
-                        {
-                            if( c->getBPs().find(bp.first) != c->getBPs().end() )
-                            {
-                                Q.push_front(c);
-                                covered.insert(c);
-                                pop = false;
-                                break;
-                            }
-                        }
-                    }
-                }
-                if( pop )
-                {
-                    Q.pop_front();
-                }
-            }
-        }        
-    }
-
-    // now construct collections from the hierarchies that have been grouped
-    for( const auto& bp : varHierarchies )
-    {
-        for( const auto& ivSet : bp.second )
-        {
-            colls.insert( make_shared<Collection>(ivSet, bp.first) );
-            /*auto it = colls.insert( make_shared<Collection>(ivSet, bp.first) );
-            PrintVal((*it.first)->getBP()->getNode()->getVal());
-            for( const auto& iv : (*it.first)->getIndices() )
-            {
-                PrintVal(iv->getNode()->getInst());
-            }
-            cout << endl;*/
-        }
-    }
-    /*map<shared_ptr<BasePointer>, set<shared_ptr<IndexVariable>>> varHierarchies;
-
-    deque<shared_ptr<IndexVariable>> Q;
-    set<shared_ptr<IndexVariable>> covered;
-    for( const auto& idx : idxVars )
-    {
-        for( const auto& bp : idx->getBPs() )
-        {
-            varHierarchies[bp].insert(idx);
-        }
-    }
-
-    // now just construct the collections
-    for( const auto& bp : varHierarchies )
-    {
-        colls.insert( make_shared<Collection>(bp.second, bp.first) );
-    }*/
-    /*for( const auto& coll : colls )
-    {
-        PrintVal(coll->getBP()->getNode()->getVal());
-        for( const auto& idx : coll->getIndices() )
-        {
-            PrintVal(idx->getNode()->getInst());
-        }
-    }*/
-    return colls;
 }
 
 /// @brief Creates expressions from collections and function nodes
@@ -1445,7 +1277,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                 PrintVal(n->getVal());
             }
 #endif
-            throw AtlasException("Cannot handle the case where a cycle in the DFG contains multiple phis!");
+            throw CyclebiteException("Cannot handle the case where a cycle in the DFG contains multiple phis!");
         }
     }
     else
@@ -1473,7 +1305,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     }
     if( !first )
     {
-        throw AtlasException("Could not find first instruction in the instruction group!");
+        throw CyclebiteException("Could not find first instruction in the instruction group!");
     }
 
     // now we need to find the order of operations
@@ -1506,7 +1338,7 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
                         auto pos = std::find(order.begin(), order.end(), DNIDMap.at(instQ.front()));
                         if( pos == order.end() )
                         {
-                            throw AtlasException("Cannot resolve where to insert function inst operand in the ordered list!");
+                            throw CyclebiteException("Cannot resolve where to insert function inst operand in the ordered list!");
                         }
                         order.insert(pos, static_pointer_cast<Inst>(DNIDMap.at(opInst)));
                         instCovered.insert(opInst);
@@ -1541,14 +1373,6 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
     // a reduction should be a cycle starting at a phi, followed by ops (binary or cast), that ultimately feed a reduction variable
     // we must separate the phi from the binary ops from the RV, then construct the expression for the reduction (which is just the binary ops), then add the reduction to it (which sets the operator next to the equal sign e.g. "+=")
     shared_ptr<ReductionVariable> rv = nullptr;
-    for( const auto& val : order )
-    {
-        PrintVal(val->getInst());
-    }
-    for( const auto& rv : rvs )
-    {
-        PrintVal(rv->getNode()->getVal());
-    }
     if( !rvs.empty() )
     {
         map<shared_ptr<DataValue>, shared_ptr<ReductionVariable>> dnToRv;
@@ -1600,44 +1424,59 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
 #endif
             // get all induction variables
             auto vars = getInductionVariables(t);
-            // get all reduction variables
-            auto rvs = getReductionVariables(t, vars);
-            // get all base pointers
-            auto bps  = getBasePointers(t);
-            // get index variables
-            auto idxVars = getIndexVariables(t, bps, vars);
-            // construct collections
-            auto cs   = getCollections(idxVars);
-            // each task should have exactly one expression
-            auto expr = getExpression(t, cs, rvs);
 #ifdef DEBUG
             spdlog::info("Vars:");
             for( const auto& var : vars )
             {
                 spdlog::info(var->dump()+" -> "+PrintVal(var->getNode()->getVal(), false));
-            }
+            }            // get all reduction variables
+#endif
+
+            auto rvs = getReductionVariables(t, vars);
+#ifdef DEBUG
             spdlog::info("Reductions");
             for( const auto& rv : rvs )
             {
                 spdlog::info(rv->dump()+" -> "+PrintVal(rv->getNode()->getVal(), false));
             }
+#endif
+            // get all base pointers
+            auto bps  = getBasePointers(t);
+#ifdef DEBUG
             spdlog::info("Base Pointers");
             for( const auto& bp : bps )
             {
                 spdlog::info(bp->dump()+" -> "+PrintVal(bp->getNode()->getVal(), false));
             }
+#endif
+            // get index variables
+            auto idxVars = getIndexVariables(t, bps, vars);
+#ifdef DEBUG
+            spdlog::info("Index Variables:");
+            for( const auto& idx : idxVars )
+            {
+                spdlog::info(idx->dump()+" -> "+PrintVal(idx->getNode()->getInst(), false));
+            }
+#endif
+            // construct collections
+            auto cs   = getCollections(idxVars);
+#ifdef DEBUG
             spdlog::info("Collections:");
             for( const auto& c : cs )
             {
                 spdlog::info(c->dump());
             }
+#endif
+            // each task should have exactly one expression
+            auto expr = getExpression(t, cs, rvs);
+#ifdef DEBUG
             spdlog::info("Expression:");
             spdlog::info(expr->dump());
             spdlog::info("Grammar Success");
             cout << endl;
 #endif
         }
-        catch(AtlasException& e)
+        catch(CyclebiteException& e)
         {
             spdlog::critical(e.what());
 #ifdef DEBUG

@@ -35,12 +35,11 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
     // Annotate its bitcodes and values
-    //CleanModule(SourceBitcode.get());
-    Format(SourceBitcode.get());
+    Cyclebite::Util::Format(*SourceBitcode);
     // construct its callgraph
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;
-    InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
 
     // Set of nodes that constitute the entire graph
     ControlGraph graph;
@@ -52,11 +51,11 @@ int main(int argc, char *argv[])
         auto err = BuildCFG(graph, InputFilename, false);
         if (err)
         {
-            throw AtlasException("Failed to read input profile file!");
+            throw CyclebiteException("Failed to read input profile file!");
         }
         if (graph.empty())
         {
-            throw AtlasException("No nodes could be read from the input profile!");
+            throw CyclebiteException("No nodes could be read from the input profile!");
         }
         // accumulate block frequencies
         for (const auto &block : graph.nodes())
@@ -72,7 +71,7 @@ int main(int argc, char *argv[])
             }
         }
     }
-    catch (AtlasException &e)
+    catch (CyclebiteException &e)
     {
         spdlog::critical(e.what());
         return EXIT_FAILURE;
@@ -87,7 +86,7 @@ int main(int argc, char *argv[])
     {
         TrivialTransforms(transformedGraph);
     }
-    catch (AtlasException &e)
+    catch (CyclebiteException &e)
     {
         spdlog::error("Exception while conducting trivial transforms on reduced markov graph:");
         spdlog::error(e.what());

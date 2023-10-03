@@ -178,7 +178,7 @@ namespace Cyclebite::Profile::Backend::Memory
             {
                 FindEpochBoundaries();
             }
-            catch (AtlasException &e)
+            catch (CyclebiteException &e)
             {
                 spdlog::critical(e.what());
                 exit(EXIT_FAILURE);

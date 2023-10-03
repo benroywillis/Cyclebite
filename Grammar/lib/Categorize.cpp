@@ -93,7 +93,7 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
                         else if (auto st = llvm::dyn_cast<llvm::StoreInst>(Q.front()))
                         {
                             // a store can't possibly be used in a store... something is wrong
-                            throw AtlasException("Found a store that is an operand to a store!");
+                            throw CyclebiteException("Found a store that is an operand to a store!");
                         }
                         else if (auto inst = llvm::dyn_cast<llvm::Instruction>(Q.front()))
                         {
@@ -181,7 +181,7 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
         {
             if (entry->colors.find(OpColor::Blue) != entry->colors.end())
             {
-                funcInstructions.insert(GetValueID(entry->inst));
+                funcInstructions.insert(Cyclebite::Util::GetValueID(entry->inst));
             }
         }
     }
@@ -284,7 +284,7 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
                         }
                         else
                         {
-                            throw AtlasException("This terminator is not yet supported: " + PrintVal(inst, false));
+                            throw CyclebiteException("This terminator is not yet supported: " + PrintVal(inst, false));
                         }
                         if (target)
                         {
@@ -345,7 +345,7 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
                     else if (auto st = llvm::dyn_cast<llvm::StoreInst>(u.get()))
                     {
                         // a store can't possibly be used in a store... something is wrong
-                        throw AtlasException("Found a store that affected state!");
+                        throw CyclebiteException("Found a store that affected state!");
                     }
                     else if (auto inst = llvm::dyn_cast<llvm::Instruction>(u.get()))
                     {
@@ -407,7 +407,7 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
             }
             else
             {
-                throw AtlasException("Cannot handle the case where a state pointer comes from: " + PrintVal(p, false));
+                throw CyclebiteException("Cannot handle the case where a state pointer comes from: " + PrintVal(p, false));
             }
         }
         // for each store instruction that stores state
@@ -463,7 +463,7 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
     {
         if (!entry->colors.empty())
         {
-            stateInstructions.insert(GetValueID(entry->inst));
+            stateInstructions.insert(Cyclebite::Util::GetValueID(entry->inst));
         }
     }
     return stateInstructions;
@@ -586,7 +586,7 @@ set<int64_t> Cyclebite::Grammar::findMemory(const map<string, set<llvm::BasicBlo
     {
         if (!entry->colors.empty())
         {
-            memInstructions.insert(GetValueID(entry->inst));
+            memInstructions.insert(Cyclebite::Util::GetValueID(entry->inst));
         }
     }
     return memInstructions;

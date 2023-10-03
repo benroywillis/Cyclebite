@@ -57,7 +57,7 @@ const shared_ptr<ControlNode> ControlGraph::getFirstNode() const
                     }
                     else
                     {
-                        throw AtlasException("Graph has more than one starting node!");
+                        throw CyclebiteException("Graph has more than one starting node!");
                     }
                 }
             }
@@ -65,7 +65,7 @@ const shared_ptr<ControlNode> ControlGraph::getFirstNode() const
     }
     if( !firstNode )
     {
-        throw AtlasException("Graph does not have a starting node!");
+        throw CyclebiteException("Graph does not have a starting node!");
     }
     return firstNode;
 }
@@ -88,7 +88,7 @@ const set<shared_ptr<ControlNode>, p_GNCompare> ControlGraph::getAllTerminators(
     }
     if( !graphTerminator )
     {
-        throw AtlasException("Cannot find the imaginary terminator of this control graph!");
+        throw CyclebiteException("Cannot find the imaginary terminator of this control graph!");
     }
     for( const auto& pred : graphTerminator->getPredecessors() )
     {
@@ -113,7 +113,7 @@ const set<shared_ptr<ControlNode>, p_GNCompare> ControlGraph::getControlNodes() 
             }
             else
             {
-                throw AtlasException("Node cannot be converted to a control node!");
+                throw CyclebiteException("Node cannot be converted to a control node!");
             }
         }
         else
@@ -137,7 +137,7 @@ const set<shared_ptr<UnconditionalEdge>, GECompare> ControlGraph::getControlEdge
             }
             else
             {
-                throw AtlasException("Edge cannot be converted to an unconditional node!");
+                throw CyclebiteException("Edge cannot be converted to an unconditional node!");
             }
         }
         else

@@ -38,7 +38,7 @@ const std::shared_ptr<ControlNode> &UnconditionalEdge::getWeightedSrc() const
 {
     if (weightedSrc == nullptr)
     {
-        throw AtlasException("Edge does not have a weighted source node!");
+        throw CyclebiteException("Edge does not have a weighted source node!");
     }
     return weightedSrc;
 }
@@ -47,7 +47,7 @@ const std::shared_ptr<ControlNode> &UnconditionalEdge::getWeightedSnk() const
 {
     if (weightedSnk == nullptr)
     {
-        throw AtlasException("Edge does not have a weighted sink node!");
+        throw CyclebiteException("Edge does not have a weighted sink node!");
     }
     return weightedSnk;
 }

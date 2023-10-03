@@ -104,11 +104,11 @@ int main(int argc, char *argv[])
     LLVMContext context;
     SMDiagnostic smerror;
     auto SourceBitcode = parseIRFile(BitcodeFileName, smerror, context);
-    Format(SourceBitcode.get());
+    Cyclebite::Util::Format(*SourceBitcode);
     // construct its callgraph
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;
-    InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
 
     // construct static call graph from the input bitcode
     llvm::CallGraph staticCG(*SourceBitcode);
@@ -145,7 +145,7 @@ int main(int argc, char *argv[])
     {
         specialInstructions = colorNodes(kernelSets);
     }
-    catch (AtlasException& e)
+    catch (CyclebiteException& e)
     {
         spdlog::critical(e.what());
         return EXIT_FAILURE;
@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
 
     if (BuildDFG(SourceBitcode.get(), dynamicCG, blockToNode, programFlow, dGraph, specialInstructions, IDToBlock))
     {
-        throw AtlasException("Failed to build DFG!");
+        throw CyclebiteException("Failed to build DFG!");
     }
     // takes the information from EP about which loads and stores touch significant memory chunks and injects that info into the DFG
     InjectSignificantMemoryInstructions(instanceJson, IDToValue);
@@ -209,7 +209,7 @@ int main(int argc, char *argv[])
                 blockInstCount++;
             }
             staticInstructions += blockInstCount;
-            auto blockID = GetBlockID(cast<BasicBlock>(b));
+            auto blockID = Cyclebite::Util::GetBlockID(cast<BasicBlock>(b));
             if( blockToNode.find(blockID) != blockToNode.end() )
             {
                 dynamicInstructions += blockInstCount;

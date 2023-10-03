@@ -14,7 +14,7 @@ void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::jso
     if( instanceJson.find("Instruction Tuples") == instanceJson.end() )
     {
         spdlog::critical("Could not find 'Instruction Tuples' category in input instance file!");
-        throw AtlasException("Could not find 'Instruction Tuples' category in input instance file!");
+        throw CyclebiteException("Could not find 'Instruction Tuples' category in input instance file!");
     }
     //for( const auto& value : instanceJson["Instruction Tuples"].items() )
     for( const auto& value : instanceJson["Instruction Tuples"] )
@@ -27,7 +27,7 @@ void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::jso
             {
                 if( Cyclebite::Graph::DNIDMap.find(inst) == Cyclebite::Graph::DNIDMap.end() )
                 {
-                    throw AtlasException("Found a significant memory op that's not live!");
+                    throw CyclebiteException("Found a significant memory op that's not live!");
                 }
                 // mark as significant
                 SignificantMemInst.insert( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(inst)) );
@@ -35,12 +35,12 @@ void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::jso
             else
             {
                 PrintVal(val);
-                throw AtlasException("Significant memory op is not an instruction!");
+                throw CyclebiteException("Significant memory op is not an instruction!");
             }
         }
         else
         {
-            throw AtlasException("Cannot find significant memory op ID in the value ID map!");
+            throw CyclebiteException("Cannot find significant memory op ID in the value ID map!");
         }
     }
 }

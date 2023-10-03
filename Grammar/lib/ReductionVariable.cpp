@@ -1,4 +1,7 @@
 #include "ReductionVariable.h"
+#include "Util/Print.h"
+#include "Util/Exceptions.h"
+#include <llvm/IR/IntrinsicInst.h>
 #include <deque>
 
 using namespace std;
@@ -6,6 +9,14 @@ using namespace Cyclebite::Grammar;
 
 ReductionVariable::ReductionVariable( const shared_ptr<InductionVariable>& iv, const shared_ptr<Cyclebite::Graph::DataValue>& n ) : Symbol("rv"), iv(iv), node(n)
 {
+    if( const auto& intrin = llvm::dyn_cast<llvm::IntrinsicInst>(node->getVal()) )
+    {
+        if( llvm::Intrinsic::getBaseName( intrin->getIntrinsicID() ) != "llvm.fmuladd" )
+        {
+            PrintVal(node->getVal());
+            throw CyclebiteException("Cannot yet handle this intrinsic as a reduction variable!");
+        }
+    }
     // incoming datanode must map to a binary operation
     if( const auto& op = llvm::dyn_cast<llvm::BinaryOperator>(n->getVal()) )
     {
@@ -54,20 +65,37 @@ const llvm::PHINode* ReductionVariable::getPhi() const
         }
         Q.pop_front();
     }
-    covered.clear();
     for( const auto& phi : phis )
     {
         // if this phi loops with our value, its our phi
         // we already know from our forward walk that this phi uses our node
         // so if our node uses this phi, we have a loop
         Q.push_front(phi);
+        covered.clear();
         covered.insert(phi);
         while( !Q.empty() )
         {
             if( Q.front() == node->getVal() )
             {
-                // the loop has been completed, return this phi
-                return phi;
+                // there's a special case when the RV node is an llvm intrinsic
+                // the arguments to the intrinsic may be from an operation that does not involve a reduction (e.g., the first two args in llvm.fmuladd are for the mul, the rv is the third)
+                // thus we must make sure this phi is transacting with the RV, not the other operands
+                if( const auto& intrin = llvm::dyn_cast<llvm::IntrinsicInst>(node->getVal()) )
+                {
+                    if( string(llvm::Intrinsic::getBaseName( intrin->getIntrinsicID() )) == "llvm.fmuladd" )
+                    {
+                        if( intrin->getOperand(2) == phi )
+                        {
+                            return phi;
+                        }
+                        // else we don't care about this case
+                    }
+                }
+                else
+                {
+                    // the loop has been completed, return this phi
+                    return phi;
+                }
             }
             else
             {

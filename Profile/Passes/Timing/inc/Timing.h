@@ -3,10 +3,10 @@
 
 namespace Cyclebite::Profile::Passes
 {
-    struct Memory : public FunctionPass
+    struct Timing : public FunctionPass
     {
         static char ID;
-        Memory() : FunctionPass(ID) {}
+        Timing() : FunctionPass(ID) {}
         bool runOnFunction(Function &F) override;
         void getAnalysisUsage(AnalysisUsage &AU) const override;
         bool doInitialization(Module &M) override;
@@ -18,10 +18,10 @@ namespace Cyclebite::Profile::Passes
 
 namespace Cyclebite::Profile::Passes
 {
-    struct Memory : llvm::PassInfoMixin<Memory> 
+    struct Timing : llvm::PassInfoMixin<Timing> 
     {
         llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager& );
         // without setting this to true, all modules with "optnone" attribute are skipped
-        static bool isRequired() { return true; }
+        static bool isRequired() { return true; };
     };
 } // namespace Cyclebite::Profile::Passes

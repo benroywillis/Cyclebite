@@ -89,7 +89,7 @@ namespace Cyclebite::Backend::BackendInstance
             }
             else
             {
-                throw AtlasException("CodeSection mapped to neither a Kernel nor a Nonkernel!");
+                throw CyclebiteException("CodeSection mapped to neither a Kernel nor a Nonkernel!");
             }
         }
         // now build out the nodes in the graph
@@ -100,13 +100,13 @@ namespace Cyclebite::Backend::BackendInstance
             auto currentSectionIt = codeSections.find(TimeLine[i].first);
             if (currentSectionIt == codeSections.end())
             {
-                throw AtlasException("currentSection in the timeline does not map to an existing code section!");
+                throw CyclebiteException("currentSection in the timeline does not map to an existing code section!");
             }
             auto currentSection = *currentSectionIt;
             auto nextSectionIt = codeSections.find(TimeLine[i + 1].first);
             if (nextSectionIt == codeSections.end())
             {
-                throw AtlasException("currentSection in the timeline does not map to an existing code section!");
+                throw CyclebiteException("currentSection in the timeline does not map to an existing code section!");
             }
             auto nextSection = *nextSectionIt;
             // currentInstance holds the object of the current codeSection
@@ -141,7 +141,7 @@ namespace Cyclebite::Backend::BackendInstance
             }
             else
             {
-                throw AtlasException("currentSection casts to neither a kernel nor a non-kernel!");
+                throw CyclebiteException("currentSection casts to neither a kernel nor a non-kernel!");
             }
             // nextInstance holds the object of the codesection that happens (temporally) after the current
             //CodeInstance *nextInstance;
@@ -156,7 +156,7 @@ namespace Cyclebite::Backend::BackendInstance
             }
             else
             {
-                throw AtlasException("nextSection maps to neither a kernel nor a non-kernel!");
+                throw CyclebiteException("nextSection maps to neither a kernel nor a non-kernel!");
             }*/
             auto nextInstance = nextSection->getCurrentInstance();
             // TODO: add iteration count to the edge
@@ -335,7 +335,7 @@ namespace Cyclebite::Backend::BackendInstance
                 auto currentSegment = codeSections.find(TimeLine[i].first);
                 if (currentSegment == codeSections.end())
                 {
-                    throw AtlasException("The current timeline entry does not map to an existing code segment!");
+                    throw CyclebiteException("The current timeline entry does not map to an existing code segment!");
                 }
                 if (auto currentKernel = dynamic_cast<Kernel *>(*currentSegment))
                 {
@@ -378,7 +378,7 @@ namespace Cyclebite::Backend::BackendInstance
                 }
                 else
                 {
-                    throw AtlasException("ID in the TimeLine mapped to neither a kernel nor a nonkernel!");
+                    throw CyclebiteException("ID in the TimeLine mapped to neither a kernel nor a nonkernel!");
                 }
             }
 
@@ -431,7 +431,7 @@ namespace Cyclebite::Backend::BackendInstance
                 }
                 else
                 {
-                    throw AtlasException("CodeSegment pointer is neither a kernel nor a nonkernel!");
+                    throw CyclebiteException("CodeSegment pointer is neither a kernel nor a nonkernel!");
                 }
             }
 
@@ -548,7 +548,7 @@ namespace Cyclebite::Backend::BackendInstance
                     auto parentInstance = parent->getCurrentInstance();
                     if (!parentInstance)
                     {
-                        throw AtlasException("Found a parent kernel that does not have an instance before its child!");
+                        throw CyclebiteException("Found a parent kernel that does not have an instance before its child!");
                     }
                     bool childFound = false;
                     // TODO: this loop needs to be turned into a search method for the children set
@@ -568,7 +568,7 @@ namespace Cyclebite::Backend::BackendInstance
                 }
                 else
                 {
-                    throw AtlasException("Don't know what to do about finding the current kernel instance when there is more than one parent!");
+                    throw CyclebiteException("Don't know what to do about finding the current kernel instance when there is more than one parent!");
                 }
             }
             // if we don't find any live kernels it means we are in non-kernel code

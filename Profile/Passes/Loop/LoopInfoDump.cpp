@@ -1,9 +1,8 @@
 
 #include "LoopInfoDump.h"
-#include "Annotate.h"
+#include "LoopInfoDump.h"
 #include "Util/Annotate.h"
 #include "Util/Print.h"
-#include "MarkovIO.h"
 #include <fstream>
 #include <iomanip>
 #include <llvm/Analysis/AssumptionCache.h>
@@ -15,8 +14,7 @@
 
 using namespace llvm;
 using namespace std;
-using json = nlohmann::json;
-
+/*
 namespace Cyclebite::Profile::Passes
 {
     enum class LoopType
@@ -231,10 +229,10 @@ namespace Cyclebite::Profile::Passes
             auto SE = ScalarEvolution(f, tli, AC, DT, LI);
             for (auto loop : LI)
             {
-                /*for( auto b : loop->blocks() )
-                {
-                    PrintVal(cast<BasicBlock>(b));
-                }*/
+                //for( auto b : loop->blocks() )
+                //{
+                //    PrintVal(cast<BasicBlock>(b));
+                //}
                 auto IV = loop->getInductionVariable(SE);
                 // common checks
                 if (loop->isLoopSimplifyForm())
@@ -247,17 +245,17 @@ namespace Cyclebite::Profile::Passes
                     {
                         cout << "Loop does not have a pre-header" << endl;
                     }
-                    /*else if (BasicBlock *Latch = loop->getLoopLatch())
-                    {
-                        PrintVal(Latch);
-                        if (BranchInst *BI = dyn_cast_or_null<BranchInst>(Latch->getTerminator()))
-                            if (BI->isConditional())
-                                cout << "Latch is correct!" << endl;
-                            else
-                                cout << "Latch is not correct:(" << endl;
-                        else
-                            cout << "Latch is not terminated with a branch:(" << endl;
-                    }*/
+                    //else if (BasicBlock *Latch = loop->getLoopLatch())
+                    //{
+                    //    PrintVal(Latch);
+                    //    if (BranchInst *BI = dyn_cast_or_null<BranchInst>(Latch->getTerminator()))
+                    //        if (BI->isConditional())
+                    //            cout << "Latch is correct!" << endl;
+                    //        else
+                    //            cout << "Latch is not correct:(" << endl;
+                    //    else
+                    //        cout << "Latch is not terminated with a branch:(" << endl;
+                    //}
                     else if (!loop->getLoopLatch())
                     {
                         cout << "Loop latch could not be found" << endl;
@@ -278,7 +276,7 @@ namespace Cyclebite::Profile::Passes
                 //
                 if (IV)
                 {
-                    loops[loopID]["IV"].push_back(GetValueID(IV));
+                    loops[loopID]["IV"].push_back(Cyclebite::Util::GetValueID(IV));
                     // the phi node inst gives the value that represents the induction variable
                     // this value should be used to offset the base pointer with GEPOperators
 
@@ -402,11 +400,11 @@ namespace Cyclebite::Profile::Passes
             // Ben - loop info dump
             for (auto base : basePointers)
             {
-                loops[loopID]["BasePointers"].push_back(GetValueID(base));
+                loops[loopID]["BasePointers"].push_back(Cyclebite::Util::GetValueID(base));
             }
             for (auto op : operations)
             {
-                loops[loopID]["Functions"].push_back(GetValueID(op));
+                loops[loopID]["Functions"].push_back(Cyclebite::Util::GetValueID(op));
             }
             for (auto loop : LI)
             {
@@ -416,7 +414,7 @@ namespace Cyclebite::Profile::Passes
                     // John: we cannot trivially say that the parent loop is hot if the child loop is hot (exception: loop body of parent loop is entirely the child loop, like GEMM, but in GEMM specifically, the middle loop should be hot)
                     // any loop that contained hot code in its call graph but did not rely on function indirect or recursion was a hot loop
                     // if a loop is contained within a recursion, it doesn't count, because I can't tell if it was hot because of the loop or because of the recursion
-                    loops[loopID]["Blocks"].push_back(GetBlockID(block));
+                    loops[loopID]["Blocks"].push_back(Cyclebite::Util::GetBlockID(block));
                     // add any functions present in the loop that does not contain another loop
                     deque<llvm::Function *> Q;
                     for (auto ii = block->begin(); ii != block->end(); ii++)
@@ -440,7 +438,7 @@ namespace Cyclebite::Profile::Passes
                     {
                         for (auto b = Q.front()->begin(); b != Q.front()->end(); b++)
                         {
-                            loops[loopID]["Blocks"].push_back(GetBlockID(llvm::cast<llvm::BasicBlock>(b)));
+                            loops[loopID]["Blocks"].push_back(Cyclebite::Util::GetBlockID(llvm::cast<llvm::BasicBlock>(b)));
                             for (auto ii = b->begin(); ii != b->end(); ii++)
                             {
                                 if (auto call = llvm::dyn_cast<CallBase>(ii))
@@ -468,11 +466,11 @@ namespace Cyclebite::Profile::Passes
             }
             for (auto b = f.begin(); b != f.end(); b++)
             {
-                staticBlocks.insert(GetBlockID(cast<BasicBlock>(b)));
+                staticBlocks.insert(Cyclebite::Util::GetBlockID(cast<BasicBlock>(b)));
             }
         }
 
-        json loopfile;
+        nlohmann::json loopfile;
         for (auto loop : loops)
         {
             loopfile["Loops"].push_back(loop.second);
@@ -492,11 +490,37 @@ namespace Cyclebite::Profile::Passes
     void LoopInfoDump::getAnalysisUsage(AnalysisUsage &AU) const
     {
         AU.setPreservesCFG();
-        AU.addRequired<Cyclebite::Profile::Passes::EncodedAnnotate>();
-        AU.addRequired<Cyclebite::Profile::Passes::MarkovIO>();
+        AU.addRequired<Cyclebite::Profile::Passes::LoopInfoDump>();
         AU.addRequired<LoopInfoWrapperPass>();
         AU.addRequired<TargetLibraryInfoWrapperPass>();
     }
     char LoopInfoDump::LoopInfoDump::ID = 0;
     static RegisterPass<LoopInfoDump> X("LoopInfoDump", "Dumps information about loop info", true, true);
 } // namespace Cyclebite::Profile::Passes
+*/
+
+// new pass manager registration
+llvm::PassPluginLibraryInfo getLoopInfoDumpPluginInfo() 
+{
+    return {LLVM_PLUGIN_API_VERSION, "LoopInfoDump", LLVM_VERSION_STRING, 
+        [](PassBuilder &PB) 
+        {
+            PB.registerPipelineParsingCallback( 
+                [](StringRef Name, ModulePassManager& MPM, ArrayRef<PassBuilder::PipelineElement>) 
+                {
+                    if (Name == "LoopInfoDump") {
+                        MPM.addPass(Cyclebite::Profile::Passes::LoopInfoDump());
+                        return true;
+                    }
+                    return false;
+                }
+            );
+        }
+    };
+}
+
+// guarantees this pass will be visible to opt when called
+extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() 
+{
+    return getLoopInfoDumpPluginInfo();
+}

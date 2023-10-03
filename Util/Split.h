@@ -4,9 +4,9 @@
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
 
-inline void Split(llvm::Module *M)
+inline void Split(llvm::Module& M)
 {
-    for (auto f = M->begin(); f != M->end(); f++)
+    for (auto f = M.begin(); f != M.end(); f++)
     {
         llvm::Function::iterator bi = f->begin();
         while (bi != f->end())

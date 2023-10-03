@@ -181,7 +181,7 @@ void Checks(ControlGraph &original, ControlGraph &transformed, string step)
     // 1. the graphs should not be empty
     if (transformed.empty() && !original.empty())
     {
-        throw AtlasException(step + ": Transformed graph is empty!");
+        throw CyclebiteException(step + ": Transformed graph is empty!");
     }
     // 2. all preds and succs should be present
     for (const auto node : transformed.getControlNodes())
@@ -190,30 +190,30 @@ void Checks(ControlGraph &original, ControlGraph &transformed, string step)
         {
             if (!transformed.find(pred))
             {
-                throw AtlasException(step + ": Predecessor edge missing!");
+                throw CyclebiteException(step + ": Predecessor edge missing!");
             }
             if (!transformed.find(pred->getSrc()))
             {
-                throw AtlasException(step + ": Predecessor source missing!");
+                throw CyclebiteException(step + ": Predecessor source missing!");
             }
             if (!transformed.find(pred->getSnk()))
             {
-                throw AtlasException(step + ": Predecessor sink missing!");
+                throw CyclebiteException(step + ": Predecessor sink missing!");
             }
         }
         for (auto succ : node->getSuccessors())
         {
             if (!transformed.find(succ))
             {
-                throw AtlasException(step + ": Successor missing!");
+                throw CyclebiteException(step + ": Successor missing!");
             }
             if (!transformed.find(succ->getSrc()))
             {
-                throw AtlasException(step + ": Successor source missing!");
+                throw CyclebiteException(step + ": Successor source missing!");
             }
             if (!transformed.find(succ->getSnk()))
             {
-                throw AtlasException(step + ": Successor sink missing!");
+                throw CyclebiteException(step + ": Successor sink missing!");
             }
         }
     }
@@ -227,7 +227,7 @@ void Checks(ControlGraph &original, ControlGraph &transformed, string step)
         {
             if (foundStart)
             {
-                throw AtlasException(step + ": Graph is not one whole piece!");
+                throw CyclebiteException(step + ": Graph is not one whole piece!");
             }
             else
             {
@@ -238,7 +238,7 @@ void Checks(ControlGraph &original, ControlGraph &transformed, string step)
         {
             if (foundEnd)
             {
-                throw AtlasException(step + ": Graph is not one whole piece!");
+                throw CyclebiteException(step + ": Graph is not one whole piece!");
             }
             else
             {
@@ -264,7 +264,7 @@ void Checks(ControlGraph &original, ControlGraph &transformed, string step)
         }
         if (sum < 0.9999 || sum > 1.0001)
         {
-            throw AtlasException(step + ": Outgoing edges do not sum to 1!");
+            throw CyclebiteException(step + ": Outgoing edges do not sum to 1!");
         }
     }
 }
@@ -275,7 +275,7 @@ void Test1_Checks(const ControlGraph& original, const ControlGraph& transformed)
     // ending subgraph size should be two nodes, two edges
     if( transformed.node_count() != 14 || transformed.edge_count() != 18 )
     {
-        throw AtlasException("Test 1 did not have the correct ending subgraph!");
+        throw CyclebiteException("Test 1 did not have the correct ending subgraph!");
     }
     // evaluate kernel entrances and exits
     for( const auto& node : transformed.nodes() )
@@ -297,7 +297,7 @@ void Test1_Checks(const ControlGraph& original, const ControlGraph& transformed)
             }
             if( entrances.size() != 3 )
             {
-                throw AtlasException("Test 1: Wrong number of kernel entrances!")
+                throw CyclebiteException("Test 1: Wrong number of kernel entrances!")
             }
             bool foundFirst = false;
             bool foundSecond = false;
@@ -321,15 +321,15 @@ void Test1_Checks(const ControlGraph& original, const ControlGraph& transformed)
             }
             if( !foundFirst )
             {
-                throw AtlasException("Test 1: Kernel did not have required 6->12 entrance!");
+                throw CyclebiteException("Test 1: Kernel did not have required 6->12 entrance!");
             }
             else if( !foundSecond )
             {
-                throw AtlasException("Test 1: Kernel did not have required 9->12 entrance!");
+                throw CyclebiteException("Test 1: Kernel did not have required 9->12 entrance!");
             }
             else if( !foundThird )
             {
-                throw AtlasException("Test 1: Kernel did not have required 11->12 entrance!");
+                throw CyclebiteException("Test 1: Kernel did not have required 11->12 entrance!");
             }
 
             set<pair<int64_t, int64_t>> exits;
@@ -340,12 +340,12 @@ void Test1_Checks(const ControlGraph& original, const ControlGraph& transformed)
             }
             if( exits.size() != 1 )
             {
-                throw AtlasException("Test 1: Wrong number of kernel exits!")
+                throw CyclebiteException("Test 1: Wrong number of kernel exits!")
             }
             bool found24to25 = false;
             if( exits.begin()->first != 24 || exits.begin()->second != 25 )
             {
-                throw AtlasException("Test 1: Kernel did not have required 24->25 exit!");
+                throw CyclebiteException("Test 1: Kernel did not have required 24->25 exit!");
             }
         }
     }
@@ -358,21 +358,21 @@ void ReverseTransformCheck(ControlGraph original, ControlGraph transformed, stri
     {
         if (original.find(node))
         {
-            throw AtlasException(step + ": Node in transformed graph not found in original!");
+            throw CyclebiteException(step + ": Node in transformed graph not found in original!");
         }
         auto origNode = original.getNode(node->NID);
         for (auto pred : node->getPredecessors())
         {
             if (origNode->getPredecessors().find(pred) == origNode->getPredecessors().end())
             {
-                throw AtlasException(step + ": Predecessor in transformed graph not found in equivalent original node predecessors!");
+                throw CyclebiteException(step + ": Predecessor in transformed graph not found in equivalent original node predecessors!");
             }
         }
         for (auto succ : node->getSuccessors())
         {
             if (origNode->getSuccessors().find(succ) == origNode->getSuccessors().end())
             {
-                throw AtlasException(step + ": Successor in transformed graph not found in equivalent original node successors!");
+                throw CyclebiteException(step + ": Successor in transformed graph not found in equivalent original node successors!");
             }
         }
     }
@@ -380,21 +380,21 @@ void ReverseTransformCheck(ControlGraph original, ControlGraph transformed, stri
     {
         if (original.find(node))
         {
-            throw AtlasException(step + ": Node in original graph not found in transformed!");
+            throw CyclebiteException(step + ": Node in original graph not found in transformed!");
         }
         auto transformedNode = original.getNode(node->NID);
         for (auto pred : node->getPredecessors())
         {
             if (transformedNode->getPredecessors().find(pred) == transformedNode->getPredecessors().end())
             {
-                throw AtlasException(step + ": Predecessor in original graph not found in equivalent transformed node predecessors!");
+                throw CyclebiteException(step + ": Predecessor in original graph not found in equivalent transformed node predecessors!");
             }
         }
         for (auto succ : node->getSuccessors())
         {
             if (transformedNode->getSuccessors().find(succ) == transformedNode->getSuccessors().end())
             {
-                throw AtlasException(step + ": Successor in original graph not found in equivalent transformed node successors!");
+                throw CyclebiteException(step + ": Successor in original graph not found in equivalent transformed node successors!");
             }
         }
     }
@@ -419,7 +419,7 @@ uint8_t RunTest(ControlGraph (*testprep)(void), string name)
             Test1_Checks(original, transformed);
         }
     }
-    catch(AtlasException& e)
+    catch(CyclebiteException& e)
     {
         std::cerr << e.what() << '\n';
         return EXIT_FAILURE;

@@ -25,7 +25,7 @@ inline std::unique_ptr<llvm::Module> ReadBitcode(const std::string &InputFilenam
     {
         spdlog::critical("Failed to open bitcode file: " + InputFilename);
     }
-    Format(SourceBitcode.get());
+    Cyclebite::Util::Format(*SourceBitcode);
     return SourceBitcode;
 }
 
@@ -137,7 +137,7 @@ inline llvm::CallGraph getCallGraph(llvm::Module *mod, std::map<int64_t, std::ve
                 // indexer to track which function call we are on in a given basic block
                 // blockCallers contains in each value the sequence of blocks that are jumped to in the context switch
                 // thus, callCount indexes the vector this block maps to in the blockCaller map, if any
-                uint32_t callCount = 0;
+                //uint32_t callCount = 0;
                 if (auto CI = llvm::dyn_cast<llvm::CallBase>(it))
                 {
                     // this is supposed to detect null function calls
@@ -147,7 +147,7 @@ inline llvm::CallGraph getCallGraph(llvm::Module *mod, std::map<int64_t, std::ve
                     if (callee == nullptr)
                     {
                         // try to find a block caller entry for this function, if it's not there we have to move on
-                        auto BBID = GetBlockID(llvm::cast<llvm::BasicBlock>(bb));
+                        auto BBID = Cyclebite::Util::GetBlockID(llvm::cast<llvm::BasicBlock>(bb));
                         if (blockCallers.find(BBID) != blockCallers.end())
                         {
                             for (auto entry : blockCallers.at(BBID))
@@ -162,7 +162,7 @@ inline llvm::CallGraph getCallGraph(llvm::Module *mod, std::map<int64_t, std::ve
                                 }
                                 else
                                 {
-                                    throw AtlasException("Could not map a callee ID in blockCallers to a basic block!");
+                                    throw CyclebiteException("Could not map a callee ID in blockCallers to a basic block!");
                                 }
                             }
                         }
@@ -171,7 +171,7 @@ inline llvm::CallGraph getCallGraph(llvm::Module *mod, std::map<int64_t, std::ve
                             spdlog::warn("BlockCallers did not contain an entry for the indirect call in BBID " + std::to_string(BBID));
                         }
                     }
-                    callCount++;
+                    //callCount++;
                 }
             }
         }

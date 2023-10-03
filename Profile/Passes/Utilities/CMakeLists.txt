@@ -1,1 +1,1 @@
-target_sources(AtlasPasses PRIVATE AddLibrary.cpp Annotate.cpp CommandArgs.cpp Functions.cpp Timing.cpp)
+target_sources(AtlasPasses PRIVATE Annotate.cpp Functions.cpp Timing.cpp)
