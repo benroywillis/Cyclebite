@@ -1,3 +1,5 @@
+// Copyright 2023 Benjamin Willis
+// SPDX-License-Identifier: Apache-2.0
 #include "VirtualNode.h"
 #include "Util/Exceptions.h"
 #include "UnconditionalEdge.h"
