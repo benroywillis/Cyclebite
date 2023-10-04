@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
 #include "Categorize.h"
-#include "Function.h"
 #include <deque>
 #include "Util/IO.h"
 #include "Util/Exceptions.h"

@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
 #pragma once
-#include "Function.h"
 #include "DataGraph.h"
 #include "ReductionVariable.h"
+#include "Collection.h"
 
 namespace Cyclebite::Grammar
 {
