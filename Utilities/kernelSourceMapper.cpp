@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "Util/Format.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"

@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #pragma once
 #include "MLCycle.h"
 #include "UnconditionalEdge.h"
