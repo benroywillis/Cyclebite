@@ -1,3 +1,5 @@
+// Copyright 2023 Benjamin Willis
+// SPDX-License-Identifier: Apache-2.0
 //Label for variable names start
 //input 4096
 //output 4088

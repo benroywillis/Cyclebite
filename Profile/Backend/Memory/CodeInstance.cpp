@@ -1,3 +1,5 @@
+// Copyright 2023 Benjamin Willis
+// SPDX-License-Identifier: Apache-2.0
 #include "CodeInstance.h"
 
 using namespace std;

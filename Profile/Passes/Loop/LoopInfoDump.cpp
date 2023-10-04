@@ -1,4 +1,5 @@
-
+// Copyright 2023 Benjamin Willis
+// SPDX-License-Identifier: Apache-2.0
 #include "LoopInfoDump.h"
 #include "LoopInfoDump.h"
 #include "Util/Annotate.h"

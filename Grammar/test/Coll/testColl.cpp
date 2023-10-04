@@ -1,3 +1,5 @@
+// Copyright 2023 Benjamin Willis
+// SPDX-License-Identifier: Apache-2.0
 #include "Util/Format.h"
 #include "Util/Print.h"
 #include "Util/IO.h"

@@ -1,3 +1,5 @@
+// Copyright 2023 Benjamin Willis
+// SPDX-License-Identifier: Apache-2.0
 #include "DashHashTable.h"
 #include <math.h>
 #include <stdbool.h>
