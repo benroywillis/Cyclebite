@@ -1463,7 +1463,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             }
 #endif
             // construct collections
-            auto cs   = getCollections(idxVars);
+            auto cs   = getCollections(t, idxVars);
 #ifdef DEBUG
             spdlog::info("Collections:");
             for( const auto& c : cs )

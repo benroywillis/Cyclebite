@@ -12,7 +12,7 @@ namespace Cyclebite::Grammar
     class Collection : public Symbol
     {
     public:
-        Collection( const std::set<std::shared_ptr<IndexVariable>>& v, const std::shared_ptr<BasePointer>& p );
+        Collection( const std::vector<std::shared_ptr<IndexVariable>>& v, const std::shared_ptr<BasePointer>& p );
         ~Collection() = default;
         uint32_t getNumDims() const;
         const std::shared_ptr<IndexVariable>& operator[](unsigned i) const;
@@ -28,5 +28,5 @@ namespace Cyclebite::Grammar
         std::vector<std::shared_ptr<IndexVariable>> vars;
         std::shared_ptr<BasePointer> bp;
     };
-    std::set<std::shared_ptr<Collection>> getCollections(const std::set<std::shared_ptr<IndexVariable>>& idxVars);
+    std::set<std::shared_ptr<Collection>> getCollections(const std::shared_ptr<Task>& t, const std::set<std::shared_ptr<IndexVariable>>& idxVars);
 } // namespace Cyclebite::Grammar
