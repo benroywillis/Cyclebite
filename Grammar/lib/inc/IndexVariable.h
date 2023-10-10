@@ -15,10 +15,14 @@ namespace Cyclebite::Grammar
     {
     public:
         IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n,
-                       const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p = nullptr, 
+                       const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& p = std::set<std::shared_ptr<IndexVariable>>(), 
                        const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c = std::set<std::shared_ptr<IndexVariable>>(),
                        bool il = false );
-        void setParent( const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p);
+        IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n,
+                       const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p, 
+                       const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c = std::set<std::shared_ptr<IndexVariable>>(),
+                       bool il = false );
+        void addParent( const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p);
         void addChild( const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& c);
         void setIV( const std::shared_ptr<Cyclebite::Grammar::InductionVariable>& iv);
         void addBP( const std::shared_ptr<Cyclebite::Grammar::BasePointer>& bp);
@@ -30,7 +34,7 @@ namespace Cyclebite::Grammar
         /// In order to correctly map the IndexVariable to its base pointer(s), the geps that use the IndexVariable must be found easily and used in the search to connect the two
         /// Note: this method only returns the gep(s) that immediately use this index variable - follow-on geps that may use the result of this gep are not captured 
         const std::set<std::shared_ptr<Cyclebite::Graph::Inst>, Graph::p_GNCompare> getGeps() const;
-        const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& getParent() const;
+        const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& getParents() const;
         const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& getChildren() const;
         const std::shared_ptr<Cyclebite::Grammar::InductionVariable>& getIV() const;
         const std::set<std::shared_ptr<Cyclebite::Grammar::BasePointer>>& getBPs() const;
@@ -44,7 +48,7 @@ namespace Cyclebite::Grammar
         /// Base pointers map this idxVar to the base pointer(s) it offsets
         std::set<std::shared_ptr<BasePointer>> bps;
         /// the parent idxVar is one dimension above this one
-        std::shared_ptr<Cyclebite::Grammar::IndexVariable> parent;
+        std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>> parents;
         /// the child idxVar is one dimension below this one
         std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>> children;        
         /// the affine dimensions of this index
@@ -66,7 +70,7 @@ namespace Cyclebite::Grammar
                 // this is my child, I get sorted first
                 return true;
             }
-            else if( (lhs->getParent() == nullptr) && (rhs->getParent() != nullptr) )
+            else if( !lhs->getParents().empty() && rhs->getParents().empty() )
             {
                 // I have no parent and rhs does, I go first
                 return true;

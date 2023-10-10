@@ -21,18 +21,29 @@ using namespace std;
 using namespace Cyclebite::Grammar;
 
 IndexVariable::IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n, 
+                              const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& p, 
+                              const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c,
+                              bool il ) : Symbol("idx"), node(n), parents(p), children(c), IL(il) {}
+
+IndexVariable::IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n, 
                               const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p, 
                               const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c,
-                              bool il ) : Symbol("idx"), node(n), parent(p), children(c), IL(il) {}
+                              bool il ) : Symbol("idx"), node(n), children(c), IL(il) 
+{
+    if( p )
+    {
+        parents.insert(p);
+    }
+}
 
 void IndexVariable::addChild( const shared_ptr<IndexVariable>& c )
 {
     children.insert(c);
 }
 
-void IndexVariable::setParent( const shared_ptr<IndexVariable>& p)
+void IndexVariable::addParent( const shared_ptr<IndexVariable>& p)
 {
-    parent = p;
+    parents.insert(p);
 }
 
 void IndexVariable::setIV( const shared_ptr<InductionVariable>& indVar )
@@ -87,9 +98,9 @@ const set<shared_ptr<Cyclebite::Graph::Inst>, Cyclebite::Graph::p_GNCompare> Ind
     return geps;
 }
 
-const shared_ptr<Cyclebite::Grammar::IndexVariable>& IndexVariable::getParent() const
+const set<shared_ptr<Cyclebite::Grammar::IndexVariable>>& IndexVariable::getParents() const
 {
-    return parent;
+    return parents;
 }
 
 const set<shared_ptr<Cyclebite::Grammar::IndexVariable>>& IndexVariable::getChildren() const
@@ -472,7 +483,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                             throw CyclebiteException("Could not find parent idxVar!");
                         }
                         p->addChild(newIdx);
-                        newIdx->setParent(p);
+                        newIdx->addParent(p);
                     }
                 }
                 idxVarOrder.push_back( newIdx );
@@ -509,7 +520,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         if( p )
                         {
                             p->addChild(newIdx);
-                            newIdx->setParent(p);
+                            newIdx->addParent(p);
                         }
                     }
                 }
@@ -548,6 +559,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                             nodeToIdx[ static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(next(bin)->first)) ] = child;
                         }
                         newIdx->addChild(child);
+                        child->addParent(newIdx);
                         idxVarOrder.push_back(newIdx);
                         idxVarOrder.push_back(child);
                         bin = next(bin);
@@ -566,6 +578,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                             newIdx = make_shared<IndexVariable>( static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)), idxVarOrder.back() );
                             nodeToIdx[ static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(bin->first)) ] = newIdx;
                         }
+                        newIdx->addParent(idxVarOrder.back());
                         idxVarOrder.back()->addChild(newIdx);
                         idxVarOrder.push_back(newIdx);
                         // don't increment the iterator, the loop will do that for us
@@ -599,6 +612,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         }
                         newIdx->addChild(child);
                         idxVarOrder.back()->addChild(newIdx);
+                        child->addParent(newIdx);
+                        newIdx->addParent(idxVarOrder.back());
                         idxVarOrder.push_back(newIdx);
                         idxVarOrder.push_back(child);
                         bin = next(bin);
@@ -606,8 +621,11 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 }
             }
             // after the gep indices are done, we investigate the pointer operand of the gep
-            // the pointer of the gep may be getting offset by another gep
-            // but we haven't accounted for this yet, thus we investigate the pointer here and draw an edge between the idxVar(s) made from the indices and the idxVars that offset our gep's pointer 
+            // when geps are discovered in the gep pointer, those geps become parents of the gep indices
+            // - think of the pointer gep as a higher-dimensional offset. It is offsetting the highest-dimension index in the current gep.
+            // Thus, we need to draw the edges between the geps in pointer, and the highest-dimension index
+            // first step: find all the geps that lead into the pointer operand of the current gep
+            set<shared_ptr<IndexVariable>> ptrGeps;
             deque<const llvm::Instruction*> instQ;
             set<const llvm::Instruction*> instCovered;
             if( const auto& inst = llvm::dyn_cast<llvm::Instruction>( llvm::cast<llvm::GetElementPtrInst>(gep->getInst())->getPointerOperand()) )
@@ -615,8 +633,6 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 instQ.push_front(inst);
                 instCovered.insert(inst);
             }
-            // set of geps that may be unconnected parents to the gep under investigation
-            set<shared_ptr<IndexVariable>> parents;
             while( !instQ.empty() )
             {
                 if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(instQ.front()) )
@@ -626,7 +642,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                     {
                         if( idx->getNode()->getInst() == gep )
                         {
-                            parents.insert(idx);
+                            ptrGeps.insert(idx);
                         }
                     }
                 }
@@ -646,47 +662,39 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 }
                 instQ.pop_front();
             }
-            if( parents.size() > 1 )
+            if( !ptrGeps.empty() )
             {
-                PrintVal(gep->getInst());
-                for( const auto& p : parents )
-                {
-                    PrintVal(p->getNode()->getInst());
-                }
-                throw CyclebiteException("Cannot yet handle the case where an idxVar has multiple parents!");
-            }
-            for( auto& p : parents )
-            {
-                // these are the parents of the parent-most idxVar(s) in idxVarOrder
-                shared_ptr<IndexVariable> parentMost = nullptr;
+                // We get the idxVar that is our highest-dimension index, then draw edges from it to the ptrGeps of the current gep
+                // The highest-dimension index of the gep is the one that is in the first position
+                auto highestIndex = llvm::cast<llvm::GetElementPtrInst>(gep->getInst())->getOperand(1);
+                shared_ptr<IndexVariable> highestDimIdxVar = nullptr;
                 for( const auto& idxVar : idxVarOrder )
                 {
-                    if( !idxVar->getParent() )
+                    if( idxVar->getNode()->getInst() == highestIndex )
                     {
-                        if( parentMost )
-                        {
-                            throw CyclebiteException("Found more than one parent-most idxVar for a single gep!");
-                        }
-                        parentMost = idxVar;
+                        highestDimIdxVar = idxVar;
+                        break;
                     }
                 }
-                if( !parentMost )
+                if( !highestDimIdxVar )
                 {
-                    // this means we already covered the edge, so continue
-                    continue;
-                }
-                if( parentMost->getParent() )
-                {
-                    if( parentMost->getParent() != p )
+                    PrintVal(gep->getInst());
+                    PrintVal(highestIndex);
+                    for( const auto& idx : idxVarOrder )
                     {
-                        throw CyclebiteException("Parent-most idxVar of a gep already has a parent, but also maps to a parent gep through its pointer operand!");
+                        PrintVal(idx->getNode()->getInst());
                     }
+                    throw CyclebiteException("Could not find highest-dimension index variable!");
                 }
-                parentMost->setParent(p);
-                p->addChild(parentMost);
+                // now that we have our highest-dimension idxVar, draw the edges from it to its new parents
+                for( auto& p : ptrGeps )
+                {
+                    highestDimIdxVar->addParent(p);
+                    p->addChild(highestDimIdxVar);
+                }
             }
 
-            // add all the new idxVars to the set
+            // finally, add all the new idxVars to the set
             for( const auto& idx : idxVarOrder )
             {
                 idxVars.insert(idx);
@@ -720,7 +728,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
         }
     }
     // determine if a non-leaf node in the idxVar tree is by itself loaded
-    for( const auto& idx : idxVars )
+    /*for( const auto& idx : idxVars )
     {
         if( !idx->getChildren().empty() )
         {
@@ -814,7 +822,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 idx->setLoaded(true);
             }
         }
-    }
+    }*/
 #ifdef DEBUG
     auto dotString = PrintIdxVarTree(idxVars);
     ofstream tStream("IdxVarTree_Task"+to_string(t->getID())+".dot");

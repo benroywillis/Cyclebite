@@ -63,11 +63,11 @@ string Cyclebite::Grammar::PrintIdxVarTree( const set<shared_ptr<IndexVariable>>
     }
     for( const auto& idx : idxVars )
     {
-        if( idx->getParent() )
+        for( const auto& p : idx->getParents() )
         {
-            auto parentInstStr = PrintVal(idx->getParent()->getNode()->getInst(), false);
+            auto parentInstStr = PrintVal(p->getNode()->getInst(), false);
             string parentName  = parentInstStr.substr( parentInstStr.find(" ") );
-            dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(idx->getParent()->getNode()->NID)+";\n";
+            dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(p->getNode()->NID)+";\n";
         }
     }
     dotString += "}";
