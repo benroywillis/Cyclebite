@@ -13,7 +13,7 @@ namespace Cyclebite::Grammar
     class Task
     {
     public:
-        Task( const std::set<std::shared_ptr<Cycle>>& c) : cycles(c) {}
+        Task( const std::set<std::shared_ptr<Cycle>>& c, uint64_t id = 0 ) : ID(id), cycles(c) {}
         const std::set<std::shared_ptr<Cycle>>& getCycles() const;
         const std::set<std::shared_ptr<Cycle>> getChildMostCycles() const;
         const std::set<std::shared_ptr<Cycle>> getParentMostCycles() const;
@@ -21,7 +21,9 @@ namespace Cyclebite::Grammar
         bool find(const std::shared_ptr<Cyclebite::Graph::Inst>& n) const;
         bool find(const std::shared_ptr<Cyclebite::Graph::ControlBlock>& b) const;
         bool find(const std::shared_ptr<Cycle>& c) const;
+        uint64_t getID() const;
     private:
+        uint64_t ID;
         std::set<std::shared_ptr<Cycle>> cycles;
     };
 } // namespace Cyclebite::Grammar

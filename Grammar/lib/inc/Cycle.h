@@ -19,7 +19,7 @@ namespace Cyclebite::Grammar
     {
     public:
         Cycle() = default;
-        Cycle(const llvm::BranchInst* c, const std::set<std::shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare>& b) : iteratorInst(c), blocks(b) {}
+        Cycle(const llvm::BranchInst* c, const std::set<std::shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare>& b, uint64_t id = 0) : ID(id), iteratorInst(c), blocks(b) {}
         const llvm::BranchInst* getIteratorInst() const;
         const std::set<std::shared_ptr<class Cycle>>& getChildren() const;
         const std::set<std::shared_ptr<class Cycle>>& getParents() const;
@@ -29,7 +29,9 @@ namespace Cyclebite::Grammar
         bool find(const std::shared_ptr<Cyclebite::Graph::ControlBlock>& b) const;
         void addChild(const std::shared_ptr<class Cycle>& c);
         void addParent(const std::shared_ptr<class Cycle>& p);
+        uint64_t getID() const;
     private:
+        uint64_t ID;
         const llvm::BranchInst* iteratorInst; // right now, the belief is that each task should have exactly one comparator that decides its next iteration
         std::set<std::shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare> blocks;
         std::set<std::shared_ptr<class Cycle>> children;
