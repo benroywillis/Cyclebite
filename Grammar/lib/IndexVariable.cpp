@@ -606,7 +606,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 }
             }
             // after the gep indices are done, we investigate the pointer operand of the gep
-            // the pointer of the gep currently being investigated may be getting offset by another gep
+            // the pointer of the gep may be getting offset by another gep
             // but we haven't accounted for this yet, thus we investigate the pointer here and draw an edge between the idxVar(s) made from the indices and the idxVars that offset our gep's pointer 
             deque<const llvm::Instruction*> instQ;
             set<const llvm::Instruction*> instCovered;
