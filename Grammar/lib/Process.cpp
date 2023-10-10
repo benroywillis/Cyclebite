@@ -1417,14 +1417,13 @@ shared_ptr<Expression> getExpression(const shared_ptr<Task>& t, const set<shared
 void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
 {
     // each expression maps 1:1 with tasks from the cartographer
-    unsigned TID = 0;
     for( const auto& t : tasks )
     {
         try
         {
 #ifdef DEBUG
             cout << endl;
-            spdlog::info("Task "+to_string(TID++));
+            spdlog::info("Task "+to_string(t->getID()));
 #endif
             // get all induction variables
             auto vars = getInductionVariables(t);
@@ -1433,9 +1432,9 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             for( const auto& var : vars )
             {
                 spdlog::info(var->dump()+" -> "+PrintVal(var->getNode()->getVal(), false));
-            }            // get all reduction variables
+            }            
 #endif
-
+            // get all reduction variables
             auto rvs = getReductionVariables(t, vars);
 #ifdef DEBUG
             spdlog::info("Reductions");

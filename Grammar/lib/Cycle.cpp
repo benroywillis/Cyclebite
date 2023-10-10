@@ -71,6 +71,11 @@ void Cycle::addParent( const shared_ptr<Cycle>& p)
     parents.insert(p);
 }
 
+uint64_t Cycle::getID() const
+{
+    return ID;
+}
+
 set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json& instanceJson, 
                                                             const nlohmann::json& kernelJson, 
                                                             const map<int64_t, llvm::BasicBlock*>& IDToBlock,
@@ -150,7 +155,7 @@ set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json&
         //  now that we have the block set and the iterator cmp, construct the cycle object
         if( iteratorCmp )
         {
-            auto newCycle = make_shared<Cycle>(iteratorCmp, blocks);
+            auto newCycle = make_shared<Cycle>(iteratorCmp, blocks, stol(i));
             idToCycle[string(i)] = newCycle;
             // add this cycle to the parent cycles, if they exist
             for( const auto& c : l["Children"] )

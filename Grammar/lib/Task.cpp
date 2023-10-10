@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
 #include "Task.h"
+#include "Util/Exceptions.h"
 #include <deque>
 
 using namespace std;
@@ -77,6 +78,11 @@ bool Task::find(const shared_ptr<Cycle>& c) const
     return cycles.find(c) != cycles.end();
 }
 
+uint64_t Task::getID() const
+{
+    return ID;
+}
+
 set<shared_ptr<Task>> Cyclebite::Grammar::getTasks(const nlohmann::json& instanceJson, 
                                                     const nlohmann::json& kernelJson, 
                                                     const std::map<int64_t, llvm::BasicBlock*>& IDToBlock) {
@@ -123,7 +129,22 @@ set<shared_ptr<Task>> Cyclebite::Grammar::getTasks(const nlohmann::json& instanc
     }
     for( const auto& group : candidates )
     {
-        tasks.insert( make_shared<Task>(group) );
+        // id of the task is the parent-most cycle
+        shared_ptr<Cycle> parentMost = nullptr;
+        for( const auto& c : group )
+        {
+            if( c->getParents().empty() )
+            {
+#ifdef DEBUG
+                if( parentMost )
+                {
+                    throw CyclebiteException("Already found parent-most cycle! Cannot determine ID of task.");
+                }
+#endif
+                parentMost = c;
+            }
+        }
+        tasks.insert( make_shared<Task>(group, parentMost->getID()) );
     }
     return tasks;
 }
