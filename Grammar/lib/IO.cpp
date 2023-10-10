@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
 #include "IO.h"
+#include "IndexVariable.h"
 #include "Graph/inc/IO.h"
 #include "Util/Exceptions.h"
 #include "Util/Print.h"
@@ -47,4 +48,28 @@ void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::jso
             throw CyclebiteException("Cannot find significant memory op ID in the value ID map!");
         }
     }
+}
+
+string Cyclebite::Grammar::PrintIdxVarTree( const set<shared_ptr<IndexVariable>>& idxVars )
+{
+    string dotString = "digraph{\n\trankdir=\"BT\";\n";
+    for( const auto& idx : idxVars )
+    {
+        auto instString = PrintVal(idx->getNode()->getInst(), false);
+        auto start = instString.find("%");
+        auto end = instString.find("%", start+1) - start;
+        string name = instString.substr(start, end);
+        dotString += "\t"+to_string(idx->getNode()->NID)+" [label=\""+name+"\"];\n";
+    }
+    for( const auto& idx : idxVars )
+    {
+        if( idx->getParent() )
+        {
+            auto parentInstStr = PrintVal(idx->getParent()->getNode()->getInst(), false);
+            string parentName  = parentInstStr.substr( parentInstStr.find(" ") );
+            dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(idx->getParent()->getNode()->NID)+";\n";
+        }
+    }
+    dotString += "}";
+    return dotString;
 }

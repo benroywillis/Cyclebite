@@ -350,8 +350,20 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 {
                     // if this is the index itself, it is an index variable
                     // if the phi is transformed by binary ops from above, it is not an idxVar
-                    //if( )
-                    // may map to an induction variable
+                    bool phiIsIndex = false;
+                    for( const auto& idx : llvm::cast<llvm::GetElementPtrInst>(gep->getInst())->indices() )
+                    {
+                        if( phi == idx.get() )
+                        {
+                            phiIsIndex = true;
+                        }
+                    }
+                    if( !phiIsIndex )
+                    {
+                        Q.pop_front();
+                        covered.insert(phi);
+                        continue;
+                    }                    
                     AffineOffset of;
                     // when induction variables are combined into a single gep to make a multi-dimensional access, we need to capture this with an idxVar for each index
                     shared_ptr<InductionVariable> var = nullptr;
@@ -375,6 +387,17 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         of.transform = Cyclebite::Graph::Operation::add;
                     }
                     bins.push_back( pair(phi, of) );
+                }
+                else if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
+                {
+                    // llvm front-end can do weird things in the new versions, like load from a multi-star pointer many times to get down to a more elementary array element
+                    // e.g., if I have float a[x][y][z] aka float***, then the LLVM front end will get to float* by doing: float** b = load a, float* c = load b
+                    // thus we need to walk through loads now - push the pointer operand into the q
+                    if( const auto& ptrInst = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
+                    {
+                        Q.push_back(ptrInst);
+                        covered.insert(ptrInst);
+                    } 
                 }
                 Q.pop_front();
             }
@@ -792,5 +815,11 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             }
         }
     }
+#ifdef DEBUG
+    auto dotString = PrintIdxVarTree(idxVars);
+    ofstream tStream("IdxVarTree_Task"+to_string(t->getID())+".dot");
+    tStream << dotString;
+    tStream.close();
+#endif
     return idxVars;
 }
