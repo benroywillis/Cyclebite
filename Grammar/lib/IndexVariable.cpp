@@ -135,17 +135,45 @@ bool IndexVariable::isLoaded() const
 
 bool IndexVariable::isValueOrTransformedValue(const llvm::Value* v) const
 {
-    // in order to avoid finding the uses of this index variable's children or parents, we have to identify which values are this index variable's children or parent
+    // to build a method that will only recognize the uses of a specific index variable, we have to be aware of all other index variables
+    // then, when we walk the DFG, we can spot all idxVars, no matter where they lie or what relationship they are to us
+    // the idxVar tree is mostly connected, so if we walk the idxVar tree we will (likely) acquire all idxVars we need to know about
     set<const llvm::Value*> forbidden;
-    for( const auto& c : IndexVariable::children )
     {
-        forbidden.insert(c->getNode()->getInst());
+        deque<const IndexVariable*> Q;
+        set<const IndexVariable*> covered;
+        Q.push_front(this);
+        covered.insert(this);
+        while( !Q.empty() )
+        {
+            for( const auto& c : Q.front()->getChildren() )
+            {
+                if( !covered.contains(c.get()) )
+                {
+                    Q.push_back(c.get());
+                    covered.insert(c.get());
+                    if( Q.front() != this )
+                    {
+                        forbidden.insert(c->getNode()->getInst());
+                    }
+                }
+            }
+            for( const auto& p : Q.front()->getParents() )
+            {
+                if( !covered.contains(p.get()) )
+                {
+                    Q.push_back(p.get());
+                    covered.insert(p.get());
+                    if( Q.front() != this )
+                    {
+                        forbidden.insert(p->getNode()->getInst());
+                    }
+                }
+            }
+            Q.pop_front();
+        }
     }
-    for( const auto& p : IndexVariable::parents )
-    {
-        forbidden.insert(p->getNode()->getInst());
-    }
-    // trivial child check
+    // trivial check
     if( forbidden.contains(v) )
     {
         return false;

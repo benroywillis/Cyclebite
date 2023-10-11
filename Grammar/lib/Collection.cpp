@@ -16,7 +16,24 @@ using namespace Cyclebite::Grammar;
 using namespace Cyclebite::Graph;
 using namespace std;
 
-Collection::Collection(const std::vector<std::shared_ptr<IndexVariable>>& v, const std::shared_ptr<BasePointer>& p ) :  Symbol("collection"), vars(v), bp(p) {}
+Collection::Collection( const std::vector<std::shared_ptr<IndexVariable>>& v, const std::set<std::shared_ptr<BasePointer>>& p, const set<const llvm::Value*>& e ) : Symbol("collection"), vars(v), bps(p) 
+{
+    for( const auto& el : e )
+    {
+        if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(el) )
+        {
+            eps.insert(ld);
+        }
+        else if( const auto& st = llvm::dyn_cast<llvm::StoreInst>(el) )
+        {
+            eps.insert(st);
+        }
+        else
+        {
+            throw CyclebiteException("Collection element pointers can only be load and store instructions!");
+        }
+    }
+}
 
 uint32_t Collection::getNumDims() const
 {
@@ -28,9 +45,9 @@ const shared_ptr<IndexVariable>& Collection::operator[](unsigned i) const
     return vars[i];
 }
 
-const shared_ptr<BasePointer>& Collection::getBP() const
+const set<shared_ptr<BasePointer>>& Collection::getBPs() const
 {
-    return bp;
+    return bps;
 }
 
 const vector<shared_ptr<IndexVariable>>& Collection::getIndices() const
@@ -40,150 +57,12 @@ const vector<shared_ptr<IndexVariable>>& Collection::getIndices() const
 
 const set<const llvm::Value*> Collection::getElementPointers() const
 {
-    set<const llvm::Value*> eps;
-    // the child-most index should connect us to the pointer that works with a load
-    // this load should have successor(s) that are not in the memory group
-    deque<const llvm::Instruction*> Q;
-    set<const llvm::Instruction*> covered;
-    // in order to find the starting point for our search, we need to walk the DFG until we find a gep or ld
-    deque<shared_ptr<Graph::Inst>> varQ;
-    // it is possible for our idxVar to be shared among many collections (e.g., when two base pointers are offset in the same way)
-    // thus, we must pick our starting point based on which use of our child-most idxVar is associated with our base pointer
-    varQ.push_front(vars.back()->getNode());
-    while( !varQ.empty() )
-    {
-        if( varQ.front()->getOp() == Graph::Operation::load )
-        {
-            if( bp->isOffset( llvm::cast<llvm::LoadInst>(varQ.front()->getInst())->getPointerOperand() ) )
-            {
-                bool noMemory = true;
-                for( const auto& succ : varQ.front()->getSuccessors() )
-                {
-                    if( const auto& nodeInst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
-                    {
-                        // there is a corner case where a load can be immediately stored (DWT/PERFECT/BBID205 OPFLAG=-O1)
-                        // in that case we will make an exception for store inst value operands
-                        if( nodeInst->getOp() == Graph::Operation::store )
-                        {
-                            if( llvm::cast<llvm::StoreInst>(nodeInst->getInst())->getValueOperand() == varQ.front()->getInst() )
-                            {
-                                // make an exception
-                            }
-                            else
-                            {
-                                noMemory = false;
-                                break;
-                            }
-                        }
-                        else if( nodeInst->isMemory() )
-                        {
-                            noMemory = false;
-                            break;
-                        }
-                    }
-                }
-                if( noMemory )
-                {
-                    eps.insert(varQ.front()->getInst());
-                }
-            }
-        }
-        else if( varQ.front()->getOp() == Graph::Operation::store )
-        {
-            if( bp->isOffset( llvm::cast<llvm::StoreInst>(varQ.front()->getInst())->getPointerOperand() ) )
-            {
-                eps.insert( varQ.front()->getInst() );
-            }
-        }
-        else if( varQ.front()->getOp() == Graph::Operation::gep )
-        {
-            // a gep that is a child of the child-most var is not what we are looking for
-            bool isChild = false;
-            for( const auto& c : vars.back()->getChildren() )
-            {
-                if( c->getNode() == varQ.front() )
-                {
-                    isChild = true;
-                    break;
-                }
-            }
-            if( !isChild )
-            {
-                // then we determine if the base pointer of this collection is touched by this GEP
-                if( bp->isOffset( llvm::cast<llvm::GetElementPtrInst>(varQ.front()->getInst())->getPointerOperand() ) )
-                {
-                    for( const auto& succ : varQ.front()->getSuccessors() )
-                    {
-                        if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
-                        {
-                            varQ.push_back(inst);
-                        }
-                    }
-                }
-                // corner case: sometimes a bp will be used to offset another bp (HistEq/PERFECT BBID118 OPFLAG=-O1)
-                else if( llvm::isa<llvm::GetElementPtrInst>(vars.back()->getNode()->getInst()) )
-                {
-                    // vars.back() is actually a gep, meaning will have exactly one offset
-                    // if this offset is an offset of the collection base pointer, it is a valid path to search
-                    bool valid = false;
-                    for( const auto& idx : llvm::cast<llvm::GetElementPtrInst>(varQ.front()->getInst())->indices() )
-                    {
-                        if( bp->isOffset(idx) )
-                        {
-                            valid = true;
-                        }
-                    }
-                    if( valid )
-                    {
-                        for( const auto& succ : varQ.front()->getSuccessors() )
-                        {
-                            if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
-                            {
-                                varQ.push_back(inst);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        else if( varQ.front()->isCastOp() )
-        {
-            for( const auto& succ : varQ.front()->getSuccessors() )
-            {
-                if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
-                {
-                    varQ.push_back(inst);
-                }
-            }
-        }
-        else if( varQ.front() == vars.back()->getNode() )
-        {
-            for( const auto& succ : varQ.front()->getSuccessors() )
-            {
-                if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
-                {
-                    varQ.push_back(inst);
-                }
-            }
-        }
-        varQ.pop_front();
-    }
-    if( eps.empty() )
-    {
-        PrintVal(bp->getNode()->getVal());
-        for( const auto& var : vars )
-        {
-            PrintVal(var->getNode()->getInst());
-        }
-        throw CyclebiteException("Collection has no element pointers!");
-    }
     return eps;
 }
 
 const llvm::LoadInst* Collection::getLoad() const
 {
     set<const llvm::LoadInst*> lds;
-    auto eps = getElementPointers();
     for( const auto& e : eps )
     {
         if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(e) )
@@ -193,7 +72,10 @@ const llvm::LoadInst* Collection::getLoad() const
     }
     if( lds.size() > 1 )
     {
-        PrintVal(bp->getNode()->getVal());
+        for( const auto& bp : bps )
+        {
+            PrintVal(bp->getNode()->getVal());
+        }
         for( const auto& var : vars )
         {
             PrintVal(var->getNode()->getInst());
@@ -210,7 +92,6 @@ const llvm::LoadInst* Collection::getLoad() const
 const set<const llvm::StoreInst*> Collection::getStores() const
 {
     set<const llvm::StoreInst*> sts;
-    auto eps = getElementPointers();
     for( const auto& e : eps )
     {
         if( const auto& st = llvm::dyn_cast<llvm::StoreInst>(e) )
@@ -254,10 +135,12 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
     {
         bps.insert(idx->getBPs().begin(), idx->getBPs().end());
     }
-
     // to build collections, we look for all loads and stores that must be explained by collections
     // these collections are later referred to when we build the task's function expression(s)
+    // the starting points need to be the pointers of the ld/st (to ensure we only search through instructions that deal with memory)
+    // the elements are the loads and stores themselves (that are used to construct the collections with)
     set<const llvm::Instruction*>  starts;
+    set<const llvm::Instruction*>  elements;
     for( const auto& c : t->getCycles() )
     {
         for( const auto& b : c->getBody() )
@@ -283,6 +166,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                         if( const auto& ptrInst = llvm::dyn_cast<llvm::Instruction>( llvm::cast<llvm::LoadInst>(i->getInst())->getPointerOperand() ) )
                         {
                             starts.insert( ptrInst );
+                            elements.insert(i->getInst());
                         }
                     }
                 }
@@ -298,6 +182,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                                 if( const auto& ptrInst = llvm::dyn_cast<llvm::Instruction>( llvm::cast<llvm::StoreInst>(i->getInst())->getPointerOperand()) )
                                 {
                                     starts.insert( ptrInst );
+                                    elements.insert( i->getInst() );
                                 }
                             }
                         }
@@ -314,7 +199,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
         // we walk backward in the DFG from this point, collecting all information about the idxVars that lead to this pointer
         // because we walk backward, vars will be sorted in reverse-order, from child-most to parent-most 
         set<shared_ptr<IndexVariable>, idxVarHierarchySort> vars;
-        shared_ptr<BasePointer> collBp = nullptr;
+        set<shared_ptr<BasePointer>> collBPs;
         deque<const llvm::Instruction*> Q;
         set<const llvm::Value*> covered;
         Q.push_front(st);
@@ -387,14 +272,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                         {
                             if( bp->getNode()->getVal() == arg )
                             {
-                                if( collBp )
-                                {
-                                    if( collBp != bp )
-                                    {
-                                        throw CyclebiteException("Found more than one possible base pointer for a collection!");
-                                    }
-                                }
-                                collBp = bp;
+                                collBPs.insert(bp);
                             }
                         }
                     }
@@ -417,14 +295,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                         {
                             if( bp->getNode()->getVal() == arg )
                             {
-                                if( collBp )
-                                {
-                                    if( collBp != bp )
-                                    {
-                                        throw CyclebiteException("Found more than one possible base pointer for a collection!");
-                                    }
-                                }
-                                collBp = bp;
+                                collBPs.insert(bp);
                             }
                         }
                     }
@@ -450,15 +321,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                             {
                                 if( bp->getNode()->getVal() == arg )
                                 {
-                                    // we have found a base pointer that may be the bp of this collection
-                                    if( collBp )
-                                    {
-                                        if( collBp != bp )
-                                        {
-                                            throw CyclebiteException("Found more than one possible base pointer for a collection!");
-                                        }
-                                    }
-                                    collBp = bp;
+                                    collBPs.insert(bp);
                                 }
                             }
                         }
@@ -474,14 +337,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 {
                     if( bp->getNode()->getVal() == alloc )
                     {
-                        if( collBp )
-                        {
-                            if( collBp != bp )
-                            {
-                                throw CyclebiteException("Found more than one possible base pointer for a collection!");
-                            }
-                        }
-                        collBp = bp;
+                        collBPs.insert(bp);
                         found = true;
                     }
                 }
@@ -509,14 +365,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 {
                     if( bp->getNode()->getVal() == call )
                     {
-                        if( collBp )
-                        {
-                            if( collBp != bp )
-                            {
-                                throw CyclebiteException("Found more than one possible base pointer for a collection!");
-                            }
-                        }
-                        collBp = bp;
+                        collBPs.insert(bp);
                     }
                 }
             }
@@ -592,13 +441,35 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             }
             Q.pop_front();
         }
-        if( !collBp )
+        if( collBPs.empty() )
         {
             PrintVal(st);
             throw CyclebiteException("Could not find a base pointer for this memory op!");
         }
+        set<const llvm::Value*> eps;
+        for( const auto& e : elements )
+        {
+            if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(e) )
+            {
+                if( st == ld->getPointerOperand() )
+                {
+                    eps.insert(ld);
+                }
+            }
+            else if( const auto& sto = llvm::dyn_cast<llvm::StoreInst>(e) )
+            {
+                if( st == sto->getPointerOperand() )
+                {
+                    eps.insert(sto);
+                }
+            }
+            else
+            {
+                throw CyclebiteException("Should only find load and store instructions in the elements of collections!");
+            }
+        }
         vector<shared_ptr<IndexVariable>> varVec(vars.begin(), vars.end());
-        colls.insert( make_shared<Collection>(varVec, collBp) );
+        colls.insert( make_shared<Collection>(varVec, collBPs, eps) );
     }
     return colls;
 }
