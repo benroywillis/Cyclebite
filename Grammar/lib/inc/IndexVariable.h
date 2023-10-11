@@ -6,6 +6,7 @@
 #include "Symbol.h"
 #include "Polyhedral.h"
 #include "Graph/inc/Inst.h"
+#include <deque>
 
 namespace Cyclebite::Grammar
 {
@@ -41,6 +42,14 @@ namespace Cyclebite::Grammar
         const PolySpace getSpace() const;
         std::string dump() const override;
         bool isLoaded() const;
+        /// @brief Returns true if the given value is the index variable or a transformed version of it
+        ///
+        /// The method will only search until one of two conditions are satisfied
+        /// 1. The value has been found to be a user (or user of users) of the index variable
+        /// 2. Another index variable has been hit
+        /// Thus, this method will not return true if the input argument is the use of one of the index variable's children. The input argument must be a "direct" use of the index variable.
+        /// @return True if the given value is the index variable or a transformed version of it (for example, casted). False otherwise.
+        bool isValueOrTransformedValue(const llvm::Value* v) const;
     protected:
         std::shared_ptr<Cyclebite::Graph::Inst> node;
         /// Index variable makes a metaphorical edge between this index variable and the control space (which is useful for constructing a polyhedral space)
@@ -61,32 +70,55 @@ namespace Cyclebite::Grammar
     };
 
     // sorts idxVars in hierarchical order (parent-most first, child-most last)
+    // in the default stl::set, things are sorted from "least" to "greatest", meaning lhs < rhs being "true" puts lhs before rhs in the set
+    // thus, to get parent-most first, lhs is "true" when it is the parent of rhs and false otherwise
     struct idxVarHierarchySort
     {
         bool operator()(const std::shared_ptr<IndexVariable>& lhs, const std::shared_ptr<IndexVariable>& rhs) const 
         {
+            if( lhs == rhs )
+            {
+                // if lhs is rhs, they are equal, and std::sets take entries whose comparisons are always false to be equal
+                return false;
+            }
             if( lhs->getChildren().find(rhs) != lhs->getChildren().end() )
             {
                 // this is my child, I get sorted first
                 return true;
             }
-            else if( !lhs->getParents().empty() && rhs->getParents().empty() )
+            if( lhs->getParents().empty() && !rhs->getParents().empty() )
             {
                 // I have no parent and rhs does, I go first
                 return true;
             }
-            else if( !lhs->getChildren().empty() )
+            else 
             {
-                for( const auto& child : lhs->getChildren() )
+                std::deque<std::shared_ptr<IndexVariable>> Q;
+                std::set<std::shared_ptr<IndexVariable>> covered;
+                Q.push_front(lhs);
+                // we assume lhs is the parent of rhs and confirm it with a BFS of the children of the idxTree, starting from lhs
+                while( !Q.empty() )
                 {
-                    if( child->getChildren().find(rhs) != child->getChildren().end() )
+                    for( const auto& c : Q.front()->getChildren() )
                     {
-                        // rhs is a child of my child, I go first
-                        return true;
+                        if( c == rhs )
+                        {
+                            // confirmed, lhs is rhs's parent
+                            return true;
+                        }
+                        else
+                        {
+                            if( !covered.contains(c) )
+                            {
+                                Q.push_back(c);
+                                covered.insert(c);
+                            }
+                        }
                     }
+                    Q.pop_front();
                 }
-            }
-            // I can't determine whether I go before rhs without significant recursion, so just return false 
+            }            
+            // if we've made it this far, we have confirmed lhs is NOT the parent of rhs, so return false 
             return false;
         }
     };

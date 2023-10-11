@@ -255,13 +255,350 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
         bps.insert(idx->getBPs().begin(), idx->getBPs().end());
     }
 
-    // now construct collections from the hierarchies that have been grouped
-    for( const auto& bp : varHierarchies )
+    // to build collections, we look for all loads and stores that must be explained by collections
+    // these collections are later referred to when we build the task's function expression(s)
+    set<const llvm::Instruction*>  starts;
+    for( const auto& c : t->getCycles() )
     {
-        for( const auto& ivSet : bp.second )
+        for( const auto& b : c->getBody() )
         {
-            colls.insert( make_shared<Collection>(ivSet, bp.first) );
+            for( const auto& i : b->instructions )
+            {
+                if( i->getOp() == Cyclebite::Graph::Operation::load )
+                {
+                    bool feedsFunction = true;
+                    for( const auto& succ : i->getSuccessors() )
+                    {
+                        if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
+                        {
+                            if( !inst->isFunction() )
+                            {
+                                feedsFunction = false;
+                                break;   
+                            }
+                        }
+                    }
+                    if( feedsFunction )
+                    {
+                        if( const auto& ptrInst = llvm::dyn_cast<llvm::Instruction>( llvm::cast<llvm::LoadInst>(i->getInst())->getPointerOperand() ) )
+                        {
+                            starts.insert( ptrInst );
+                        }
+                    }
+                }
+                else if( i->getOp() == Cyclebite::Graph::Operation::store )
+                {
+                    // value operand needs to be a function
+                    if( DNIDMap.contains( llvm::cast<llvm::StoreInst>(i->getInst())->getValueOperand()) )
+                    {
+                        if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(DNIDMap.at( llvm::cast<llvm::StoreInst>(i->getInst())->getValueOperand() )) )
+                        {
+                            if( inst->isFunction() )
+                            {
+                                if( const auto& ptrInst = llvm::dyn_cast<llvm::Instruction>( llvm::cast<llvm::StoreInst>(i->getInst())->getPointerOperand()) )
+                                {
+                                    starts.insert( ptrInst );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    // now that we have all instructions that need to be explained by collections, build collections for each one
+    for( const auto& st : starts )
+    {
+        // st is a pointer operand from either a load or a store
+        // we walk backward in the DFG from this point, collecting all information about the idxVars that lead to this pointer
+        // because we walk backward, vars will be sorted in reverse-order, from child-most to parent-most 
+        set<shared_ptr<IndexVariable>, idxVarHierarchySort> vars;
+        shared_ptr<BasePointer> collBp = nullptr;
+        deque<const llvm::Instruction*> Q;
+        set<const llvm::Value*> covered;
+        Q.push_front(st);
+        covered.insert(st);
+        while( !Q.empty() )
+        {
+            if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
+            {
+                // we have found a gep that we know is used by this collection
+                // therefore, we can include all idxVars that are associated with it
+                // to do this, we go through each index in the gep, map each one to a unique idx var, then push it to the set (that is sorted automatically)
+                // find the idxVar(s) that map to this gep
+                // the gep itself might be an idxVar so check it
+                for( const auto& i : idxVars )
+                {
+                    if( i->isValueOrTransformedValue(gep) )
+                    {
+                        vars.insert(i);
+                        break;
+                    }
+                }
+                for( const auto& idx : gep->indices() )
+                {
+                    // find an idxVar for it
+                    shared_ptr<IndexVariable> idxVar = nullptr;
+                    for( const auto& i : idxVars )
+                    {
+                        if( i->isValueOrTransformedValue(idx) )
+                        {
+#ifdef DEBUG
+                            if( idxVar )
+                            {
+                                if( idxVar != i )
+                                {
+                                    PrintVal(gep);
+                                    PrintVal(idx);
+                                    PrintVal(i->getNode()->getInst());
+                                    PrintVal(idxVar->getNode()->getInst());
+                                    throw CyclebiteException("Found more than one idxVar for this dimension of a gep!");
+                                }
+                            }
+                            idxVar = i;
+#else
+                            idxVar = i;
+                            break;
+#endif
+                        }
+                    }
+                    if( idxVar )
+                    {
+                        // now we push the found idxVar to the set
+                        vars.insert(idxVar);
+                    }
+                }
+                // once we are done absorbing all idxVars this gep has to offer, we must walk backward through its operands
+                for( const auto& op : gep->operands() )
+                {
+                    if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+                    {
+                        if( !covered.contains(opInst) )
+                        {
+                            Q.push_back(opInst);
+                            covered.insert(opInst);
+                        }
+                    }
+                    else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(op) )
+                    {
+                        // this may be a base pointer
+                        for( const auto& bp : bps )
+                        {
+                            if( bp->getNode()->getVal() == arg )
+                            {
+                                if( collBp )
+                                {
+                                    if( collBp != bp )
+                                    {
+                                        throw CyclebiteException("Found more than one possible base pointer for a collection!");
+                                    }
+                                }
+                                collBp = bp;
+                            }
+                        }
+                    }
+                }
+            }
+            else if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
+            {
+                // the pointer of this load may lead us to more geps
+                if( !covered.contains(ld->getPointerOperand()) )
+                {
+                    if( const auto& ptrInst = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()) )
+                    {
+                        Q.push_back(ptrInst);
+                        covered.insert(ptrInst);
+                    }
+                    else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(ld->getPointerOperand()) )
+                    {
+                        // this may be a base pointer
+                        for( const auto& bp : bps )
+                        {
+                            if( bp->getNode()->getVal() == arg )
+                            {
+                                if( collBp )
+                                {
+                                    if( collBp != bp )
+                                    {
+                                        throw CyclebiteException("Found more than one possible base pointer for a collection!");
+                                    }
+                                }
+                                collBp = bp;
+                            }
+                        }
+                    }
+                }
+            }
+            else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
+            {
+                // cast instructions can be used as shims between allocs and exact pointer types
+                // thus, their operands are interesting
+                for( const auto& op : cast->operands() )
+                {
+                    if( !covered.contains(op.get()) )
+                    {
+                        if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op.get()) )
+                        {
+                            Q.push_back(opInst);
+                            covered.insert(opInst);
+                        }
+                        else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(op.get()) )
+                        {
+                            // this may be our base pointer
+                            for( const auto& bp : bps )
+                            {
+                                if( bp->getNode()->getVal() == arg )
+                                {
+                                    // we have found a base pointer that may be the bp of this collection
+                                    if( collBp )
+                                    {
+                                        if( collBp != bp )
+                                        {
+                                            throw CyclebiteException("Found more than one possible base pointer for a collection!");
+                                        }
+                                    }
+                                    collBp = bp;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else if( const auto& alloc = llvm::dyn_cast<llvm::AllocaInst>(Q.front()) )
+            {
+                // alloc instructions may be base pointers themselves or have a base pointer stored in them
+                // if this alloc is a bp it will match a bp in the set
+                bool found = false;
+                for( const auto& bp : bps )
+                {
+                    if( bp->getNode()->getVal() == alloc )
+                    {
+                        if( collBp )
+                        {
+                            if( collBp != bp )
+                            {
+                                throw CyclebiteException("Found more than one possible base pointer for a collection!");
+                            }
+                        }
+                        collBp = bp;
+                        found = true;
+                    }
+                }
+                // if this is alloc is not a bp, it may be storing one
+                // thus we must walk forward to find the store that puts the bp into this alloc
+                if( !found )
+                {
+                    for( const auto& use : alloc->users() )
+                    {
+                        if( !covered.contains(use) )
+                        {
+                            if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use) )
+                            {
+                                Q.push_front(useInst);
+                                covered.insert(useInst);
+                            }
+                        }
+                    }
+                }
+            }
+            else if( const auto& call = llvm::dyn_cast<llvm::CallBase>(Q.front()) )
+            {
+                // call bases may be base pointers
+                for( const auto& bp : bps )
+                {
+                    if( bp->getNode()->getVal() == call )
+                    {
+                        if( collBp )
+                        {
+                            if( collBp != bp )
+                            {
+                                throw CyclebiteException("Found more than one possible base pointer for a collection!");
+                            }
+                        }
+                        collBp = bp;
+                    }
+                }
+            }
+            else if( const auto& sto = llvm::dyn_cast<llvm::StoreInst>(Q.front()) )
+            {
+                // stores can put the bp into an alloc instruction
+                // thus we walk backwards from the value operand of the store
+                if( const auto& valueInst = llvm::dyn_cast<llvm::Instruction>(sto->getValueOperand()) )
+                {
+                    if( !covered.contains(valueInst) )
+                    {
+                        Q.push_back(valueInst);
+                        covered.insert(valueInst);
+                    }
+                }
+            }
+            else if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(Q.front()) )
+            {
+                // might map to an idxVar
+                shared_ptr<IndexVariable> idx = nullptr;
+                for( const auto& i : idxVars )
+                {
+                    if( i->isValueOrTransformedValue(bin) )
+                    {
+#ifdef DEBUG
+                        if( idx )
+                        {
+                            if( idx != i )
+                            {
+                                PrintVal(bin);
+                                PrintVal(i->getNode()->getInst());
+                                PrintVal(idx->getNode()->getInst());
+                                throw CyclebiteException("Found more than one idxVar for this dimension of a gep!");
+                            }
+                        }
+                        idx = i;
+#else
+                        idx = i;
+                        break;
+#endif
+                    }
+                }
+                if( idx )
+                {
+                    vars.insert(idx);
+                }
+                // then push its operands into the queue for more investigation!
+                for( const auto& op : bin->operands() )
+                {
+                    if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+                    {
+                        if( !covered.contains(opInst) )
+                        {
+                            Q.push_back(opInst);
+                            covered.insert(opInst);
+                        }
+                    }
+                }
+            }
+            else if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
+            {
+                for( const auto& op : inst->operands() )
+                {
+                    if( !covered.contains(op) )
+                    {
+                        if( const auto& opinst = llvm::dyn_cast<llvm::Instruction>(op) )
+                        {
+                            Q.push_back(opinst);
+                            covered.insert(opinst);
+                        }
+                    }
+                }
+            }
+            Q.pop_front();
+        }
+        if( !collBp )
+        {
+            PrintVal(st);
+            throw CyclebiteException("Could not find a base pointer for this memory op!");
+        }
+        vector<shared_ptr<IndexVariable>> varVec(vars.begin(), vars.end());
+        colls.insert( make_shared<Collection>(varVec, collBp) );
     }
     return colls;
 }

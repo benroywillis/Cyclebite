@@ -133,6 +133,52 @@ bool IndexVariable::isLoaded() const
     return IL;
 }
 
+bool IndexVariable::isValueOrTransformedValue(const llvm::Value* v) const
+{
+    // in order to avoid finding the uses of this index variable's children or parents, we have to identify which values are this index variable's children or parent
+    set<const llvm::Value*> forbidden;
+    for( const auto& c : IndexVariable::children )
+    {
+        forbidden.insert(c->getNode()->getInst());
+    }
+    for( const auto& p : IndexVariable::parents )
+    {
+        forbidden.insert(p->getNode()->getInst());
+    }
+    // trivial child check
+    if( forbidden.contains(v) )
+    {
+        return false;
+    }
+    deque<const llvm::Instruction*> Q;
+    set<const llvm::Value*> covered;
+    Q.push_front(node->getInst());
+    covered.insert(node->getInst());
+    while( !Q.empty() )
+    {
+        if( Q.front() == v )
+        {
+            return true;
+        }
+        for( const auto& use : Q.front()->users() )
+        {
+            if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use) )
+            {
+                if( !forbidden.contains(useInst) )
+                {
+                    if( !covered.contains(useInst) )
+                    {
+                        Q.push_back(useInst);
+                        covered.insert(useInst);
+                    }
+                }
+            }
+        }
+        Q.pop_front();
+    }
+    return false;
+}
+
 set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const shared_ptr<Task>& t, const set<shared_ptr<BasePointer>>& BPs, const set<shared_ptr<InductionVariable>>& vars)
 {
     // final set of index variables that may be found
@@ -406,8 +452,11 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                     // thus we need to walk through loads now - push the pointer operand into the q
                     if( const auto& ptrInst = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
                     {
-                        Q.push_back(ptrInst);
-                        covered.insert(ptrInst);
+                        if( !covered.contains(ptrInst) )
+                        {
+                            Q.push_back(ptrInst);
+                            covered.insert(ptrInst);
+                        }
                     } 
                 }
                 Q.pop_front();
