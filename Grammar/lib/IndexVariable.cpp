@@ -135,10 +135,28 @@ bool IndexVariable::isLoaded() const
 
 bool IndexVariable::isValueOrTransformedValue(const llvm::Value* v) const
 {
+    if( v == node->getInst() )
+    {
+        return true;
+    }
     // to build a method that will only recognize the uses of a specific index variable, we have to be aware of all other index variables
     // then, when we walk the DFG, we can spot all idxVars, no matter where they lie or what relationship they are to us
     // the idxVar tree is mostly connected, so if we walk the idxVar tree we will (likely) acquire all idxVars we need to know about
     set<const llvm::Value*> forbidden;
+
+    // it can be hard to detect the child idxVars of IVs when those IVs are not their parent (because they aren't used in the same gep)
+    // thus we implement a check here specific to phis whose users are binary instructions
+    if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(node->getInst()) )
+    {
+        for( const auto& use : phi->users() )
+        {
+            if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(use) )
+            {
+                forbidden.insert(bin);
+            }
+        }
+    }
+    // anonymous DFG namespace prevents DFG walk clash
     {
         deque<const IndexVariable*> Q;
         set<const IndexVariable*> covered;
@@ -152,7 +170,7 @@ bool IndexVariable::isValueOrTransformedValue(const llvm::Value* v) const
                 {
                     Q.push_back(c.get());
                     covered.insert(c.get());
-                    if( Q.front() != this )
+                    if( c.get() != this )
                     {
                         forbidden.insert(c->getNode()->getInst());
                     }
@@ -164,7 +182,7 @@ bool IndexVariable::isValueOrTransformedValue(const llvm::Value* v) const
                 {
                     Q.push_back(p.get());
                     covered.insert(p.get());
-                    if( Q.front() != this )
+                    if( p.get() != this )
                     {
                         forbidden.insert(p->getNode()->getInst());
                     }
@@ -172,7 +190,8 @@ bool IndexVariable::isValueOrTransformedValue(const llvm::Value* v) const
             }
             Q.pop_front();
         }
-    }
+    } // anonymous DFG namespace
+
     // trivial check
     if( forbidden.contains(v) )
     {
@@ -747,7 +766,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 shared_ptr<IndexVariable> highestDimIdxVar = nullptr;
                 for( const auto& idxVar : idxVarOrder )
                 {
-                    if( idxVar->getNode()->getInst() == highestIndex )
+                    if( idxVar->isValueOrTransformedValue(highestIndex) )
                     {
                         highestDimIdxVar = idxVar;
                         break;
