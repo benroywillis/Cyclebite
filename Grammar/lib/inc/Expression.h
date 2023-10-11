@@ -42,5 +42,11 @@ namespace Cyclebite::Grammar
         static bool printedName;
     };
     class ReductionVariable;
+    /// @brief Expression builder for a function expression
+    /// @param t The task in which this function group belongs
+    /// @param insts A vector of all instructions in the function group, in the order they operate
+    /// @param rv A reduction variable, if necessary. If this argument is non-null, the returned expression is a Reduction. Otherwise it is an Expression.
+    /// @param colls The collections in the task
+    /// @return An expression that describes the entire function group. Member symbols may contain symbols within them.
     const std::shared_ptr<Expression> constructExpression( const std::shared_ptr<Task>& t, const std::vector<std::shared_ptr<Graph::Inst>>& insts, const std::shared_ptr<ReductionVariable>& rv, const std::set<std::shared_ptr<Collection>>& colls );
 } // namespace Cyclebite::Grammar

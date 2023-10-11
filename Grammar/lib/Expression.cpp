@@ -105,7 +105,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
     vector<shared_ptr<Symbol>> newSymbols;
     if( const auto inst = llvm::dyn_cast<llvm::Instruction>(op) )
     {
-        const auto opNode = Cyclebite::Graph::DNIDMap.at(op);
+        const auto opNode = Cyclebite::Graph::DNIDMap.at(inst);
         if( nodeToExpr.find(opNode) != nodeToExpr.end() )
         {
             // this value comes from a previous function group operator, thus it should be a symbol in the expression
@@ -211,10 +211,34 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
         }
         else if( const auto bin = llvm::dyn_cast<llvm::BinaryOperator>(inst) )
         {
+            // binary operators can be embedded inside other expressions in the function group
+            // e.g., WAMI/debayer Task 18 (BBID)
+            // this operator needs an entire expression built for it, so we call the expression builder
+            if( const auto& nodeInst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(opNode) )
+            {
+                vector<shared_ptr<Symbol>> args;
+                for( const auto& binOp : bin->operands() )
+                {
+                    for( const auto& news : buildExpression(nodeInst, t, binOp, nodeToExpr, colls) )
+                    {
+                        args.push_back( news );
+                    }
+                }
+                vector<Cyclebite::Graph::Operation> binOps;
+                binOps.push_back( Cyclebite::Graph::GetOp(bin->getOpcode()) );
+                auto binExpr = make_shared<Expression>( args, binOps );
+                spdlog::info("Embedded binary op expression is: "+binExpr->dump());
+                nodeToExpr[ opNode ] = binExpr;
+                newSymbols.push_back(binExpr);
+            }
+            else
+            {
+                throw CyclebiteException("Embedded binary instruction is not a Graph::Inst!");
+            }
             // an in-task binary op should already have an expression in nodeToExpr, throw an error
-            PrintVal(bin);
-            PrintVal(opNode->getVal());
-            throw CyclebiteException("Cannot map this instruction to an expression!");
+            //PrintVal(bin);
+            //PrintVal(opNode->getVal());
+            //throw CyclebiteException("Cannot map this instruction to an expression!");
         }
         else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(op) )
         {
@@ -222,6 +246,28 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             // if twe have made it this far, this phi doesn't map to an RV.. so at this point it is an error
             PrintVal(phi);
             throw CyclebiteException("phi node use implies predication or loop-loop dependence!");
+        }
+        else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(op) )
+        {
+            if( const auto nodeInst = dynamic_pointer_cast<Cyclebite::Graph::Inst>( opNode ) )
+            {
+                vector<shared_ptr<Symbol>> args;
+                for( const auto& castOp : cast->operands() )
+                {
+                    // call expression builder
+                    for( const auto& news : buildExpression(nodeInst, t, castOp, nodeToExpr, colls) )
+                    {
+                        args.push_back( news );
+                    }
+                }
+                auto castExpr = make_shared<OperatorExpression>( Cyclebite::Graph::GetOp(cast->getOpcode()), args );
+                nodeToExpr[ opNode ] = castExpr;
+                newSymbols.push_back(castExpr);
+            }
+            else
+            {
+                throw CyclebiteException("Cast instruction is not a Graph::Inst!");
+            }
         }
     }
     else if( auto con = llvm::dyn_cast<llvm::Constant>(op) )
@@ -359,6 +405,12 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
     }
     for( const auto& node : insts )
     {
+        if( nodeToExpr.contains(node) )
+        {
+            // you have already been accounted for by a recursive symbol build (probably for an operatorExpression of some kind)
+            // so we skip you entirely (because you are already embedded in someone else's expression)
+            continue;
+        }
         if( const auto& shuffle = llvm::dyn_cast<llvm::ShuffleVectorInst>(node->getInst()) )
         {
             // shuffles appear to be useful for concatenating elemnents of different vectors into the same vector
@@ -380,6 +432,10 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
                     // call expression builder
                     for( const auto& news : buildExpression(node, t, argOp.get(), nodeToExpr, colls) )
                     {
+                        if( Graph::DNIDMap.contains(argOp.get()) )
+                        {
+                            nodeToExpr[ Graph::DNIDMap.at(argOp.get()) ] = news;
+                        }
                         args.push_back( news );
                     }
                 }
@@ -431,6 +487,10 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
                     // call expression builder
                     for( const auto& news : buildExpression(node, t, op, nodeToExpr, colls) )
                     {
+                        if( Graph::DNIDMap.contains(op) )
+                        {
+                            nodeToExpr[ Graph::DNIDMap.at(op) ] = news;
+                        }
                         args.push_back( news );
                     }
                 }
@@ -444,6 +504,10 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
             {
                 for( const auto& news : buildExpression(node, t, op, nodeToExpr, colls) )
                 {
+                    if( Graph::DNIDMap.contains(op) )
+                    {
+                        nodeToExpr[ Graph::DNIDMap.at(op) ] = news;
+                    }
                     vec.push_back(news);
                 }
             }
