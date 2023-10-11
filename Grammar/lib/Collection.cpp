@@ -200,10 +200,14 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
         // because we walk backward, vars will be sorted in reverse-order, from child-most to parent-most 
         set<shared_ptr<IndexVariable>, idxVarHierarchySort> vars;
         set<shared_ptr<BasePointer>> collBPs;
-        deque<const llvm::Instruction*> Q;
+        deque<const llvm::Value*> Q;
         set<const llvm::Value*> covered;
         Q.push_front(st);
         covered.insert(st);
+        // there is a corner case where static global structure will be offset and stored to 
+        // thus we won't find a base pointer for the memory op
+        // this flag remembers that so we can effectively check if the ld/st has had a base pointer mapped to it
+        bool hasConstantPointer = false;
         while( !Q.empty() )
         {
             if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
@@ -257,24 +261,10 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 // once we are done absorbing all idxVars this gep has to offer, we must walk backward through its operands
                 for( const auto& op : gep->operands() )
                 {
-                    if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+                    if( !covered.contains(op) )
                     {
-                        if( !covered.contains(opInst) )
-                        {
-                            Q.push_back(opInst);
-                            covered.insert(opInst);
-                        }
-                    }
-                    else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(op) )
-                    {
-                        // this may be a base pointer
-                        for( const auto& bp : bps )
-                        {
-                            if( bp->getNode()->getVal() == arg )
-                            {
-                                collBPs.insert(bp);
-                            }
-                        }
+                        Q.push_back(op);
+                        covered.insert(op);
                     }
                 }
             }
@@ -283,22 +273,8 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 // the pointer of this load may lead us to more geps
                 if( !covered.contains(ld->getPointerOperand()) )
                 {
-                    if( const auto& ptrInst = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()) )
-                    {
-                        Q.push_back(ptrInst);
-                        covered.insert(ptrInst);
-                    }
-                    else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(ld->getPointerOperand()) )
-                    {
-                        // this may be a base pointer
-                        for( const auto& bp : bps )
-                        {
-                            if( bp->getNode()->getVal() == arg )
-                            {
-                                collBPs.insert(bp);
-                            }
-                        }
-                    }
+                    Q.push_back(ld->getPointerOperand());
+                    covered.insert(ld->getPointerOperand());
                 }
             }
             else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
@@ -309,22 +285,8 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 {
                     if( !covered.contains(op.get()) )
                     {
-                        if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op.get()) )
-                        {
-                            Q.push_back(opInst);
-                            covered.insert(opInst);
-                        }
-                        else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(op.get()) )
-                        {
-                            // this may be our base pointer
-                            for( const auto& bp : bps )
-                            {
-                                if( bp->getNode()->getVal() == arg )
-                                {
-                                    collBPs.insert(bp);
-                                }
-                            }
-                        }
+                        Q.push_back(op);
+                        covered.insert(op);
                     }
                 }
             }
@@ -349,11 +311,8 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                     {
                         if( !covered.contains(use) )
                         {
-                            if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use) )
-                            {
-                                Q.push_front(useInst);
-                                covered.insert(useInst);
-                            }
+                            Q.push_front(use);
+                            covered.insert(use);
                         }
                     }
                 }
@@ -373,13 +332,10 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             {
                 // stores can put the bp into an alloc instruction
                 // thus we walk backwards from the value operand of the store
-                if( const auto& valueInst = llvm::dyn_cast<llvm::Instruction>(sto->getValueOperand()) )
+                if( !covered.contains(sto->getValueOperand()) )
                 {
-                    if( !covered.contains(valueInst) )
-                    {
-                        Q.push_back(valueInst);
-                        covered.insert(valueInst);
-                    }
+                    Q.push_back(sto->getValueOperand());
+                    covered.insert(sto->getValueOperand());
                 }
             }
             else if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(Q.front()) )
@@ -415,13 +371,10 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 // then push its operands into the queue for more investigation!
                 for( const auto& op : bin->operands() )
                 {
-                    if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+                    if( !covered.contains(op) )
                     {
-                        if( !covered.contains(opInst) )
-                        {
-                            Q.push_back(opInst);
-                            covered.insert(opInst);
-                        }
+                        Q.push_back(op);
+                        covered.insert(op);
                     }
                 }
             }
@@ -431,17 +384,39 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 {
                     if( !covered.contains(op) )
                     {
-                        if( const auto& opinst = llvm::dyn_cast<llvm::Instruction>(op) )
-                        {
-                            Q.push_back(opinst);
-                            covered.insert(opinst);
-                        }
+                        Q.push_back(op);
+                        covered.insert(op);
+                    }
+                }
+            }
+            else if( const auto& con = llvm::dyn_cast<llvm::Constant>(Q.front()) )
+            {
+                // contants can appear in the search when a static global structure is being offset (ex. StencilChain filter weight array)
+                // when we encounter them, we make a collection for them and put that pointer as the base pointer
+                if( con->getType()->isPointerTy() || con->getType()->isArrayTy() )
+                {
+                    hasConstantPointer = true;
+                }
+            }
+            else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(Q.front()) )
+            {
+                // this may be a base pointer
+                for( const auto& bp : bps )
+                {
+                    if( bp->getNode()->getVal() == arg )
+                    {
+                        collBPs.insert(bp);
                     }
                 }
             }
             Q.pop_front();
         }
-        if( collBPs.empty() )
+        if( hasConstantPointer && collBPs.empty() )
+        {
+            // we don't consider this ld/st for a collection
+            continue;
+        }
+        else if( collBPs.empty() )
         {
             PrintVal(st);
             throw CyclebiteException("Could not find a base pointer for this memory op!");
