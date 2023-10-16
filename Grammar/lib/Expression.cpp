@@ -10,6 +10,7 @@
 #include "Task.h"
 #include "TaskParameter.h"
 #include "OperatorExpression.h"
+#include "Graph/inc/Dijkstra.h"
 #include "Graph/inc/IO.h"
 #include "Util/Exceptions.h"
 #include "Util/Print.h"
@@ -573,4 +574,285 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
         }
     }
     return expr;
+}
+
+shared_ptr<Expression> Cyclebite::Grammar::getExpression(const shared_ptr<Task>& t, const set<shared_ptr<Collection>>& colls, const set<shared_ptr<ReductionVariable>>& rvs)
+{
+    // the following DFG walk does both 1 and 2
+    // 1. Group all function nodes together
+    deque<shared_ptr<Cyclebite::Graph::Inst>> Q;
+    set<shared_ptr<Cyclebite::Graph::DataValue>, Cyclebite::Graph::p_GNCompare> covered;
+    set<shared_ptr<Cyclebite::Graph::Inst>, Cyclebite::Graph::p_GNCompare> functionGroup;
+    // 2. find the loads that feed each group
+    set<const llvm::LoadInst*> lds;
+    // 3. find the stores that store each group
+    set<const llvm::StoreInst*> sts;
+    for( const auto& c : t->getCycles() )
+    {
+        for( const auto& block : c->getBody() )
+        {
+            for( const auto& node : block->instructions )
+            {
+                if( covered.find(node) == covered.end() )
+                {
+                    covered.insert(node);
+                    if( node->isFunction() )
+                    {
+                        Q.clear();
+                        Q.push_front(node);
+                        functionGroup.insert(node);
+                        while( !Q.empty() )
+                        {
+                            for( const auto& user : Q.front()->getInst()->users() )
+                            {
+                                if( !Cyclebite::Graph::DNIDMap.contains(user) )
+                                {
+                                    continue;
+                                }
+                                else if( !t->find(Cyclebite::Graph::DNIDMap.at(user)) )
+                                {
+                                    continue;
+                                }
+                                // we expect eating stores to happen only after functional groups
+                                if( const auto st = llvm::dyn_cast<llvm::StoreInst>(user) )
+                                {
+                                    sts.insert(st);
+                                    covered.insert(Cyclebite::Graph::DNIDMap.at(st));
+                                }
+                                else if( const auto userInst = llvm::dyn_cast<llvm::Instruction>(user) )
+                                {
+                                    if( !covered.contains(Cyclebite::Graph::DNIDMap.at(userInst)) )
+                                    {
+                                        if( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(userInst))->isFunction() )
+                                        {
+                                            functionGroup.insert(static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(userInst)));
+                                        }
+                                        covered.insert(Cyclebite::Graph::DNIDMap.at(userInst));
+                                        Q.push_back(static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(userInst)));
+                                    }
+                                }
+                            }
+                            for( const auto& use : Q.front()->getInst()->operands() )
+                            {
+                                if( Cyclebite::Graph::DNIDMap.find(use) == Cyclebite::Graph::DNIDMap.end() )
+                                {
+                                    continue;
+                                }
+                                else if( !t->find(Cyclebite::Graph::DNIDMap.at(use)) )
+                                {
+                                    continue;
+                                }
+                                // we expect feeding loads to happen only prior to functional groups
+                                if( const auto ld = llvm::dyn_cast<llvm::LoadInst>(use) )
+                                {
+                                    lds.insert(ld);
+                                    covered.insert(Cyclebite::Graph::DNIDMap.at(ld));
+                                }
+                                else if( const auto useInst = llvm::dyn_cast<llvm::Instruction>(use) )
+                                {
+                                    if( !covered.contains(Cyclebite::Graph::DNIDMap.at(useInst)) )
+                                    {
+                                        if( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(useInst))->isFunction() )
+                                        {
+                                            functionGroup.insert(static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(useInst)));
+                                        }
+                                        covered.insert(Cyclebite::Graph::DNIDMap.at(useInst));
+                                        Q.push_back(static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(useInst)));
+                                    }
+                                }
+                            }
+                            Q.pop_front();
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    // 3. construct expressions
+    // - walk the function group from start to finish
+    //   -- for each datanode, construct an expression
+    //      --- if the datanode is a reduction variable, construct a reduction
+    // maps each node to expressions, which makes it convenient to construct expressions that use other expressions
+
+    // in order for expression generation to go well, ops need to be done in the right order (producer to consumer)
+    // thus, the following logic attempts to order the instructions such that the instructions at the beginning of the group are done first
+    // this way, the expressions that use earlier expressions have an expression to refer to
+    // each binary operation in the function group is recorded in order, this will give us the operators in the expression
+    // in order to find the ordering of the group, we find the instruction that doesn't use any other instruction in the group
+    // then we walk the DFG to find all subsequent instructions
+    shared_ptr<Cyclebite::Graph::Inst> first = nullptr;
+    // there are two checks here
+    // 1. the group forms a phi -> op(s) -> phi... cycle
+    //    - in this case the phi is the first instruction, since it has the initial value of whatever variable we are dealing with
+    // 2. the group does not form a cycle
+    //    - then we loop for members of the group whose operands are all outside the group
+    set<shared_ptr<Cyclebite::Graph::UnconditionalEdge>, Cyclebite::Graph::GECompare> edges;
+    for( const auto& n : functionGroup )
+    {
+        for( const auto& p : n->getPredecessors() )
+        {
+            edges.insert(static_pointer_cast<Cyclebite::Graph::UnconditionalEdge>(p));
+        }
+        for( const auto& s : n->getSuccessors() )
+        {
+            edges.insert(static_pointer_cast<Cyclebite::Graph::UnconditionalEdge>(s));
+        }
+    }
+    Cyclebite::Graph::DataGraph dg(functionGroup, edges);
+    if( Cyclebite::Graph::FindCycles(dg) ) // forms a cycle
+    {
+        // get the phi and set a user of it (that is within the function group) as the first instruction
+        // the phi itself does not belong in the function group (because phis create false dependencies and are not important to the expression)
+        set<const llvm::PHINode*> phis;
+        for( const auto& n : functionGroup )
+        {
+            if( const auto phi = llvm::dyn_cast<llvm::PHINode>(n->getVal()) )
+            {
+                phis.insert(phi);
+            }
+        }
+        if( phis.size() == 1 )
+        {
+            first = static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(*phis.begin()));
+        }
+        else
+        {
+#ifdef DEBUG
+            for( const auto& n : functionGroup ) 
+            {
+                PrintVal(n->getVal());
+            }
+#endif
+            throw CyclebiteException("Cannot handle the case where a cycle in the DFG contains multiple phis!");
+        }
+    }
+    else
+    {
+        for( const auto& n : functionGroup )
+        {
+            bool allOutside = true;
+            for( const auto& op : n->getInst()->operands() )
+            {
+                if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(op) )
+                {
+                    if( functionGroup.find(Cyclebite::Graph::DNIDMap.at(inst)) != functionGroup.end() )
+                    {
+                        allOutside = false;
+                        break;
+                    }
+                }
+            }
+            if( allOutside )
+            {
+                first = n;
+                break;
+            }
+        }
+    }
+    if( !first )
+    {
+        throw CyclebiteException("Could not find first instruction in the instruction group!");
+    }
+
+    // now we need to find the order of operations
+    vector<shared_ptr<Cyclebite::Graph::Inst>> order;
+    order.push_back(first);
+    deque<const llvm::Instruction*> instQ;
+    set<const llvm::Instruction*> instCovered;
+    instQ.push_front(first->getInst());
+    instCovered.insert(first->getInst());
+    while(!instQ.empty() )
+    {
+        bool depthFirst = false;
+        for( const auto& op : instQ.front()->operands() )
+        {
+            if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(instQ.front()) )
+            {
+                // we don't look through phi operands because that will lead to the back of the cycle
+                // and we prefer phis to be the first instruction in the ordering (because that is literally how the instructions will have executed)
+                break;
+            }
+            else if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+            {
+                if( instCovered.find(opInst) == instCovered.end() )
+                {
+                    if( functionGroup.find(Cyclebite::Graph::DNIDMap.at(opInst)) != functionGroup.end() )
+                    {
+                        // this instruction comes before the current, thus two things need to happen
+                        // 1. it needs to be pushed before the current instruction in the "order" list
+                        // 2. its operands need to be investigated before anything else
+                        auto pos = std::find(order.begin(), order.end(), Cyclebite::Graph::DNIDMap.at(instQ.front()));
+                        if( pos == order.end() )
+                        {
+                            throw CyclebiteException("Cannot resolve where to insert function inst operand in the ordered list!");
+                        }
+                        order.insert(pos, static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(opInst)));
+                        instCovered.insert(opInst);
+                        instQ.push_front(opInst);
+                        depthFirst = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if( depthFirst ) { continue; }
+        for( const auto& user : instQ.front()->users() )
+        {
+            if( const auto& userInst = llvm::dyn_cast<llvm::Instruction>(user) )
+            {
+                if( instCovered.find(userInst) == instCovered.end() )
+                {
+                    if( functionGroup.find(Cyclebite::Graph::DNIDMap.at(userInst)) != functionGroup.end() )
+                    {
+                        order.push_back(static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(userInst)));
+                        instQ.push_back(userInst);
+                        instCovered.insert(userInst);
+                    }
+                }
+            }
+        }
+        instQ.pop_front();
+    }
+
+    vector<shared_ptr<Cyclebite::Graph::Inst>> insts;
+    // make a quick mapping from datanode to reduction variable
+    // a reduction should be a cycle starting at a phi, followed by ops (binary or cast), that ultimately feed a reduction variable
+    // we must separate the phi from the binary ops from the RV, then construct the expression for the reduction (which is just the binary ops), then add the reduction to it (which sets the operator next to the equal sign e.g. "+=")
+    shared_ptr<ReductionVariable> rv = nullptr;
+    if( !rvs.empty() )
+    {
+        map<shared_ptr<Cyclebite::Graph::DataValue>, shared_ptr<ReductionVariable>> dnToRv;
+        for( const auto& node : order )
+        {
+            for( const auto& rv : rvs )
+            {
+                // TODO: having to use the llvm objects here implies there is more than one node for a single llvm::value
+                // this will likely lead to more bugs and should be investigated
+                if( rv->getNode()->getVal() == node->getInst() )
+                {
+                    dnToRv[node] = rv;
+                    break;
+                }
+            }
+        }
+        for( const auto& node : order )
+        {
+            if( dnToRv.find(node) != dnToRv.end() )
+            {
+                rv = dnToRv.at(node);
+            }
+            /*else
+            {
+                insts.push_back(node);
+            }*/
+            insts.push_back(node);
+
+        }
+    }
+    else
+    {
+        insts = order;
+    }
+    return constructExpression(t, insts, rv, colls);
 }

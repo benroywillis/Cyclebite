@@ -9,6 +9,7 @@
 
 namespace Cyclebite::Grammar
 {
+    class Task;
     /// @brief Sets the threshold, in bytes, that a memory allocation must make in order to be considered a base pointer
     constexpr uint64_t ALLOC_THRESHOLD = 128;
     /// @brief Decides whether this function allocates memory
@@ -37,4 +38,5 @@ namespace Cyclebite::Grammar
         std::vector<std::pair<const llvm::GetElementPtrInst*, const llvm::LoadInst*>> loads;
         std::vector<std::pair<const llvm::GetElementPtrInst*, const llvm::StoreInst*>> stores;
     };
+    std::set<std::shared_ptr<BasePointer>> getBasePointers(const std::shared_ptr<Task>& t);
 } // namespace Cyclebite::Grammar

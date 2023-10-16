@@ -9,6 +9,7 @@
 
 namespace Cyclebite::Grammar
 {
+    class Task;
     class ReductionVariable : public Symbol
     {
     public:
@@ -23,4 +24,5 @@ namespace Cyclebite::Grammar
         std::shared_ptr<Cyclebite::Graph::DataValue> node;
         Cyclebite::Graph::Operation bin;
     };
+    std::set<std::shared_ptr<ReductionVariable>> getReductionVariables(const std::shared_ptr<Task>& t, const std::set<std::shared_ptr<InductionVariable>>& vars);
 } // namespace Cyclebite::Grammar

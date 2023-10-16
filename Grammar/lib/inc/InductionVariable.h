@@ -10,6 +10,7 @@
 
 namespace Cyclebite::Grammar
 {
+    class Task;
     class InductionVariable : public Symbol
     {
     public:
@@ -29,4 +30,5 @@ namespace Cyclebite::Grammar
         /// Represents the blocks that this IV "controls", which basically means the loop body
         std::set<std::shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare> body; 
     };
+    std::set<std::shared_ptr<InductionVariable>> getInductionVariables(const std::shared_ptr<Task>& t);
 } // namespace Cyclebite::Grammar

@@ -49,4 +49,17 @@ namespace Cyclebite::Grammar
     /// @param colls The collections in the task
     /// @return An expression that describes the entire function group. Member symbols may contain symbols within them.
     const std::shared_ptr<Expression> constructExpression( const std::shared_ptr<Task>& t, const std::vector<std::shared_ptr<Graph::Inst>>& insts, const std::shared_ptr<ReductionVariable>& rv, const std::set<std::shared_ptr<Collection>>& colls );
+    /// @brief Creates expressions from collections and function nodes
+    ///
+    /// Expressions use the collections of functions and the found collections of data to generate the rhs of a function
+    /// Steps:
+    /// 1. Group each functional expression together // find all rhs expressions
+    /// 2. For each function group // replace instructions in the rhs expression with collections
+    ///    - for each instruction in the group
+    ///      -- figure out which collection supplies this instruction (if any)
+    /// 3. Construct expressions from function
+    /// @param DG 
+    /// @param colls 
+    /// @return 
+    std::shared_ptr<Expression> getExpression(const std::shared_ptr<Task>& t, const std::set<std::shared_ptr<Collection>>& colls, const std::set<std::shared_ptr<ReductionVariable>>& rvs);
 } // namespace Cyclebite::Grammar
