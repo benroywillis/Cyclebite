@@ -4,6 +4,9 @@
 //==------------------------------==//
 #include "IO.h"
 #include "IndexVariable.h"
+#include "InductionVariable.h"
+#include "BasePointer.h"
+#include "Collection.h"
 #include "Graph/inc/IO.h"
 #include "Util/Exceptions.h"
 #include "Util/Print.h"
@@ -50,24 +53,96 @@ void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::jso
     }
 }
 
+inline string getInstName( uint64_t NID, const llvm::Value* v )
+{
+    string name = "";
+    string instString = PrintVal(v, false);
+    if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(v) )
+    {
+        auto start = instString.find("%");
+        auto end = instString.find("%", start+1) - start;
+        name = instString.substr(start, end);
+    }
+    else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(v) )
+    {
+        if( arg->getParent() )
+        {
+            name += string(arg->getParent()->getName()) + " <- ";
+        }
+        name += instString;
+    }
+    else
+    {
+        name = instString;
+    }
+    return "\t"+to_string(NID)+" [label=\""+name+"\"];\n";
+}
+
 string Cyclebite::Grammar::PrintIdxVarTree( const set<shared_ptr<IndexVariable>>& idxVars )
 {
     string dotString = "digraph{\n\trankdir=\"BT\";\n";
     for( const auto& idx : idxVars )
     {
-        auto instString = PrintVal(idx->getNode()->getInst(), false);
-        auto start = instString.find("%");
-        auto end = instString.find("%", start+1) - start;
-        string name = instString.substr(start, end);
-        dotString += "\t"+to_string(idx->getNode()->NID)+" [label=\""+name+"\"];\n";
+        dotString += getInstName(idx->getNode()->NID, idx->getNode()->getInst());
+        if( idx->getIV() )
+        {
+            dotString += getInstName(idx->getIV()->getNode()->NID, idx->getIV()->getNode()->getVal());
+        }
     }
     for( const auto& idx : idxVars )
     {
         for( const auto& p : idx->getParents() )
         {
-            auto parentInstStr = PrintVal(p->getNode()->getInst(), false);
-            string parentName  = parentInstStr.substr( parentInstStr.find(" ") );
             dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(p->getNode()->NID)+";\n";
+        }
+        if( idx->getIV() )
+        {
+            dotString += "\t"+to_string(idx->getIV()->getNode()->NID)+" -> "+to_string(idx->getNode()->NID)+" [style=dotted];\n";
+        }
+    }
+    dotString += "}";
+    return dotString;
+}
+
+string Cyclebite::Grammar::VisualizeCollection( const shared_ptr<Collection>& coll )
+{
+    string dotString = "digraph{\n\trankdir=\"BT\";\n";
+    for( const auto& bp : coll->getBPs() )
+    {
+        dotString += getInstName(bp->getNode()->NID, bp->getNode()->getVal());
+    }
+    for( const auto& idx : coll->getIndices() )
+    {
+        dotString += getInstName(idx->getNode()->NID, idx->getNode()->getInst());
+        if( idx->getIV() )
+        {
+            dotString += getInstName(idx->getIV()->getNode()->NID, idx->getIV()->getNode()->getVal());
+        }
+    }
+    // print the base pointer edges
+    // they should point to their parent-most idxVar
+    for( const auto& bp : coll->getBPs() )
+    {
+        for( const auto& idx : coll->getIndices() )
+        {
+            if( idx->getBPs().contains(bp) )
+            {
+                dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(bp->getNode()->NID)+" [style=dashed];\n";
+            }
+        }
+    }
+    for( const auto& idx : coll->getIndices() )
+    {
+        for( const auto& p : idx->getParents() )
+        {
+            if( std::find(coll->getIndices().begin(), coll->getIndices().end(), p) != coll->getIndices().end() )
+            {
+                dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(p->getNode()->NID)+";\n";
+            }
+        }
+        if( idx->getIV() )
+        {
+            dotString += "\t"+to_string(idx->getIV()->getNode()->NID)+" -> "+to_string(idx->getNode()->NID)+" [style=dotted];\n";
         }
     }
     dotString += "}";
