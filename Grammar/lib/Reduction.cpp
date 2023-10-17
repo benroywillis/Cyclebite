@@ -7,7 +7,7 @@
 using namespace std;
 using namespace Cyclebite::Grammar;
 
-Reduction::Reduction(const shared_ptr<ReductionVariable>& v, const vector<shared_ptr<Symbol>>& s, const vector<Cyclebite::Graph::Operation>& o ) : Expression(s, o), var(v) {}
+Reduction::Reduction(const shared_ptr<ReductionVariable>& v, const vector<shared_ptr<Symbol>>& s, const vector<Cyclebite::Graph::Operation>& o ) : Expression(s, o, "reduction"), var(v) {}
 
 const shared_ptr<ReductionVariable>& Reduction::getRV() const
 {
