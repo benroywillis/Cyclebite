@@ -9,19 +9,31 @@ using namespace Cyclebite::Grammar;
 
 string FunctionExpression::dump() const
 {
-    string funcCall = string(f->getName())+"( ";
+    string expr = "";
+    bool flip = false;
+    if( !printedName )
+    {
+        flip = true;
+        if( output )
+        {
+            expr += output->dump() + " <- ";
+        }
+    }
+    printedName = true;
+    expr += string(f->getName())+"( ";
     if( !args.empty() )
     {
         auto arg = args.begin();
-        funcCall += (*arg++)->dump();
+        expr += (*arg++)->dump();
         while( arg != args.end() )
         {
-            funcCall += ", ";
-            funcCall += (*arg++)->dump();
+            expr += ", ";
+            expr += (*arg++)->dump();
         }
     }
-    funcCall += " )";
-    return funcCall;
+    expr += " )";
+    printedName = flip ? !printedName : printedName;
+    return expr;
 }
 
 const llvm::Function* FunctionExpression::getFunction() const

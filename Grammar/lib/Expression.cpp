@@ -22,9 +22,9 @@ using namespace Cyclebite::Grammar;
 
 bool Expression::printedName = false;
 
-Expression::Expression( const vector<shared_ptr<Symbol>>& s, const vector<Cyclebite::Graph::Operation>& o ) : Symbol("expr"), ops(o), symbols(s) 
+Expression::Expression( const vector<shared_ptr<Symbol>>& in, const vector<Cyclebite::Graph::Operation>& o, const shared_ptr<Symbol>& out, const string name ) : Symbol(name), output(out), ops(o), symbols(in)
 {
-    if( s.empty() && o.empty() )
+    if( in.empty() && o.empty() )
     {
         throw CyclebiteException("Expression cannot be empty!");
     }
@@ -33,57 +33,7 @@ Expression::Expression( const vector<shared_ptr<Symbol>>& s, const vector<Cycleb
     // symbols are hierarchically grouped, thus we need to search under the input list to find them all
     deque<shared_ptr<Symbol>> Q;
     set<shared_ptr<Symbol>> covered;
-    for( const auto& sym : s )
-    {
-        Q.push_front(sym);
-        covered.insert(sym);
-    }
-    while( !Q.empty() )
-    {
-        if( const auto& coll = dynamic_pointer_cast<Collection>(Q.front()) )
-        {
-            // collections present in the expression are always inputs
-            inputs.insert(coll);
-        }
-        if( const auto& expr = dynamic_pointer_cast<Expression>(Q.front()) )
-        {
-            for( const auto& child : expr->getSymbols() )
-            {
-                if( !covered.contains(child) )
-                {
-                    Q.push_back(child);
-                    covered.insert(child);
-                }
-            }
-        }
-        Q.pop_back();
-    }
-    /*else if( o.size() != s.size()-1 )
-    {
-        for( const auto& op : o )
-        {
-            cout << Graph::OperationToString.at(op) << endl;
-        }
-        for( const auto& sym : s )
-        {
-            sym->dump();
-        }
-        throw CyclebiteException("There should be "+to_string(symbols.size()-1)+" operations for an expression with "+to_string(symbols.size())+" symbols! Operation count: "+to_string(o.size()));
-    }*/
-}
-
-Expression::Expression( const vector<shared_ptr<Symbol>> s, const vector<Cyclebite::Graph::Operation> o, const string name ) : Symbol(name), ops(o), symbols(s)
-{
-    if( s.empty() && o.empty() )
-    {
-        throw CyclebiteException("Expression cannot be empty!");
-    }
-    printedName = false;
-    // lets find all our inputs
-    // symbols are hierarchically grouped, thus we need to search under the input list to find them all
-    deque<shared_ptr<Symbol>> Q;
-    set<shared_ptr<Symbol>> covered;
-    for( const auto& sym : s )
+    for( const auto& sym : in )
     {
         Q.push_front(sym);
         covered.insert(sym);
@@ -124,10 +74,16 @@ Expression::Expression( const vector<shared_ptr<Symbol>> s, const vector<Cyclebi
 
 string Expression::dump() const
 {
-    string expr;
+    string expr = "";
+    bool flip = false;
     if( !printedName )
     {
-        expr = name + " = ";
+        flip = true;
+        if( output )
+        {
+            expr += output->dump() + " <- ";
+        }
+        expr += name + " = ";
     }
     printedName = true;
     if( !symbols.empty() )
@@ -143,6 +99,7 @@ string Expression::dump() const
             o = next(o);
         }
     }
+    printedName = flip ? !printedName : printedName;
     return expr;
 }
 
@@ -164,19 +121,24 @@ const set<shared_ptr<InductionVariable>>& Expression::getVars() const
 const set<shared_ptr<Collection>> Expression::getCollections() const
 {
     set<shared_ptr<Collection>> collections;
-    collections.insert(inputs.begin(), inputs.end());
-    collections.insert(outputs.begin(), outputs.end());
+    for( const auto& i : inputs )
+    {
+        if( const auto& coll = dynamic_pointer_cast<Collection>(i) )
+        {
+            collections.insert(coll);
+        }
+    }
     return collections;
 }
 
-const set<shared_ptr<Collection>>& Expression::getInputs() const
+const set<shared_ptr<Symbol>>& Expression::getInputs() const
 {
     return inputs;
 }
 
-const set<shared_ptr<Collection>>& Expression::getOutputs() const
+const shared_ptr<Symbol>& Expression::getStored() const
 {
-    return outputs;
+    return output;
 }
 
 vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::Inst>& node,
@@ -476,16 +438,30 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
 
     vector<Cyclebite::Graph::Operation> ops;
     map<shared_ptr<Graph::DataValue>, shared_ptr<Symbol>> nodeToExpr;
+    // there are a few DataValues that need to be mapped to their symbols before we start generating this expression
+    // first, the loads and stores of collections (these will be used to find the input and output values of the expression)
+    for( const auto& coll : colls )
+    {
+        if( coll->getLoad() )
+        {
+            nodeToExpr[ Graph::DNIDMap.at(coll->getLoad()) ] = coll;
+        }
+        for( const auto& st : coll->getStores() )
+        {
+            nodeToExpr[ Graph::DNIDMap.at(st) ] = coll;
+        }
+    }
+    // if there is a reduction variable, it's phi should be put into nodeToExpr
+    // but not the rv's node - the node is a binary operator that carries out the reduction (it is accounted for in the reduction expression)
     if( rv )
     {
-        // the reduction variable's phi should be put into nodeToExpr
-        // but not its node - the node is the literal reduction and this is implicit in the reduction expression
         if( rv->getPhi() )
         {
             nodeToExpr[Graph::DNIDMap.at(rv->getPhi())] = rv;
         }
         nodeToExpr[rv->getNode()] = rv;
     }
+    // now we iterate (from start to finish) over the instructions in the expression, each time building a Symbol for each one, until all instructions in the expression have a symbol built for them
     for( const auto& node : insts )
     {
         if( nodeToExpr.contains(node) )
@@ -502,6 +478,24 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
             // example: StencilChain/Naive/DFG_Kernel15.svg (shufflevector transforms i8 to i32, then i32 is converted to float before the MAC takes place)
             PrintVal(node->getInst());
             throw CyclebiteException("Cannot support shufflevector instructions yet!");
+        }
+        // this parameter maps to the place this instruction is stored
+        // (see Cyclebite::Grammar::Expression::getStored() documentation for more on this)
+        shared_ptr<Symbol> symbolOutput = nullptr;
+        for( const auto& succ : node->getSuccessors() )
+        {
+            if( const auto& inst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(succ->getSnk()) )
+            {
+                if( inst->getOp() == Cyclebite::Graph::Operation::store )
+                {
+                    if( !nodeToExpr.contains(inst) )
+                    {
+                        throw CyclebiteException("Could not map an expression's store to a Symbol!");
+                    }
+                    symbolOutput = nodeToExpr.at(inst);
+                    break;
+                }
+            }
         }
         vector<shared_ptr<Symbol>> vec;
         if( node->isFunctionCall() || node->isCastOp() )
@@ -561,7 +555,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
                 {
                     f = llvm::cast<llvm::CallBase>(node->getInst())->getCalledFunction();
                 }
-                expr = make_shared<FunctionExpression>(f, args);
+                expr = make_shared<FunctionExpression>(f, args, symbolOutput);
             }
             else
             {
@@ -577,7 +571,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
                         args.push_back( news );
                     }
                 }
-                expr = make_shared<OperatorExpression>(node->getOp(), args);
+                expr = make_shared<OperatorExpression>(node->getOp(), args, symbolOutput);
             }
         }
         else
@@ -596,12 +590,12 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
             }
             if( rv )
             {
-                expr = make_shared<Reduction>(rv, vec, ops);
+                expr = make_shared<Reduction>(rv, vec, ops, symbolOutput);
                 nodeToExpr[rv->getNode()] = expr;
             }
             else
             {
-                expr = make_shared<Expression>(vec, ops);
+                expr = make_shared<Expression>(vec, ops, symbolOutput);
             }
         }
         nodeToExpr[node] = expr;

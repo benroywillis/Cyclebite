@@ -19,21 +19,33 @@ namespace Cyclebite::Grammar
     {
     public:
         /// @brief Standalone constructor. Useful for building expression classes.
-        Expression( const std::vector<std::shared_ptr<Symbol>>& s, const std::vector<Cyclebite::Graph::Operation>& o );
-        /// @brief Inheritor constructur 
-        Expression( const std::vector<std::shared_ptr<Symbol>> s, const std::vector<Cyclebite::Graph::Operation> o, const std::string name );
+        Expression( const std::vector<std::shared_ptr<Symbol>>& in, const std::vector<Cyclebite::Graph::Operation>& o, const std::shared_ptr<Symbol>& out = nullptr, const std::string name = "expr" );
         ~Expression() = default;
+        /// @brief Returns the input values that this expression requires to do its computation
+        /// @return All input values to the expression including Collections, TaskParameters, TaskRegisters, and other Expressions 
         const std::vector<std::shared_ptr<Symbol>>& getSymbols() const;
         const std::vector<Cyclebite::Graph::Operation>& getOps() const;
         const std::set<std::shared_ptr<InductionVariable>>& getVars() const;
+        /// Returns the collections that input into the expression
         const std::set<std::shared_ptr<Collection>> getCollections() const;
-        const std::set<std::shared_ptr<Collection>>& getInputs() const;
-        const std::set<std::shared_ptr<Collection>>& getOutputs() const;
+        /// @brief Returns all memory-related inputs required to evaluate this expression
+        ///
+        /// Memory-related inputs come from two places: Collections (heap addresses) and TaskRegisters (phi nodes). 
+        /// @return A list of Collections and TaskRegisters required to evaluate this Expression
+        const std::set<std::shared_ptr<Symbol>>& getInputs() const;
+        /// @brief Returns the place in memory that this expression is stored within, if any
+        ///
+        /// The two accepted answers here (so far) are a heap address (represented as a Cyclebite::Grammar::Collection) and a register (represented as a Cyclebite::Grammar::TaskRegister)
+        /// Background: 
+        /// - most expressions are not stored - they are intermediates in the processing of an atom. In this case, the expression is not stored, and this method will return nullptr
+        /// - in some cases, the expression is stored in a memory address. Thus, it may be used in a future computation somewhere
+        /// @retval Either a Collection or TaskRegister that this expression is stored to after its evaluation. If the expression is not stored, nullptr is returned.
+        const std::shared_ptr<Symbol>& getStored() const;
         std::string dump() const override;
     protected:
         // contains all collections referenced by this expression
-        std::set<std::shared_ptr<Collection>> inputs;
-        std::set<std::shared_ptr<Collection>> outputs;
+        std::set<std::shared_ptr<Symbol>> inputs;
+        std::shared_ptr<Symbol> output;
         // contains the IVs that define the iterator space of this expression
         std::set<std::shared_ptr<InductionVariable>> vars;
         // contains operators that lie in between each symbol entry. Will always be of size (symbols.size() - 1)

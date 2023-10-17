@@ -8,9 +8,12 @@
 using namespace std;
 using namespace Cyclebite::Grammar;
 
-OperatorExpression::OperatorExpression(Cyclebite::Graph::Operation o, const std::vector<std::shared_ptr<Symbol>>& a) : Expression( std::vector<std::shared_ptr<Symbol>>(), 
-                                                                                                    std::vector<Cyclebite::Graph::Operation>( {o} ), 
-                                                                                                    Cyclebite::Graph::OperationToString.at(o) ), op(o), args(a) 
+OperatorExpression::OperatorExpression(Cyclebite::Graph::Operation o, const std::vector<std::shared_ptr<Symbol>>& a, const shared_ptr<Symbol>& out) : Expression( std::vector<std::shared_ptr<Symbol>>(),
+                                                                                                                                                                  std::vector<Cyclebite::Graph::Operation>( {o} ), 
+                                                                                                                                                                  out,
+                                                                                                                                                                  Cyclebite::Graph::OperationToString.at(o) ),
+                                                                                                                                                      op(o),
+                                                                                                                                                      args(a) 
 {
     // lets find all our inputs
     // symbols are hierarchically grouped, thus we need to search under the input list to find them all
@@ -56,7 +59,18 @@ const vector<shared_ptr<Symbol>>& OperatorExpression::getArgs() const
 
 string OperatorExpression::dump() const
 {
-    string expr = Graph::OperationToString.at(op) + string(" (");
+    string expr = "";
+    bool flip = false;
+    if( !printedName )
+    {
+        flip = true;
+        if( output )
+        {
+            expr += output->dump() + " <- ";
+        }
+    }
+    expr += Graph::OperationToString.at(op) + string(" (");
+    printedName = true;
     if( !args.empty() )
     {
         auto arg = args.begin();
@@ -68,5 +82,6 @@ string OperatorExpression::dump() const
         }
     }
     expr += " )";
+    printedName = flip ? !printedName : printedName;
     return expr;
 }

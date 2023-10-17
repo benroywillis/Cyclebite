@@ -7,7 +7,7 @@
 using namespace std;
 using namespace Cyclebite::Grammar;
 
-Reduction::Reduction(const shared_ptr<ReductionVariable>& v, const vector<shared_ptr<Symbol>>& s, const vector<Cyclebite::Graph::Operation>& o ) : Expression(s, o, "reduction"), var(v) {}
+Reduction::Reduction(const shared_ptr<ReductionVariable>& v, const vector<shared_ptr<Symbol>>& in, const vector<Cyclebite::Graph::Operation>& o, const shared_ptr<Symbol>& out ) : Expression(in, o, out, "reduction"), var(v) {}
 
 const shared_ptr<ReductionVariable>& Reduction::getRV() const
 {
@@ -16,7 +16,18 @@ const shared_ptr<ReductionVariable>& Reduction::getRV() const
 
 string Reduction::dump() const
 {
-    string expr = name + " " + Cyclebite::Graph::OperationToString.at(var->getOp()) + "= ";
+    string expr = "";
+    bool flip = false;
+    if( !printedName )
+    {
+        flip = true;
+        if( output )
+        {
+            expr += output->dump() + " <- ";
+        }
+        expr += name + " " + Cyclebite::Graph::OperationToString.at(var->getOp()) + "= ";
+    }
+    printedName = true;
     if( !symbols.empty() )
     {
         auto b = symbols.begin();
@@ -30,5 +41,6 @@ string Reduction::dump() const
             o = next(o);
         }
     }
+    printedName = flip ? !printedName : printedName;
     return expr;
 }
