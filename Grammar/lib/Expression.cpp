@@ -24,11 +24,40 @@ bool Expression::printedName = false;
 
 Expression::Expression( const vector<shared_ptr<Symbol>>& s, const vector<Cyclebite::Graph::Operation>& o ) : Symbol("expr"), ops(o), symbols(s) 
 {
-    if( s.empty() )
+    if( s.empty() && o.empty() )
     {
         throw CyclebiteException("Expression cannot be empty!");
     }
     printedName = false;
+    // lets find all our inputs
+    // symbols are hierarchically grouped, thus we need to search under the input list to find them all
+    deque<shared_ptr<Symbol>> Q;
+    set<shared_ptr<Symbol>> covered;
+    for( const auto& sym : s )
+    {
+        Q.push_front(sym);
+        covered.insert(sym);
+    }
+    while( !Q.empty() )
+    {
+        if( const auto& coll = dynamic_pointer_cast<Collection>(Q.front()) )
+        {
+            // collections present in the expression are always inputs
+            inputs.insert(coll);
+        }
+        if( const auto& expr = dynamic_pointer_cast<Expression>(Q.front()) )
+        {
+            for( const auto& child : expr->getSymbols() )
+            {
+                if( !covered.contains(child) )
+                {
+                    Q.push_back(child);
+                    covered.insert(child);
+                }
+            }
+        }
+        Q.pop_back();
+    }
     /*else if( o.size() != s.size()-1 )
     {
         for( const auto& op : o )
@@ -43,7 +72,55 @@ Expression::Expression( const vector<shared_ptr<Symbol>>& s, const vector<Cycleb
     }*/
 }
 
-Expression::Expression( const vector<shared_ptr<Symbol>> s, const vector<Cyclebite::Graph::Operation> o, const string name ) : Symbol(name), ops(o), symbols(s) {} 
+Expression::Expression( const vector<shared_ptr<Symbol>> s, const vector<Cyclebite::Graph::Operation> o, const string name ) : Symbol(name), ops(o), symbols(s)
+{
+    if( s.empty() && o.empty() )
+    {
+        throw CyclebiteException("Expression cannot be empty!");
+    }
+    printedName = false;
+    // lets find all our inputs
+    // symbols are hierarchically grouped, thus we need to search under the input list to find them all
+    deque<shared_ptr<Symbol>> Q;
+    set<shared_ptr<Symbol>> covered;
+    for( const auto& sym : s )
+    {
+        Q.push_front(sym);
+        covered.insert(sym);
+    }
+    while( !Q.empty() )
+    {
+        if( const auto& coll = dynamic_pointer_cast<Collection>(Q.front()) )
+        {
+            // collections present in the expression are always inputs
+            inputs.insert(coll);
+        }
+        if( const auto& expr = dynamic_pointer_cast<Expression>(Q.front()) )
+        {
+            for( const auto& child : expr->getSymbols() )
+            {
+                if( !covered.contains(child) )
+                {
+                    Q.push_back(child);
+                    covered.insert(child);
+                }
+            }
+        }
+        Q.pop_front();
+    }
+    /*else if( o.size() != s.size()-1 )
+    {
+        for( const auto& op : o )
+        {
+            cout << Graph::OperationToString.at(op) << endl;
+        }
+        for( const auto& sym : s )
+        {
+            sym->dump();
+        }
+        throw CyclebiteException("There should be "+to_string(symbols.size()-1)+" operations for an expression with "+to_string(symbols.size())+" symbols! Operation count: "+to_string(o.size()));
+    }*/
+} 
 
 string Expression::dump() const
 {
@@ -72,6 +149,11 @@ string Expression::dump() const
 const vector<shared_ptr<Symbol>>& Expression::getSymbols() const
 {
     return symbols;
+}
+
+const vector<Cyclebite::Graph::Operation>& Expression::getOps() const
+{
+    return ops;
 }
 
 const set<shared_ptr<InductionVariable>>& Expression::getVars() const

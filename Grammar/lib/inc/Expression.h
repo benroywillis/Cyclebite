@@ -24,6 +24,7 @@ namespace Cyclebite::Grammar
         Expression( const std::vector<std::shared_ptr<Symbol>> s, const std::vector<Cyclebite::Graph::Operation> o, const std::string name );
         ~Expression() = default;
         const std::vector<std::shared_ptr<Symbol>>& getSymbols() const;
+        const std::vector<Cyclebite::Graph::Operation>& getOps() const;
         const std::set<std::shared_ptr<InductionVariable>>& getVars() const;
         const std::set<std::shared_ptr<Collection>> getCollections() const;
         const std::set<std::shared_ptr<Collection>>& getInputs() const;
