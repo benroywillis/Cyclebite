@@ -173,7 +173,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             spdlog::info("Grammar Success");
             cout << endl;
 #endif
-            Export(expr);
+            Export(t, expr);
         }
         catch(CyclebiteException& e)
         {
