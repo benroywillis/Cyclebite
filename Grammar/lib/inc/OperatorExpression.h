@@ -12,7 +12,7 @@ namespace Cyclebite::Grammar
     class OperatorExpression : public Expression
     {
     public:
-        OperatorExpression(Cyclebite::Graph::Operation o, const std::vector<std::shared_ptr<Symbol>>& a, const std::shared_ptr<Symbol>& out = nullptr );
+        OperatorExpression(const std::shared_ptr<Task>& ta, Cyclebite::Graph::Operation o, const std::vector<std::shared_ptr<Symbol>>& a, const std::shared_ptr<Symbol>& out = nullptr );
         Cyclebite::Graph::Operation getOp() const;
         const std::vector<std::shared_ptr<Symbol>>& getArgs() const;
         std::string dump() const override;

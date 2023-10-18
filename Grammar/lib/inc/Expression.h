@@ -8,6 +8,7 @@
 
 namespace Cyclebite::Grammar
 {
+    class Cycle;
     /// @brief Represents the rhs of a computation statement
     ///
     /// In the Halide example
@@ -19,8 +20,9 @@ namespace Cyclebite::Grammar
     {
     public:
         /// @brief Standalone constructor. Useful for building expression classes.
-        Expression( const std::vector<std::shared_ptr<Symbol>>& in, const std::vector<Cyclebite::Graph::Operation>& o, const std::shared_ptr<Symbol>& out = nullptr, const std::string name = "expr" );
+        Expression( const std::shared_ptr<Task>& ta, const std::vector<std::shared_ptr<Symbol>>& in, const std::vector<Cyclebite::Graph::Operation>& o, const std::shared_ptr<Symbol>& out = nullptr, const std::string name = "expr" );
         ~Expression() = default;
+        const std::shared_ptr<Task>& getTask() const;
         /// @brief Returns the input values that this expression requires to do its computation
         /// @return All input values to the expression including Collections, TaskParameters, TaskRegisters, and other Expressions 
         const std::vector<std::shared_ptr<Symbol>>& getSymbols() const;
@@ -41,8 +43,18 @@ namespace Cyclebite::Grammar
         /// - in some cases, the expression is stored in a memory address. Thus, it may be used in a future computation somewhere
         /// @retval Either a Collection or TaskRegister that this expression is stored to after its evaluation. If the expression is not stored, nullptr is returned.
         const std::shared_ptr<Symbol>& getStored() const;
+        /// @brief Returns the (input) collections that cause loop-loop dependencies
+        ///
+        /// The returned collections act like Halide expressions
+        /// e.g., filtered(x, y) = alpha*input(x, y) + (1-alpha)*filtered(x, y-1) -> filtered has a loop-carried dependence
+        
+        /// @brief Returns the cycle objects from within this task whose iterations are fully parallel
+        /// @return All cycles within the task whose iterations are embarassingly parallel
+        const std::set<std::shared_ptr<Cycle>> getParallelCycles() const;
         std::string dump() const override;
     protected:
+        /// the task in which the expression is derived
+        std::shared_ptr<Task> t;
         // contains all collections referenced by this expression
         std::set<std::shared_ptr<Symbol>> inputs;
         std::shared_ptr<Symbol> output;

@@ -12,11 +12,16 @@ namespace Cyclebite::Grammar
     class Reduction : public Expression
     {
     public:
-        Reduction(const std::shared_ptr<ReductionVariable>& var, const std::vector<std::shared_ptr<Symbol>>& in, const std::vector<Cyclebite::Graph::Operation>& o, const std::shared_ptr<Symbol>& out = nullptr );
+        Reduction( const std::shared_ptr<Task>& ta, 
+                   const std::shared_ptr<ReductionVariable>& var, 
+                   const std::vector<std::shared_ptr<Symbol>>& in, 
+                   const std::vector<Cyclebite::Graph::Operation>& o, 
+                   const std::shared_ptr<Symbol>& out = nullptr );
         ~Reduction() = default;
         const std::shared_ptr<ReductionVariable>& getRV() const;
+        const std::shared_ptr<Cycle>& getReductionCycles() const;
         std::string dump() const override;
     private:
-        std::shared_ptr<ReductionVariable> var;
+        std::shared_ptr<ReductionVariable> rv;
     };
 } // namespace Cyclebite::Grammar

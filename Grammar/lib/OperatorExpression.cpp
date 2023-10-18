@@ -8,12 +8,15 @@
 using namespace std;
 using namespace Cyclebite::Grammar;
 
-OperatorExpression::OperatorExpression(Cyclebite::Graph::Operation o, const std::vector<std::shared_ptr<Symbol>>& a, const shared_ptr<Symbol>& out) : Expression( std::vector<std::shared_ptr<Symbol>>(),
-                                                                                                                                                                  std::vector<Cyclebite::Graph::Operation>( {o} ), 
-                                                                                                                                                                  out,
-                                                                                                                                                                  Cyclebite::Graph::OperationToString.at(o) ),
-                                                                                                                                                      op(o),
-                                                                                                                                                      args(a) 
+OperatorExpression::OperatorExpression( const shared_ptr<Task>& ta, 
+                                        Cyclebite::Graph::Operation o, 
+                                        const std::vector<std::shared_ptr<Symbol>>& a, 
+                                        const shared_ptr<Symbol>& out) : Expression(ta, std::vector<std::shared_ptr<Symbol>>(),
+                                                                                    std::vector<Cyclebite::Graph::Operation>( {o} ), 
+                                                                                    out,
+                                                                                    Cyclebite::Graph::OperationToString.at(o) ),
+                                                                         op(o),
+                                                                         args(a) 
 {
     // lets find all our inputs
     // symbols are hierarchically grouped, thus we need to search under the input list to find them all
@@ -26,7 +29,6 @@ OperatorExpression::OperatorExpression(Cyclebite::Graph::Operation o, const std:
     }
     while( !Q.empty() )
     {
-        spdlog::info(Q.front()->dump());
         if( const auto& coll = dynamic_pointer_cast<Collection>(Q.front()) )
         {
             // collections present in the expression are always inputs
