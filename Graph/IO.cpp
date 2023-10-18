@@ -1257,6 +1257,10 @@ void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg,
         exit(EXIT_FAILURE);
     }
 #ifdef DEBUG
+    ofstream LabeledMCG("LabeledMCG.dot");
+    auto LMCG = GenerateDot(graph, true);
+    LabeledMCG << LMCG << "\n";
+    LabeledMCG.close();
     ofstream DynamicCallallGraphDot("DynamicCallGraph.dot");
     auto dynamicCallGraph = GenerateCallGraph(dynamicCG);
     DynamicCallallGraphDot << dynamicCallGraph << "\n";
