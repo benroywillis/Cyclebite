@@ -84,9 +84,9 @@ string Cyclebite::Grammar::PrintIdxVarTree( const set<shared_ptr<IndexVariable>>
     for( const auto& idx : idxVars )
     {
         dotString += getInstName(idx->getNode()->NID, idx->getNode()->getInst());
-        if( idx->getIV() )
+        for( const auto& iv : idx->getIVs() )
         {
-            dotString += getInstName(idx->getIV()->getNode()->NID, idx->getIV()->getNode()->getVal());
+            dotString += getInstName(iv->getNode()->NID, iv->getNode()->getVal());
         }
     }
     for( const auto& idx : idxVars )
@@ -95,9 +95,9 @@ string Cyclebite::Grammar::PrintIdxVarTree( const set<shared_ptr<IndexVariable>>
         {
             dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(p->getNode()->NID)+";\n";
         }
-        if( idx->getIV() )
+        for( const auto& iv : idx->getIVs() )
         {
-            dotString += "\t"+to_string(idx->getIV()->getNode()->NID)+" -> "+to_string(idx->getNode()->NID)+" [style=dotted];\n";
+            dotString += "\t"+to_string(iv->getNode()->NID)+" -> "+to_string(idx->getNode()->NID)+" [style=dotted];\n";
         }
     }
     dotString += "}";
@@ -114,9 +114,9 @@ string Cyclebite::Grammar::VisualizeCollection( const shared_ptr<Collection>& co
     for( const auto& idx : coll->getIndices() )
     {
         dotString += getInstName(idx->getNode()->NID, idx->getNode()->getInst());
-        if( idx->getIV() )
+        for( const auto& iv : idx->getIVs() )
         {
-            dotString += getInstName(idx->getIV()->getNode()->NID, idx->getIV()->getNode()->getVal());
+            dotString += getInstName(iv->getNode()->NID, iv->getNode()->getVal());
         }
     }
     // print the base pointer edges
@@ -140,9 +140,9 @@ string Cyclebite::Grammar::VisualizeCollection( const shared_ptr<Collection>& co
                 dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(p->getNode()->NID)+";\n";
             }
         }
-        if( idx->getIV() )
+        for( const auto& iv : idx->getIVs() )
         {
-            dotString += "\t"+to_string(idx->getIV()->getNode()->NID)+" -> "+to_string(idx->getNode()->NID)+" [style=dotted];\n";
+            dotString += "\t"+to_string(iv->getNode()->NID)+" -> "+to_string(idx->getNode()->NID)+" [style=dotted];\n";
         }
     }
     dotString += "}";

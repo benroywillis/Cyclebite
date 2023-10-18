@@ -22,13 +22,11 @@ using namespace Cyclebite::Grammar;
 
 IndexVariable::IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n, 
                               const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& p, 
-                              const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c,
-                              bool il ) : Symbol("idx"), node(n), parents(p), children(c), IL(il) {}
+                              const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c ) : Symbol("idx"), node(n), parents(p), children(c) {}
 
 IndexVariable::IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n, 
                               const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p, 
-                              const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c,
-                              bool il ) : Symbol("idx"), node(n), children(c), IL(il) 
+                              const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c ) : Symbol("idx"), node(n), children(c)
 {
     if( p )
     {
@@ -46,19 +44,14 @@ void IndexVariable::addParent( const shared_ptr<IndexVariable>& p)
     parents.insert(p);
 }
 
-void IndexVariable::setIV( const shared_ptr<InductionVariable>& indVar )
+void IndexVariable::addIV( const shared_ptr<InductionVariable>& indVar )
 {
-    iv = indVar;
+    iv.insert(indVar);
 }
 
 void IndexVariable::addBP( const shared_ptr<BasePointer>& baseP )
 {
     bps.insert(baseP);
-}
-
-void IndexVariable::setLoaded( bool loaded )
-{
-    IL = loaded;
 }
 
 const shared_ptr<Cyclebite::Graph::Inst>& IndexVariable::getNode() const
@@ -108,7 +101,7 @@ const set<shared_ptr<Cyclebite::Grammar::IndexVariable>>& IndexVariable::getChil
     return children;
 }
 
-const shared_ptr<InductionVariable>& IndexVariable::getIV() const
+const set<shared_ptr<InductionVariable>>& IndexVariable::getIVs() const
 {
     return iv;
 }
@@ -126,11 +119,6 @@ string IndexVariable::dump() const
 const PolySpace IndexVariable::getSpace() const
 {
     return space;
-}
-
-bool IndexVariable::isLoaded() const
-{
-    return IL;
 }
 
 bool IndexVariable::isValueOrTransformedValue(const llvm::Value* v) const
@@ -800,15 +788,12 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
     // find sources to each var
     for( const auto& idx : idxVars )
     {
-        deque<const llvm::Instruction*> Q;
-        set<const llvm::Instruction*> covered;
         // find out if this index var is using an induction variable;
         for( const auto& iv : vars )
         {
             if( iv->isOffset(idx->getNode()->getInst()) )
             {
-                idx->setIV(iv);
-                break;
+                idx->addIV(iv);
             }
         }
         // map idxVars to their base pointer(s)

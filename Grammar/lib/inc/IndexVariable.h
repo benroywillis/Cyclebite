@@ -17,17 +17,14 @@ namespace Cyclebite::Grammar
     public:
         IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n,
                        const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& p = std::set<std::shared_ptr<IndexVariable>>(), 
-                       const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c = std::set<std::shared_ptr<IndexVariable>>(),
-                       bool il = false );
+                       const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c = std::set<std::shared_ptr<IndexVariable>>() );
         IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n,
                        const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p, 
-                       const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c = std::set<std::shared_ptr<IndexVariable>>(),
-                       bool il = false );
+                       const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c = std::set<std::shared_ptr<IndexVariable>>() );
         void addParent( const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p);
         void addChild( const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& c);
-        void setIV( const std::shared_ptr<Cyclebite::Grammar::InductionVariable>& iv);
+        void addIV( const std::shared_ptr<Cyclebite::Grammar::InductionVariable>& iv);
         void addBP( const std::shared_ptr<Cyclebite::Grammar::BasePointer>& bp);
-        void setLoaded( bool load );
         const std::shared_ptr<Cyclebite::Graph::Inst>& getNode() const;
         /// @brief Method returns gep(s) the indexVariable is used within
         ///
@@ -37,11 +34,10 @@ namespace Cyclebite::Grammar
         const std::set<std::shared_ptr<Cyclebite::Graph::Inst>, Graph::p_GNCompare> getGeps() const;
         const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& getParents() const;
         const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& getChildren() const;
-        const std::shared_ptr<Cyclebite::Grammar::InductionVariable>& getIV() const;
+        const std::set<std::shared_ptr<Cyclebite::Grammar::InductionVariable>>& getIVs() const;
         const std::set<std::shared_ptr<Cyclebite::Grammar::BasePointer>>& getBPs() const;
         const PolySpace getSpace() const;
         std::string dump() const override;
-        bool isLoaded() const;
         /// @brief Returns true if the given value is the index variable or a transformed version of it
         ///
         /// The method will only search until one of two conditions are satisfied
@@ -53,7 +49,7 @@ namespace Cyclebite::Grammar
     protected:
         std::shared_ptr<Cyclebite::Graph::Inst> node;
         /// Index variable makes a metaphorical edge between this index variable and the control space (which is useful for constructing a polyhedral space)
-        std::shared_ptr<InductionVariable> iv;
+        std::set<std::shared_ptr<InductionVariable>> iv;
         /// Base pointers map this idxVar to the base pointer(s) it offsets
         std::set<std::shared_ptr<BasePointer>> bps;
         /// the parent idxVar is one dimension above this one
@@ -62,11 +58,6 @@ namespace Cyclebite::Grammar
         std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>> children;        
         /// the affine dimensions of this index
         PolySpace space;
-        /// Patch on the fact that some idxVars do not have to be leaves in the idxVar tree in order to form a collection
-        /// When an idxVar represents the last offset to a collection, but that idxVar is also offset by things like idxVar-1, then both this idxVar and its offset have to form collections
-        /// But, the original idxVar is not a leaf in the idxVar tree
-        /// This flag tells the Collection builder to make a collection for this idxVar (and its parents) even though it is not a leaf
-        bool IL;
     };
 
     // sorts idxVars in hierarchical order (parent-most first, child-most last)
