@@ -14,7 +14,7 @@ namespace Cyclebite::Grammar
     class InductionVariable : public Symbol
     {
     public:
-        InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n, const std::shared_ptr<Cycle>& c );
+        InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n, const std::shared_ptr<Cycle>& c, const llvm::Instruction* targetExit );
         const std::shared_ptr<Cyclebite::Graph::DataValue>& getNode() const;
         const std::shared_ptr<Cycle>& getCycle() const;
         StridePattern getPattern() const;

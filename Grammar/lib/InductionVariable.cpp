@@ -25,7 +25,7 @@ enum class IV_BOUNDARIES
     UNDETERMINED = INT_MIN+1
 };
 
-InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n, const std::shared_ptr<Cycle>& c ) : Symbol("var"), cycle(c), node(n)
+InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n, const std::shared_ptr<Cycle>& c, const llvm::Instruction* targetExit ) : Symbol("var"), cycle(c), node(n)
 {
     // crawl the uses of the induction variable and try to ascertain what its dimensions are access patterns are
     deque<const llvm::Value*> Q;
@@ -98,8 +98,8 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         // thus we push the comparators and the stores into the queue and see what kind of binary ops we find
         Q.clear();
         covered.clear();
-        Q.push_front(cycle->getIteratorInst());
-        covered.insert(cycle->getIteratorInst());
+        Q.push_front(targetExit);
+        covered.insert(targetExit);
         for ( const auto& st : sts )
         {
             Q.push_front(st);
@@ -234,15 +234,23 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     // quick check here to make sure the sign we extract from the comparator makes sense
     // llvm::cmpinst* compare op0 to op1, that is, if cmp->getPredicate is gte, it is asking if op0 >= op1
     // right now, we assume op0 is the IV and op1 is the condition boundary, thus if this is not true we throw an error
-    auto targetCmp = llvm::cast<llvm::CmpInst>(cycle->getIteratorInst()->getCondition());
-    if( !targetCmp )
+    llvm::CmpInst* targetCmp = nullptr;
+    if( const auto& br = llvm::dyn_cast<llvm::BranchInst>(targetExit) )
     {
+        targetCmp = llvm::dyn_cast<llvm::CmpInst>(br->getCondition());
+        if( !targetCmp )
+        {
 #ifdef DEBUG
-        PrintVal(node->getVal());
-        PrintVal(cycle->getIteratorInst()->getCondition());
-        PrintVal(cycle->getIteratorInst());
+            PrintVal(node->getVal());
+            PrintVal(br->getCondition());
+            PrintVal(br);
 #endif
-        throw CyclebiteException("Cycle iterator inst was not fed by a condition!");
+            throw CyclebiteException("Cycle iterator inst was not fed by a condition!");
+        }
+    }
+    else
+    {
+        throw CyclebiteException("Cannot yet support non-branch cycle exits!");
     }
     // here we figure out what the means for the induction variable
     // for example, if the IV is in position 0 of the comparator, then the comparator's operation does not need to be inverted (e.g., IV < thresh means the lt can be taken literally)
@@ -504,92 +512,14 @@ bool InductionVariable::isOffset(const llvm::Value* v) const
                 // this is the value we are looking for, return true
                 return true;
             }
-            if( Q.front() == node->getVal() )
+            for( const auto& use : Q.front()->users() )
             {
-                for( const auto& user : Q.front()->users() )
+                if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use) )
                 {
-                    if( covered.find(user) == covered.end() )
+                    if( !covered.contains(useInst) )
                     {
-                        Q.push_back(user);
-                        covered.insert(user);
-                    }
-                }
-            }
-            else if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(Q.front()) )
-            {
-                // binary ops may be offsetting the IV, thus its users can be searched through
-                for( const auto& user : bin->users() )
-                {
-                    if( covered.find(user) == covered.end() )
-                    {
-                        Q.push_back(user);
-                        covered.insert(user);
-                    }
-                }
-            }
-            else if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
-            {
-                // loads indicate an access to the induction variable (most commonly found in the unoptimized case)
-                for( const auto& user : ld->users() )
-                {
-                    if( covered.find(user) == covered.end() )
-                    {
-                        Q.push_back(user);
-                        covered.insert(user);
-                    }
-                }
-            }
-            else if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
-            {
-                // when geps work together to access a multi-dimensional structure, they will hand off each others work until the reference is down to a primitive
-                // thus we walk through the users of a gep pointer
-                for( const auto& user : gep->users() )
-                {
-                    if( covered.find(user) == covered.end() )
-                    {
-                        Q.push_back(user);
-                        covered.insert(user);
-                    }
-                }
-            }
-            else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
-            {
-                // sometimes induction variables are cast to their destination gep before being used
-                for( const auto& user : cast->users() )
-                {
-                    if( covered.find(user) == covered.end() )
-                    {
-                        Q.push_back(user);
-                        covered.insert(user);
-                    }
-                }
-            }
-            else if( const auto& comp = llvm::dyn_cast<llvm::CmpInst>(Q.front()) )
-            {
-                // when the optimizer has unrolled an inner loop, it may use comparators and select instructions to figure out which IV transformation to use on the next memory access
-                // example: StencilChain/Naive/ DFG_kernel22.dot
-                for( const auto& user : comp->users() )
-                {
-                    if( !llvm::isa<llvm::BranchInst>(user) )
-                    {
-                        if( covered.find(user) == covered.end() )
-                        {
-                            Q.push_back(user);
-                            covered.insert(user);
-                        }
-                    }
-                }
-            }
-            else if( const auto& sel = llvm::dyn_cast<llvm::SelectInst>(Q.front()) )
-            {
-                // when the optimizer has unrolled an inner loop, it may use comparators and select instructions to figure out which IV transformation to use on the next memory access
-                // example: StencilChain/Naive/ DFG_kernel22.dot
-                for( const auto& user : sel->users() )
-                {
-                    if( covered.find(user) == covered.end() )
-                    {
-                        Q.push_back(user);
-                        covered.insert(user);
+                        Q.push_back(useInst);
+                        covered.insert(useInst);
                     }
                 }
             }
@@ -598,7 +528,6 @@ bool InductionVariable::isOffset(const llvm::Value* v) const
     }
     return false;
 }
-
 
 set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(const shared_ptr<Task>& t)
 {
@@ -622,119 +551,122 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
     // thus, we will start from all the cycle-inducing instructions, walk backwards through the graph, and find the IVs (likely through PHIs and ld/st with the same pointer)
     for( const auto& cycle : t->getCycles() )
     {
-        auto d = static_pointer_cast<Inst>(DNIDMap.at(cycle->getIteratorInst()));
-        if( (d->isTerminator()) && (d->parent->getSuccessors().size() > 1) )
+        for( const auto& e : cycle->getNonChildExits() )
         {
-            // we have a multi-destination control instruction, walk its predecessors to find a memory or binary operation that indicates an induction variable
-            set<shared_ptr<DataValue>, p_GNCompare> vars;
-            set<const llvm::Instruction*> covered;
-            deque<const llvm::Instruction*> Q;
-            Q.push_front(llvm::cast<llvm::Instruction>(d->getVal()));
-            covered.insert(llvm::cast<llvm::Instruction>(d->getVal()));
-            PrintVal(Q.front());
-            while( !Q.empty() )
+            auto d = static_pointer_cast<Inst>(DNIDMap.at(e));
+            if( (d->isTerminator()) && (d->parent->getSuccessors().size() > 1) )
             {
-                for( auto& use : Q.front()->operands() )
-                {
-                    if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use.get()) )
-                    {
-                        if( !cycle->find(DNIDMap.at(useInst)) )
-                        {
-                            continue;
-                        }
-                    }
-                    if( auto cmp = llvm::dyn_cast<llvm::CmpInst>(use.get()) )
-                    {
-                        if( covered.find(cmp) == covered.end() )
-                        {
-                            Q.push_back(cmp);
-                            covered.insert(cmp);
-                        }
-                    }
-                    else if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(use.get()) )
-                    {
-                        if( covered.find(bin) == covered.end() )
-                        {
-                            Q.push_back(bin);
-                            covered.insert(bin);
-                        }
-                    }
-                    else if( auto phi = llvm::dyn_cast<llvm::PHINode>(use.get()) )
-                    {
-                        // any phi within the current cycle that is used by a branch iterator inst is an IV candidate
-                        // later we see which phis have a binary instruction user within the given cycle, these phis will become IVs and filter those that come from elsewhere or set dynamic boundaries
-                        covered.insert(bin);
-                        covered.insert(phi);
-                        vars.insert( Cyclebite::Graph::DNIDMap.at((llvm::Instruction*)phi) );
-                    }
-                    else if( auto ld = llvm::dyn_cast<llvm::LoadInst>(use.get()) )
-                    {
-                        // case found in unoptimized programs when the induction variable lives on the heap (not in a value) and is communicated with through ld/st
-                        // the pointer argument to this load is likely the induction variable pointer, so add that to the vars set
-                        covered.insert(ld);
-                        if( const auto& p_inst = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()) )
-                        {
-                            // make sure this IV is alive
-                            if( BBCBMap.find(p_inst->getParent()) != BBCBMap.end() )
-                            {
-                                vars.insert( Cyclebite::Graph::DNIDMap.at((llvm::Instruction*)ld->getPointerOperand()) );
-                            }
-                        }
-                    }
-                }
-                Q.pop_front();
-            }
-            if( vars.empty() )
-            {
-                throw CyclebiteException("Could not find any IVs for this cycle!");
-            }
-            for( const auto& var : vars )
-            {
-                // make sure it has a binary operation within the cycle itself
-                // this will distinguish true IVs from dynamic boundaries that may be loaded and stored to just like IVs
-                // in order to be a candidate, the var must be manipulated by an llvm::BinaryOperator within the task itself
-                // this differentiates the IV from a dynamic boundary that is captured elsewhere
-                bool foundBin = false;
-                Q.clear();
-                covered.clear();
-                Q.push_front(static_pointer_cast<Inst>(var)->getInst());
-                covered.insert(static_pointer_cast<Inst>(var)->getInst());
+                // we have a multi-destination control instruction, walk its predecessors to find a memory or binary operation that indicates an induction variable
+                set<shared_ptr<DataValue>, p_GNCompare> vars;
+                set<const llvm::Instruction*> covered;
+                deque<const llvm::Instruction*> Q;
+                Q.push_front(llvm::cast<llvm::Instruction>(d->getVal()));
+                covered.insert(llvm::cast<llvm::Instruction>(d->getVal()));
+                PrintVal(Q.front());
                 while( !Q.empty() )
                 {
-                    for( const auto& use : Q.front()->users() )
+                    for( auto& use : Q.front()->operands() )
                     {
-                        if( DNIDMap.find(use) == DNIDMap.end() )
+                        if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use.get()) )
                         {
-                            continue;
-                        }
-                        if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(use) )
-                        {
-                            if( cycle->find(DNIDMap.at(bin)) )
+                            if( !cycle->find(DNIDMap.at(useInst)) )
                             {
-                                foundBin = true;
-                                break;
+                                continue;
                             }
                         }
-                        else if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(use) )
+                        if( auto cmp = llvm::dyn_cast<llvm::CmpInst>(use.get()) )
                         {
-                            if( cycle->find(DNIDMap.at(inst)) )
+                            if( covered.find(cmp) == covered.end() )
                             {
-                                if( covered.find(inst) == covered.end() )
+                                Q.push_back(cmp);
+                                covered.insert(cmp);
+                            }
+                        }
+                        else if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(use.get()) )
+                        {
+                            if( covered.find(bin) == covered.end() )
+                            {
+                                Q.push_back(bin);
+                                covered.insert(bin);
+                            }
+                        }
+                        else if( auto phi = llvm::dyn_cast<llvm::PHINode>(use.get()) )
+                        {
+                            // any phi within the current cycle that is used by a branch iterator inst is an IV candidate
+                            // later we see which phis have a binary instruction user within the given cycle, these phis will become IVs and filter those that come from elsewhere or set dynamic boundaries
+                            covered.insert(bin);
+                            covered.insert(phi);
+                            vars.insert( Cyclebite::Graph::DNIDMap.at((llvm::Instruction*)phi) );
+                        }
+                        else if( auto ld = llvm::dyn_cast<llvm::LoadInst>(use.get()) )
+                        {
+                            // case found in unoptimized programs when the induction variable lives on the heap (not in a value) and is communicated with through ld/st
+                            // the pointer argument to this load is likely the induction variable pointer, so add that to the vars set
+                            covered.insert(ld);
+                            if( const auto& p_inst = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()) )
+                            {
+                                // make sure this IV is alive
+                                if( BBCBMap.find(p_inst->getParent()) != BBCBMap.end() )
                                 {
-                                    Q.push_back(inst);
-                                    covered.insert(inst);
+                                    vars.insert( Cyclebite::Graph::DNIDMap.at((llvm::Instruction*)ld->getPointerOperand()) );
                                 }
                             }
                         }
                     }
-                    if( foundBin )
-                    {
-                        auto newIV = make_shared<InductionVariable>(var, cycle);
-                        IVs.insert(newIV);
-                        Q.clear();
-                        break;
-                    }
                     Q.pop_front();
+                }
+                if( vars.empty() )
+                {
+                    throw CyclebiteException("Could not find any IVs for this cycle!");
+                }
+                for( const auto& var : vars )
+                {
+                    // make sure it has a binary operation within the cycle itself
+                    // this will distinguish true IVs from dynamic boundaries that may be loaded and stored to just like IVs
+                    // in order to be a candidate, the var must be manipulated by an llvm::BinaryOperator within the task itself
+                    // this differentiates the IV from a dynamic boundary that is captured elsewhere
+                    bool foundBin = false;
+                    Q.clear();
+                    covered.clear();
+                    Q.push_front(static_pointer_cast<Inst>(var)->getInst());
+                    covered.insert(static_pointer_cast<Inst>(var)->getInst());
+                    while( !Q.empty() )
+                    {
+                        for( const auto& use : Q.front()->users() )
+                        {
+                            if( DNIDMap.find(use) == DNIDMap.end() )
+                            {
+                                continue;
+                            }
+                            if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(use) )
+                            {
+                                if( cycle->find(DNIDMap.at(bin)) )
+                                {
+                                    foundBin = true;
+                                    break;
+                                }
+                            }
+                            else if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(use) )
+                            {
+                                if( cycle->find(DNIDMap.at(inst)) )
+                                {
+                                    if( covered.find(inst) == covered.end() )
+                                    {
+                                        Q.push_back(inst);
+                                        covered.insert(inst);
+                                    }
+                                }
+                            }
+                        }
+                        if( foundBin )
+                        {
+                            auto newIV = make_shared<InductionVariable>(var, cycle, e);
+                            IVs.insert(newIV);
+                            Q.clear();
+                            break;
+                        }
+                        Q.pop_front();
+                    }
                 }
             }
         }

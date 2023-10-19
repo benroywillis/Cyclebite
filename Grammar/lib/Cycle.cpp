@@ -15,9 +15,113 @@ using namespace Cyclebite::Grammar;
 using namespace Cyclebite::Graph;
 using namespace std;
 
-const llvm::BranchInst* Cycle::getIteratorInst() const
+const set<const llvm::Instruction*>& Cycle::getExits() const
 {
-    return iteratorInst;
+    return exits;
+}
+
+const set<const llvm::Instruction*> Cycle::getNonChildExits() const
+{
+    set<const llvm::Instruction*> nonChildExits;
+    for( const auto& e : exits )
+    {
+        if( const auto& br = llvm::dyn_cast<llvm::BranchInst>(e) )
+        {
+            bool nonChildExit = true;
+            for( unsigned i = 0; i < br->getNumSuccessors(); i++ )
+            {
+                auto destNode = Graph::BBCBMap.at(br->getSuccessor(i));
+                if( !blocks.contains(destNode) )
+                {
+                    for( const auto& c : children )
+                    {
+                        if( c->blocks.contains(destNode) )
+                        {
+                            nonChildExit = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            if( nonChildExit )
+            {
+                nonChildExits.insert(br);
+            }
+        }
+    }
+    return nonChildExits;
+}
+
+const set<const llvm::Instruction*> Cycle::getNonParentExits() const
+{
+    set<const llvm::Instruction*> nonParentExits;
+    for( const auto& e : exits )
+    {
+        if( const auto& br = llvm::dyn_cast<llvm::BranchInst>(e) )
+        {
+            bool nonParentExit = true;
+            for( unsigned i = 0; i < br->getNumSuccessors(); i++ )
+            {
+                auto destNode = Graph::BBCBMap.at(br->getSuccessor(i));
+                if( !blocks.contains(destNode) )
+                {
+                    for( const auto& p : parents )
+                    {
+                        if( p->blocks.contains(destNode) )
+                        {
+                            nonParentExit = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            if( nonParentExit )
+            {
+                nonParentExits.insert(br);
+            }
+        }
+    }
+    return nonParentExits;
+}
+
+const set<const llvm::Instruction*> Cycle::getNonCycleExits() const
+{
+    set<const llvm::Instruction*> nonCycleExits;
+    for( const auto& e : exits )
+    {
+        if( const auto& br = llvm::dyn_cast<llvm::BranchInst>(e) )
+        {
+            bool nonCycleExit = true;
+            for( unsigned i = 0; i < br->getNumSuccessors(); i++ )
+            {
+                auto destNode = Graph::BBCBMap.at(br->getSuccessor(i));
+                if( !blocks.contains(destNode) )
+                {
+                    for( const auto& c : children )
+                    {
+                        if( c->blocks.contains(destNode) )
+                        {
+                            nonCycleExit = false;
+                            break;
+                        }
+                    }
+                    for( const auto& p : parents )
+                    {
+                        if( p->blocks.contains(destNode) )
+                        {
+                            nonCycleExit = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            if( nonCycleExit )
+            {
+                nonCycleExits.insert(br);
+            }
+        }
+    }
+    return nonCycleExits;
 }
 
 const set<shared_ptr<Cycle>>& Cycle::getChildren() const
@@ -91,8 +195,8 @@ set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json&
         {
             blocks.insert( BBCBMap.at(IDToBlock.at(id)) );
         }
-        // second, find the cmp inst that can either enter or exit the cycle
-        const llvm::BranchInst* iteratorCmp = nullptr;
+        // second, find the cmp insts that can either exit the cycle
+        set<const llvm::Instruction*> exiters;
         for( const auto& b : blocks )
         {
             for( const auto& i : b->instructions )
@@ -107,15 +211,14 @@ set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json&
                         {
                             // get its targets and see if they exit the cycle block set
                             // this check here is to make sure both targets are alive, if even one of them is dead we don't consider this br to be the iterator br
-                            if( (BBCBMap.find(br->getSuccessor(0)) != BBCBMap.end()) && (BBCBMap.find(br->getSuccessor(1)) != BBCBMap.end()) )
+                            if( BBCBMap.contains(br->getSuccessor(0)) && BBCBMap.contains(br->getSuccessor(1)) )
                             {
                                 auto dest0 = BBCBMap.at( br->getSuccessor(0) );
                                 auto dest1 = BBCBMap.at( br->getSuccessor(1) );
-                                if( (blocks.find(dest0) == blocks.end()) || (blocks.find(dest1) == blocks.end()) )
+                                if( !blocks.contains(dest0) || !blocks.contains(dest1) )
                                 {
                                     // the destination of this edge is outside the cycle, thus it is an exit
-                                    iteratorCmp = br;
-                                    break;
+                                    exiters.insert(br);
                                 }
                             }
                         }
@@ -147,15 +250,11 @@ set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json&
                     }
                 }
             }
-            if( iteratorCmp )
-            {
-                break;
-            }
         }
         //  now that we have the block set and the iterator cmp, construct the cycle object
-        if( iteratorCmp )
+        if( !exiters.empty() )
         {
-            auto newCycle = make_shared<Cycle>(iteratorCmp, blocks, stol(i));
+            auto newCycle = make_shared<Cycle>(exiters, blocks, stol(i));
             idToCycle[string(i)] = newCycle;
             // add this cycle to the parent cycles, if they exist
             for( const auto& c : l["Children"] )
