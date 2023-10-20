@@ -34,7 +34,18 @@ OperatorExpression::OperatorExpression( const shared_ptr<Task>& ta,
             // collections present in the expression are always inputs
             inputs.insert(coll);
         }
-        if( const auto& expr = dynamic_pointer_cast<Expression>(Q.front()) )
+        if( const auto& opExpr = dynamic_pointer_cast<OperatorExpression>(Q.front()) )
+        {
+            for( const auto& child : opExpr->getArgs() )
+            {
+                if( !covered.contains(child) )
+                {
+                    Q.push_back(child);
+                    covered.insert(child);
+                }
+            }
+        }
+        else if( const auto& expr = dynamic_pointer_cast<Expression>(Q.front()) )
         {
             for( const auto& child : expr->getSymbols() )
             {
