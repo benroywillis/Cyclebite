@@ -107,10 +107,7 @@ string Cyclebite::Grammar::PrintIdxVarTree( const set<shared_ptr<IndexVariable>>
 string Cyclebite::Grammar::VisualizeCollection( const shared_ptr<Collection>& coll )
 {
     string dotString = "digraph{\n\trankdir=\"BT\";\n";
-    for( const auto& bp : coll->getBPs() )
-    {
-        dotString += getInstName(bp->getNode()->NID, bp->getNode()->getVal());
-    }
+    dotString += getInstName(coll->getBP()->getNode()->NID, coll->getBP()->getNode()->getVal());
     for( const auto& idx : coll->getIndices() )
     {
         dotString += getInstName(idx->getNode()->NID, idx->getNode()->getInst());
@@ -121,15 +118,9 @@ string Cyclebite::Grammar::VisualizeCollection( const shared_ptr<Collection>& co
     }
     // print the base pointer edges
     // they should point to their parent-most idxVar
-    for( const auto& bp : coll->getBPs() )
+    for( const auto& idx : coll->getIndices() )
     {
-        for( const auto& idx : coll->getIndices() )
-        {
-            if( idx->getBPs().contains(bp) )
-            {
-                dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(bp->getNode()->NID)+" [style=dashed];\n";
-            }
-        }
+        dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(coll->getBP()->getNode()->NID)+" [style=dashed];\n";
     }
     for( const auto& idx : coll->getIndices() )
     {
