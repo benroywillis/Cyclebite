@@ -24,7 +24,7 @@ namespace Cyclebite::Grammar
         StridePattern pattern;
     };
     
-    enum class IV_BOUNDARIES 
+    enum class STATIC_VALUE 
     {
         INVALID = INT_MIN,
         UNDETERMINED = INT_MIN+1
