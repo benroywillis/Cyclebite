@@ -49,9 +49,9 @@ void IndexVariable::addIV( const shared_ptr<InductionVariable>& indVar )
     iv.insert(indVar);
 }
 
-void IndexVariable::addBP( const shared_ptr<BasePointer>& baseP )
+void IndexVariable::addOffsetBP( const shared_ptr<BasePointer>& p )
 {
-    bps.insert(baseP);
+    offsetBPs.insert(p);
 }
 
 const shared_ptr<Cyclebite::Graph::Inst>& IndexVariable::getNode() const
@@ -106,9 +106,9 @@ const set<shared_ptr<InductionVariable>>& IndexVariable::getIVs() const
     return iv;
 }
 
-const set<shared_ptr<BasePointer>>& IndexVariable::getBPs() const
+const set<shared_ptr<BasePointer>>& IndexVariable::getOffsetBPs() const
 {
-    return bps;
+    return offsetBPs;
 }
 
 string IndexVariable::dump() const
@@ -212,6 +212,271 @@ bool IndexVariable::isValueOrTransformedValue(const llvm::Value* v) const
         Q.pop_front();
     }
     return false;
+}
+
+bool IndexVariable::isDimension() const
+{
+    // this variable already groups together its iv (source) and its binary operators
+    // the transformation this idxVar does on its source will indicate whether is idxVar is a dimension or not
+    for( const auto& iv : iv )
+    {
+        // look to see what the transformation is on this iv
+        if( node->getInst() == iv->getNode()->getVal() )
+        {
+            // we are trivially a dimension
+            return true;
+        }
+        else
+        {
+            // we must be some kind of user
+            // for now, we care about 2 users:
+            // 1. geps that makes a constant offset - these are not dimensions
+            // 2. binary operators that make a constant offset
+            if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(node->getInst()) )
+            {
+                // check for a constant offset
+                for( const auto& idx : gep->indices() )
+                {
+                    if( const auto& con = llvm::dyn_cast<llvm::Constant>(idx) )
+                    {
+                        //spdlog::warn("Found an idxVar that is not a dimension: "+PrintVal(node->getInst(), false));
+                        return false;
+                    }
+                }
+            }
+            else if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(node->getInst()) )
+            {
+                // check for constant offset
+                for( const auto& op : bin->operands() )
+                {
+                    if( const auto& con = llvm::dyn_cast<llvm::Constant>(op) )
+                    {
+                        //spdlog::warn("Found an idxVar that is not a dimension: "+PrintVal(node->getInst(), false));
+                        return false;
+                    }
+                }
+            }
+            // everything else is allowed
+            return true;
+        }
+    }
+    // for now, we say that this cannot possibly be a dimension
+    return false;
+}
+
+const set<shared_ptr<IndexVariable>> IndexVariable::getOffsetDimensions() const
+{
+    // in this method, the dimension we offset may be our parent or our child
+    // child case: IIRBlur/Naive -O1 Task 14 BB 9 -> the PHINode is offset first before being multiplied
+    // parent case: BilateralFilter/Naive -O1 BB69 -> the GEPs make a constant offset to the already indexed pointer
+    // to figure out which case we are, we introspect the instruction literally
+    // - if we are a gep with a constant offset, we use the dimension we find by searching the dimension(s) above the constant offset
+    // - else we look through the uses of our instruction and see if any of those map to a dimension
+    set<shared_ptr<IndexVariable>> offsetDims;
+    deque<shared_ptr<IndexVariable>> Q;
+    set<shared_ptr<IndexVariable>> covered;
+    // this flag dictates whether we look above the current idxVar for dimensions or below (true -> we explore parents, false -> we explore children)
+    bool lookAbove = true;
+    /*if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(node->getInst()) )
+    {
+        for( const auto& p : parents )
+        {
+            Q.push_front(p);
+            covered.insert(p);
+        }
+    }
+    else
+    {
+        //lookAbove = false;
+        for( const auto& c : children )
+        {
+            Q.push_front(c);
+            covered.insert(c);
+        }
+    }*/
+    if( parents.empty() )
+    {
+        lookAbove = false;
+        for( const auto& c : children )
+        {
+            Q.push_front(c);
+            covered.insert(c);
+        }
+    }
+    else 
+    {
+        // we look through the parents by default
+        for( const auto& p : parents )
+        {
+            Q.push_front(p);
+            covered.insert(p);
+        }
+    }
+    spdlog::info(this->dump());
+    while( !Q.empty() )
+    {
+        if( Q.front()->isDimension() )
+        {
+            offsetDims.insert(Q.front());
+        }
+        else
+        {
+            if( lookAbove) 
+            {
+                for( const auto& p : Q.front()->getParents() )
+                {
+                    if( !covered.contains(p) )
+                    {
+                        Q.push_back(p);
+                        covered.insert(p);
+                    }
+                }
+            }
+            else
+            {
+                for( const auto& c : Q.front()->getChildren() )
+                {
+                    if( !covered.contains(c) )
+                    {
+                        Q.push_back(c);
+                        covered.insert(c);
+                    }
+                }
+            }
+        }
+        Q.pop_front();
+    }
+    return offsetDims;
+}
+
+bool IndexVariable::overlaps( const shared_ptr<IndexVariable>& var2 ) const
+{
+    // for two vars to overlap, we have to satisfy two conditions
+    // 1. They index the same base pointer
+    // 2. They have the same boundaries
+    // 3. They index the same dimension of the base pointer
+    // case 1: both vars are dimensions, then it's a trivial compare
+    if( isDimension() && var2->isDimension() )
+    {
+        if( this == var2.get() )
+        {
+            return true;
+        }
+    }
+    // case 2, I am a dimension and the other is not, then I have to see if I overlap with var2's dimensions
+    else if( isDimension() && !var2->isDimension() )
+    {
+        for( const auto& dim : var2->getOffsetDimensions() )
+        {
+            if( dim.get() == this )
+            {
+                return true;
+            }
+        }
+    }
+    // case 3, var 2 is a dimension, then I do the vise versa of case 2 
+    else if( !isDimension() && var2->isDimension() )
+    {
+        if( getOffsetDimensions().contains(var2) )
+        {
+            return true;
+        }
+    }
+    // nobody is a dimension, then I have to compare the dimension(s) they map to and its pretty messy
+    else
+    {
+        auto var0Dims = getOffsetDimensions();
+        auto var2Dims = var2->getOffsetDimensions();
+        // we say the dimensions overlap if ALL dimensions match each other
+        vector<shared_ptr<IndexVariable>> overlap;
+        overlap.reserve(var0Dims.size() + var2Dims.size());
+        auto it = set_intersection(var0Dims.begin(), var0Dims.end(), var2Dims.begin(), var2Dims.end(), overlap.begin());
+        overlap.resize( (size_t)(it-overlap.begin()) );
+        if( var0Dims.size() == var2Dims.size() && var0Dims.size() == overlap.size() )
+        {
+            // we assume that they all contain the same dimensions
+            return true;
+        }
+    }
+    return false;
+}
+
+DimensionOffset IndexVariable::getOffset() const
+{
+    DimensionOffset dim = { .op = Cyclebite::Graph::GetOp(getNode()->getInst()->getOpcode()), .coefficient = static_cast<int>(Cyclebite::Grammar::STATIC_VALUE::UNDETERMINED) };
+    // to find the coefficient associated with this operation
+    for( const auto& op : node->getInst()->operands() )
+    {
+        if( const auto& con = llvm::dyn_cast<llvm::Constant>(op) )
+        {
+            if( con->getType()->isIntegerTy() )
+            {
+                dim.coefficient = (int)*con->getUniqueInteger().getRawData();
+            }
+            else
+            {
+                throw CyclebiteException("Found a non-integer in an idxVar!");
+            }
+        }
+    }
+    return dim;
+}
+
+int IndexVariable::getDimensionIndex() const
+{
+    // the dimension index counts how many dimensions are above us
+    set<const IndexVariable*> dimensions;
+    if( isDimension() )
+    {
+        if( parents.empty() )
+        {
+            return 0;
+        }
+        else
+        {
+            dimensions.insert(this);
+        }
+    }
+    else
+    {
+        for( const auto& dim : getOffsetDimensions() )
+        {
+            dimensions.insert(dim.get());
+        }
+    }
+    // we walk backward in the idxVarTree from the nearest dimension to the parent-most dimension
+    int dim = 0;
+    deque<shared_ptr<IndexVariable>> Q;
+    set<shared_ptr<IndexVariable>> covered;
+    for( const auto& dim : dimensions )
+    {
+        for( const auto& p : parents )
+        {
+            Q.push_front(p);
+            covered.insert(p);
+        }
+    }
+    while( !Q.empty() )
+    {
+        if( Q.front()->getParents().empty() )
+        {
+            return dim;
+        }
+        if( Q.front()->isDimension() )
+        {
+            dim++;
+        }
+        for( const auto& p : Q.front()->getParents() )
+        {
+            if( !covered.contains(p) )
+            {
+                Q.push_back(p);
+                covered.insert(p);
+            }
+        }
+        Q.pop_front();
+    }
+    return dim;
 }
 
 set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const shared_ptr<Task>& t, const set<shared_ptr<BasePointer>>& BPs, const set<shared_ptr<InductionVariable>>& vars)
@@ -786,6 +1051,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
         }
     }
     // find sources to each var
+    set<shared_ptr<IndexVariable>> newIdxs;
+    //newIdxs.reserve(idxVars.size()*2); // make sure to reserve many spots so we don't invalidate iterators during the execution of the loop
     for( const auto& idx : idxVars )
     {
         // find out if this index var is using an induction variable;
@@ -796,18 +1063,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 idx->addIV(iv);
             }
         }
-        // map idxVars to their base pointer(s)
-        for( const auto& bp : BPs )
-        {
-            for( const auto& gep : idx->getGeps() )
-            {
-                if( bp->isOffset(gep->getInst()) )
-                {
-                    idx->addBP(bp);
-                }
-            }
-        }
     }
+    idxVars.insert(newIdxs.begin(), newIdxs.end());
     // determine if a non-leaf node in the idxVar tree is by itself loaded
     /*for( const auto& idx : idxVars )
     {
