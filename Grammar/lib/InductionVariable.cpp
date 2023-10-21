@@ -19,7 +19,7 @@ using namespace Cyclebite::Grammar;
 using namespace Cyclebite::Graph;
 using namespace std;
 
-enum class IV_BOUNDARIES 
+enum class STATIC_VALUE 
 {
     INVALID = INT_MIN,
     UNDETERMINED = INT_MIN+1
@@ -174,7 +174,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
             throw CyclebiteException("Cannot yet handle opcode "+to_string(bin->getOpcode())+" that offsets an IV!");
     }
     // find out how the IV is initialized through its stores or phis
-    int initValue = static_cast<int>(IV_BOUNDARIES::INVALID);
+    int initValue = static_cast<int>(STATIC_VALUE::INVALID);
     if( !sts.empty() )
     {
         // likely the unoptimized case 
@@ -222,11 +222,11 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
                 //  - for now, the belief is that this doesn't matter. EP ensures the task we are evaluating is a good accelerator candidate, and we trust EP
                 // TODO: the IO.cpp/BuildDFG() method doesn't yet populate the edges between ControlBlocks, so this will always return 0
                 //initValue = (int)BBCBMap.at(phi->getParent())->getFrequency();
-                initValue = static_cast<int>(IV_BOUNDARIES::UNDETERMINED);
+                initValue = static_cast<int>(STATIC_VALUE::UNDETERMINED);
             }
         }
     }
-    if( initValue == static_cast<int>(IV_BOUNDARIES::INVALID) )
+    if( initValue == static_cast<int>(STATIC_VALUE::INVALID) )
     {
         PrintVal(node->getVal());
         throw CyclebiteException("Could not find initialization value for IV!");
@@ -260,7 +260,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     {
         invert = true;
     }
-    int cmpBoundary = static_cast<int>(IV_BOUNDARIES::INVALID);
+    int cmpBoundary = static_cast<int>(STATIC_VALUE::INVALID);
     for( unsigned i = 0; i < targetCmp->getNumOperands(); i++ )
     {
         if( auto con = llvm::dyn_cast<llvm::Constant>(targetCmp->getOperand(i)) )
@@ -270,10 +270,10 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         else
         {
             // TODO: walk backward through the dataflow to find the value, if it is determinable
-            cmpBoundary = static_cast<int>(IV_BOUNDARIES::UNDETERMINED); 
+            cmpBoundary = static_cast<int>(STATIC_VALUE::UNDETERMINED); 
         }
     }
-    if( cmpBoundary == static_cast<int>(IV_BOUNDARIES::INVALID) )
+    if( cmpBoundary == static_cast<int>(STATIC_VALUE::INVALID) )
     {
 #ifdef DEBUG
         PrintVal(node->getVal());
