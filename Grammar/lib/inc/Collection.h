@@ -13,13 +13,21 @@ namespace Cyclebite::Grammar
     {
     public:
         /// @param v    The group of index variables that offset the memory of this collection. They should define the access patterns of the collection.
-        /// @param p    The base pointers of this collection. Multiple base pointers can be used - e.g., one to offset with index variables, and one that is used by the index variable(s) themselves
+        /// @param p    The index base pointer of this collection. The index base pointer is the one whose memory is indexed by this collection.
         /// @param e    The memory primitive(s) that are produced by this collection. This represents the loaded or stored values or places this collection facilitates.
-        Collection( const std::vector<std::shared_ptr<IndexVariable>>& v, const std::set<std::shared_ptr<BasePointer>>& p, const std::set<const llvm::Value*>& e );
+        Collection( const std::vector<std::shared_ptr<IndexVariable>>& v, const std::shared_ptr<BasePointer>& p, const std::set<const llvm::Value*>& e );
         ~Collection() = default;
         uint32_t getNumDims() const;
+        /// Returns the index variables belonging to this collection that are dimensions of the underlying base pointer
+        const std::set<std::shared_ptr<IndexVariable>> getDimensions() const;
+        /// Returns the spaces of each dimension in the collection
+        std::vector<PolySpace> getPolyhedralSpace() const;
         const std::shared_ptr<IndexVariable>& operator[](unsigned i) const;
-        const std::set<std::shared_ptr<BasePointer>>& getBPs() const;
+        /// @brief Returns the indexBP of the collection
+        const std::shared_ptr<BasePointer>& getBP() const;
+        /// @brief Returns the BPs used by the index variables of this collection
+        const std::set<std::shared_ptr<BasePointer>>& getOffsetBPs() const;
+        /// @brief Returns the index variables of this collection in their hierarchical order, parent-most to child-most 
         const std::vector<std::shared_ptr<IndexVariable>>& getIndices() const;
         /// @brief  Returns the instruction(s) that return an element from this collection
         /// Each collection is given the ld/st instructions that served as their starting points, and this method returns them
@@ -30,12 +38,15 @@ namespace Cyclebite::Grammar
         std::string dump() const override;
     protected:
         std::vector<std::shared_ptr<IndexVariable>> vars;
-        std::set<std::shared_ptr<BasePointer>> bps;
+        /// indexBP is the base pointer this collection loads from
+        std::shared_ptr<BasePointer> indexBP;
+        /// offsetBPs are base pointers used by the indexVariables of this collection
+        std::set<std::shared_ptr<BasePointer>> offsetBPs;
     private:
         /// Element pointers
         /// Each collection is constructed from a load or store (or both) 
         /// This set remembers those instructions for later reference (when expressions are being built and we have to find a collection that explains a loaded or stored value)
        std::set<const llvm::Value*> eps;
     };
-    std::set<std::shared_ptr<Collection>> getCollections(const std::shared_ptr<Task>& t, const std::set<std::shared_ptr<IndexVariable>>& idxVars);
+    std::set<std::shared_ptr<Collection>> getCollections(const std::shared_ptr<Task>& t, const std::set<std::shared_ptr<BasePointer>>& bps, const std::set<std::shared_ptr<IndexVariable>>& idxVars);
 } // namespace Cyclebite::Grammar

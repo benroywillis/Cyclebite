@@ -16,8 +16,12 @@ using namespace Cyclebite::Grammar;
 using namespace Cyclebite::Graph;
 using namespace std;
 
-Collection::Collection( const std::vector<std::shared_ptr<IndexVariable>>& v, const std::set<std::shared_ptr<BasePointer>>& p, const set<const llvm::Value*>& e ) : Symbol("collection"), vars(v), bps(p) 
+Collection::Collection( const std::vector<std::shared_ptr<IndexVariable>>& v, const std::shared_ptr<BasePointer>& p, const set<const llvm::Value*>& e ) : Symbol("collection"), vars(v), indexBP(p) 
 {
+    for( const auto& var : vars )
+    {
+        offsetBPs.insert(var->getOffsetBPs().begin(), var->getOffsetBPs().end());
+    }
     for( const auto& el : e )
     {
         if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(el) )
@@ -37,7 +41,35 @@ Collection::Collection( const std::vector<std::shared_ptr<IndexVariable>>& v, co
 
 uint32_t Collection::getNumDims() const
 {
-    return (uint32_t)vars.size();
+    uint32_t dim = 0;
+    for( const auto& var : vars )
+    {
+        dim = var->isDimension() ? dim++ : dim;
+    }
+    return dim;
+}
+
+const set<shared_ptr<IndexVariable>> Collection::getDimensions() const
+{
+    set<shared_ptr<IndexVariable>> dims;
+    for( const auto& var : vars )
+    {
+        if( var->isDimension() )
+        {
+            dims.insert(var);
+        }
+    }
+    return dims;
+}
+
+vector<PolySpace> Collection::getPolyhedralSpace() const
+{
+    vector<PolySpace> dims;
+    for( const auto& dim : getDimensions() )
+    {
+        dims.push_back(dim->getSpace());
+    }
+    return dims;
 }
 
 const shared_ptr<IndexVariable>& Collection::operator[](unsigned i) const
@@ -45,9 +77,14 @@ const shared_ptr<IndexVariable>& Collection::operator[](unsigned i) const
     return vars[i];
 }
 
-const set<shared_ptr<BasePointer>>& Collection::getBPs() const
+const shared_ptr<BasePointer>& Collection::getBP() const
 {
-    return bps;
+    return indexBP;
+}
+
+const set<shared_ptr<BasePointer>>& Collection::getOffsetBPs() const
+{
+    return offsetBPs;
 }
 
 const vector<shared_ptr<IndexVariable>>& Collection::getIndices() const
@@ -72,10 +109,7 @@ const llvm::LoadInst* Collection::getLoad() const
     }
     if( lds.size() > 1 )
     {
-        for( const auto& bp : bps )
-        {
-            PrintVal(bp->getNode()->getVal());
-        }
+        PrintVal(indexBP->getNode()->getVal());
         for( const auto& var : vars )
         {
             PrintVal(var->getNode()->getInst());
@@ -121,7 +155,7 @@ string Collection::dump() const
     return expr;
 }
 
-set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<Task>& t, const set<shared_ptr<IndexVariable>>& idxVars)
+set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<Task>& t, const set<shared_ptr<BasePointer>>& bps, const set<shared_ptr<IndexVariable>>& idxVars)
 {
     // all collections that are forged in this method
     set<shared_ptr<Collection>> colls;
@@ -129,12 +163,6 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
     // each base pointer contains groups of sorted index variables (from parent to child) that encode the hierarchy of idxVars for that collection
     // thus the <base pointer, idxVar hierarchy> pairs map 1:1 with collections
     map<shared_ptr<BasePointer>, set<vector<shared_ptr<IndexVariable>>>> varHierarchies;
-    // base pointers help us end our search
-    set<shared_ptr<BasePointer>> bps;
-    for( const auto& idx : idxVars )
-    {
-        bps.insert(idx->getBPs().begin(), idx->getBPs().end());
-    }
     // to build collections, we look for all loads and stores that must be explained by collections
     // these collections are later referred to when we build the task's function expression(s)
     // the starting points need to be the pointers of the ld/st (to ensure we only search through instructions that deal with memory)
@@ -199,6 +227,8 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
         // we walk backward in the DFG from this point, collecting all information about the idxVars that lead to this pointer
         // because we walk backward, vars will be sorted in reverse-order, from child-most to parent-most 
         set<shared_ptr<IndexVariable>, idxVarHierarchySort> vars;
+        // we can find multiple base pointers for this start along the walk (they can either be the base pointer being indexed or base pointers used to index the underlying memory)
+        // we resolve which bp is the indexed base pointer and assign that one to the collection
         set<shared_ptr<BasePointer>> collBPs;
         deque<const llvm::Value*> Q;
         set<const llvm::Value*> covered;
@@ -443,8 +473,39 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 throw CyclebiteException("Should only find load and store instructions in the elements of collections!");
             }
         }
+        // now we have the information we need to build collection(s) from the base pointers and idxVars we found
+        /*for( const auto& potentialIndexBP : collBPs )
+        {
+            // this set holds the idxVars whose indexBPs map to the potentialIndexBP
+            set<shared_ptr<IndexVariable>,idxVarHierarchySort> commonIdxs;
+            // we need to check to see if the vars we acquired explain the entire idx hierarchy - we do this by counting the underlying nodes we map to
+            set<shared_ptr<Graph::DataValue>> totalNodes;
+            for( const auto& idx : vars )
+            {
+                if( idx->getBP() == potentialIndexBP )
+                {
+                    totalNodes.insert(idx->getNode());
+                    commonIdxs.insert(idx);
+                }
+            }
+            if( (!commonIdxs.empty()) && (commonIdxs.size() == totalNodes.size()) )
+            {
+                // we have a complete hierarchy, build a collection with this information
+                vector<shared_ptr<IndexVariable>> varVec(commonIdxs.begin(), commonIdxs.end());
+                colls.insert( make_shared<Collection>( varVec, potentialIndexBP, eps ) );
+            }
+        }*/
+        // now we have a set of index variables and a set of base pointers that form collections
+        // to do this we simply construct a collection for each base pointer, and assign it all the vars we found for it
         vector<shared_ptr<IndexVariable>> varVec(vars.begin(), vars.end());
-        colls.insert( make_shared<Collection>(varVec, collBPs, eps) );
+        shared_ptr<BasePointer> commonBP = nullptr;
+        for( const auto& bp : collBPs )
+        {
+            // there is a catch here: the bp may be used by the vars to offset true indexBP
+            // it is also possible for those offset BPs to be indexBPs themselves
+            // we are not exactly hurt by having too many Collections, so for now we construct them all haphazardly
+            colls.insert( make_shared<Collection>(varVec, bp, eps) );
+        }
     }
     return colls;
 }
