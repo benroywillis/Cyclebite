@@ -42,12 +42,7 @@ namespace Cyclebite::Grammar
         /// - most expressions are not stored - they are intermediates in the processing of an atom. In this case, the expression is not stored, and this method will return nullptr
         /// - in some cases, the expression is stored in a memory address. Thus, it may be used in a future computation somewhere
         /// @retval Either a Collection or TaskRegister that this expression is stored to after its evaluation. If the expression is not stored, nullptr is returned.
-        const std::shared_ptr<Symbol>& getStored() const;
-        /// @brief Returns the (input) collections that cause loop-loop dependencies
-        ///
-        /// The returned collections act like Halide expressions
-        /// e.g., filtered(x, y) = alpha*input(x, y) + (1-alpha)*filtered(x, y-1) -> filtered has a loop-carried dependence
-        
+        const std::shared_ptr<Symbol>& getOutput() const;
         /// @brief Returns the cycle objects from within this task whose iterations are fully parallel
         /// @return All cycles within the task whose iterations are embarassingly parallel
         const std::set<std::shared_ptr<Cycle>> getParallelCycles() const;

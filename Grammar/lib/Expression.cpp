@@ -141,7 +141,7 @@ const set<shared_ptr<Symbol>>& Expression::getInputs() const
     return inputs;
 }
 
-const shared_ptr<Symbol>& Expression::getStored() const
+const shared_ptr<Symbol>& Expression::getOutput() const
 {
     return output;
 }
@@ -270,16 +270,10 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     {
                         cout << endl;
                         PrintVal(ld);
-                        for( const auto& bp : coll->getBPs() )
-                        {
-                            PrintVal(bp->getNode()->getVal());
-                        }
+                        PrintVal(coll->getBP()->getNode()->getVal());
                         PrintVal(coll->getLoad());
                         PrintVal(coll->getIndices().back()->getNode()->getInst());
-                        for( const auto& bp : found->getBPs() )
-                        {
-                            PrintVal(bp->getNode()->getVal());
-                        }
+                        PrintVal(found->getBP()->getNode()->getVal());
                         PrintVal(found->getLoad());
                         PrintVal(found->getIndices().back()->getNode()->getInst());
                         throw CyclebiteException("Mapped more than one collection to a load value!");
@@ -323,10 +317,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 PrintVal(ld);
                 for( const auto& coll : colls )
                 {
-                    for( const auto& bp : coll->getBPs() )
-                    {
-                        PrintVal(bp->getNode()->getVal());
-                    }                    
+                    PrintVal(coll->getBP()->getNode()->getVal());
                     for( const auto& idx : coll->getIndices() )
                     {
                         PrintVal(idx->getNode()->getInst());
