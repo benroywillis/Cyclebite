@@ -123,7 +123,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             // get all induction variables
             auto vars = getInductionVariables(t);
 #ifdef DEBUG
-            spdlog::info("Vars:");
+            spdlog::info("Induction Variables:");
             for( const auto& var : vars )
             {
                 spdlog::info(var->dump()+" -> "+PrintVal(var->getNode()->getVal(), false));
@@ -153,11 +153,16 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             spdlog::info("Index Variables:");
             for( const auto& idx : idxVars )
             {
-                spdlog::info(idx->dump()+" -> "+PrintVal(idx->getNode()->getInst(), false));
+                string dimension = "";
+                if( idx->isDimension() )
+                {
+                    dimension = "(dimension) ";
+                }
+                spdlog::info(dimension+idx->dump()+" -> "+PrintVal(idx->getNode()->getInst(), false));
             }
 #endif
             // construct collections
-            auto cs   = getCollections(t, idxVars);
+            auto cs   = getCollections(t, bps, idxVars);
 #ifdef DEBUG
             spdlog::info("Collections:");
             for( const auto& c : cs )
@@ -171,9 +176,8 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             spdlog::info("Expression:");
             spdlog::info(expr->dump());
             spdlog::info("Grammar Success");
-            cout << endl;
 #endif
-            Export(t, expr);
+            Export(expr);
         }
         catch(CyclebiteException& e)
         {
