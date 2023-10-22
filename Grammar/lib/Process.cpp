@@ -148,16 +148,13 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             }
 #endif
             // get index variables
-            auto idxVars = getIndexVariables(t, bps, vars);
+            auto idxVars = getIndexVariables(t, vars);
 #ifdef DEBUG
             spdlog::info("Index Variables:");
             for( const auto& idx : idxVars )
             {
                 string dimension = "";
-                if( idx->isDimension() )
-                {
-                    dimension = "(dimension) ";
-                }
+                dimension = "(dimension "+to_string(idx->getDimensionIndex())+") ";
                 spdlog::info(dimension+idx->dump()+" -> "+PrintVal(idx->getNode()->getInst(), false));
             }
 #endif

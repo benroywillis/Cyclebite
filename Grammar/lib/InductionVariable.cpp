@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
 #include "InductionVariable.h"
-#include "DataValue.h"
 #include "IO.h"
 #include "Task.h"
 #include "Graph/inc/IO.h"
@@ -19,15 +18,9 @@ using namespace Cyclebite::Grammar;
 using namespace Cyclebite::Graph;
 using namespace std;
 
-enum class STATIC_VALUE 
+InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n, const std::shared_ptr<Cycle>& c, const llvm::Instruction* targetExit ) : Counter(n, c), Symbol("var")
 {
-    INVALID = INT_MIN,
-    UNDETERMINED = INT_MIN+1
-};
-
-InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n, const std::shared_ptr<Cycle>& c, const llvm::Instruction* targetExit ) : Symbol("var"), cycle(c), node(n)
-{
-    // crawl the uses of the induction variable and try to ascertain what its dimensions are access patterns are
+    // crawl the uses of the induction variable and try to ascertain what its dimensions and access patterns are
     deque<const llvm::Value*> Q;
     set<const llvm::Value*> covered;
     // binary operators tell us how the induction variable is incremented
@@ -467,67 +460,11 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     }*/
 }
 
-const shared_ptr<DataValue>& InductionVariable::getNode() const
-{
-    return node;
-}
-
-const shared_ptr<Cycle>& InductionVariable::getCycle() const
-{
-    return cycle;
-}
-
-StridePattern InductionVariable::getPattern() const
-{
-    return pat;
-}
-
-const set<shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare>& InductionVariable::getBody() const
-{
-    return body;
-}
-
-const PolySpace InductionVariable::getSpace() const
-{
-    return space;
-}
-
 string InductionVariable::dump() const
 {
     return name;
 }
 
-bool InductionVariable::isOffset(const llvm::Value* v) const
-{
-    if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(v) )
-    {
-        deque<const llvm::Value*> Q;
-        set<const llvm::Value*> covered;
-        Q.push_front(node->getVal());
-        covered.insert(node->getVal());
-        while( !Q.empty() )
-        {
-            if( Q.front() == v )
-            {
-                // this is the value we are looking for, return true
-                return true;
-            }
-            for( const auto& use : Q.front()->users() )
-            {
-                if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use) )
-                {
-                    if( !covered.contains(useInst) )
-                    {
-                        Q.push_back(useInst);
-                        covered.insert(useInst);
-                    }
-                }
-            }
-            Q.pop_front();
-        }
-    }
-    return false;
-}
 
 set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(const shared_ptr<Task>& t)
 {

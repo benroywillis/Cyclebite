@@ -39,25 +39,12 @@ Collection::Collection( const std::vector<std::shared_ptr<IndexVariable>>& v, co
     }
 }
 
-uint32_t Collection::getNumDims() const
+const set<shared_ptr<Dimension>> Collection::getDimensions() const
 {
-    uint32_t dim = 0;
+    set<shared_ptr<Dimension>> dims;
     for( const auto& var : vars )
     {
-        dim = var->isDimension() ? dim++ : dim;
-    }
-    return dim;
-}
-
-const set<shared_ptr<IndexVariable>> Collection::getDimensions() const
-{
-    set<shared_ptr<IndexVariable>> dims;
-    for( const auto& var : vars )
-    {
-        if( var->isDimension() )
-        {
-            dims.insert(var);
-        }
+        dims.insert(var->getDimensions().begin(), var->getDimensions().end());
     }
     return dims;
 }
@@ -67,7 +54,10 @@ vector<PolySpace> Collection::getPolyhedralSpace() const
     vector<PolySpace> dims;
     for( const auto& dim : getDimensions() )
     {
-        dims.push_back(dim->getSpace());
+        if( const auto& count = dynamic_pointer_cast<Counter>(dim) )
+        {
+            dims.push_back(count->getSpace());
+        }
     }
     return dims;
 }
@@ -153,6 +143,27 @@ string Collection::dump() const
         expr += " )";
     }
     return expr;
+}
+
+set<shared_ptr<IndexVariable>> Collection::overlaps( const shared_ptr<Collection>& coll ) const
+{
+    set<shared_ptr<IndexVariable>> overlapDims;
+    // if the collections do not touch the same bp, we can trivially say they do not overlap
+    if( indexBP != coll->getBP() )
+    {
+        return overlapDims;
+    }
+    for( const auto& var0 : vars )
+    {
+        for( const auto& var1 : coll->getIndices() )
+        {
+            if( var0->overlaps(var1) )
+            {
+                overlapDims.insert(var0);
+            }
+        }
+    }
+    return overlapDims;
 }
 
 set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<Task>& t, const set<shared_ptr<BasePointer>>& bps, const set<shared_ptr<IndexVariable>>& idxVars)

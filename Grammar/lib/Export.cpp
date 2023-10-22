@@ -1,3 +1,7 @@
+//==------------------------------==//
+// Copyright 2023 Benjamin Willis
+// SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "Export.h"
 #include "Task.h"
 #include "Expression.h"
@@ -14,64 +18,6 @@ string MapTaskToName( const shared_ptr<Expression>& expr )
 {
     // get polyhedral space for each input collection
     // check to see if 
-}
-
-bool overlapsOutputSpace(const shared_ptr<Collection>& input, const shared_ptr<Collection>& output )
-{
-    // first find the dimension(s) which overlap between input space and output space
-    // each overlapping dimension represents a place the input and output space may overlap
-    for( const auto& var0 : input->getDimensions() )
-    {
-        for( const auto& var1 : output->getDimensions() )
-        {
-            if( var0->overlaps(var1) )
-            {
-                spdlog::info("Overlapping dimensions are: ");
-                spdlog::info(var0->dump());
-                spdlog::info(var1->dump());
-                // for each overlapping dimension in the input, see whether is modified (by an idxVar) to reference a previously-written output
-                // to do this, we search the input dimension for any affine modifiers to it
-                shared_ptr<IndexVariable> modifier = nullptr;
-                for( const auto& var : input->getIndices() )
-                {
-                    if( !var->isDimension() )
-                    {
-                        if( var->getOffsetDimensions().contains(var0) )
-                        {
-                            // var is a modifier of our overlapping dimension
-                            modifier = var;
-                        }
-                    }
-                }
-                if( !modifier )
-                {
-#ifdef DEBUG
-                    spdlog::warn("Could not find a modifier for these overlapping dimensions:");
-                    spdlog::warn(var0->dump() + " -> "+PrintVal(var0->getNode()->getInst(), false));
-                    spdlog::warn(var1->dump() + " -> "+PrintVal(var1->getNode()->getInst(), false));
-#endif
-                    continue;
-                }
-                // we then compare that affine modifier to the stride pattern of the output
-                if( var1->getSpace().stride > 0 )
-                {
-                    if( modifier->getOffset().coefficient < 0 )
-                    {
-                        // we have dipped the input dimension into a previous iteration of the output, this is overlap
-                        return true;
-                    }
-                }
-                else if( var1->getSpace().stride < 0 )
-                {
-                    if( modifier->getOffset().coefficient > 0 )
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-    }
-    return false;
 }
 
 set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
@@ -98,7 +44,7 @@ set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
     // thus, we must find out what the stride pattern of the 
     
     // "overlaps" tracks that symbolic overlaps between an input to the task expression, and an output that came from a previous result
-    set<pair<shared_ptr<Collection>, shared_ptr<Collection>>> overlaps;
+    set<shared_ptr<IndexVariable>> overlaps;
     shared_ptr<Collection> output = nullptr;
     if( auto array = dynamic_pointer_cast<Collection>(expr->getOutput()) )
     {
@@ -114,24 +60,16 @@ set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
         {
             // compare the input space to the output space to find overlap between the two
             // trivial case, if the input is the output, we have overlap
-            if( array == output )
+            auto overlap = array->overlaps(output);
+            if( !overlap.empty() )
             {
-                overlaps.insert( pair(array, output) );
-            }
-            // we compare the vars of this array with the knowledge we have about the output space and decide whether that input overlaps with a previous output
-            else if( overlapsOutputSpace(array, output) )
-            {
-                overlaps.insert( pair(array, output) );
+                spdlog::info("Overlap detected between collections "+array->dump()+" and "+output->dump()+":");
+                for( const auto& o : overlap )
+                {
+                    spdlog::info(o->dump());
+                }
             }
         }
-    }
-    for( const auto& overlap : overlaps )
-    {
-        spdlog::info("Dimensions "+overlap.first->dump()+" and "+overlap.second->dump()+" overlap!");
-    }
-    if( overlaps.empty() )
-    {
-        spdlog::info("Task"+to_string(expr->getTask()->getID())+" is fully parallel!");
     }
     return parallelSpots;
 }

@@ -118,7 +118,7 @@ const vector<Cyclebite::Graph::Operation>& Expression::getOps() const
     return ops;
 }
 
-const set<shared_ptr<InductionVariable>>& Expression::getVars() const
+const set<shared_ptr<Dimension>>& Expression::getVars() const
 {
     return vars;
 }
@@ -196,7 +196,7 @@ const set<shared_ptr<Cycle>> Expression::getParallelCycles() const
                 {
                     // we determine dependence by looking at transformations to the loop iterator
                     // first, find the loop iterator
-                    for( const auto& iv : var->getIVs() )
+                    for( const auto& iv : var->getDimensions() )
                     {
                         // this is a loop iterator we depend on, if it is transformed to reference a previous iteration, we're sunk
                         // we judget this by measuring the sign of the offset with the sign of the stride in the idxVar

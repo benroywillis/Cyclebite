@@ -19,7 +19,7 @@ namespace Cyclebite::Grammar
         ~Collection() = default;
         uint32_t getNumDims() const;
         /// Returns the index variables belonging to this collection that are dimensions of the underlying base pointer
-        const std::set<std::shared_ptr<IndexVariable>> getDimensions() const;
+        const std::set<std::shared_ptr<Dimension>> getDimensions() const;
         /// Returns the spaces of each dimension in the collection
         std::vector<PolySpace> getPolyhedralSpace() const;
         const std::shared_ptr<IndexVariable>& operator[](unsigned i) const;
@@ -35,6 +35,15 @@ namespace Cyclebite::Grammar
         const std::set<const llvm::Value*> getElementPointers() const;
         const llvm::LoadInst* getLoad() const;
         const std::set<const llvm::StoreInst*> getStores() const;
+        /// @brief Returns the dimensions in which this collection and the input overlap
+        ///
+        /// Two dimensions overlap if 
+        ///   1. Their integer space intersection is non-null
+        ///   2. They index the same base pointer
+        ///   3. There is a modifier on a dimension that implies a dependency on a previously-computed result
+        /// @param coll The collection whose dimensions and base pointer should be compared to the current
+        /// @return All dimensions that overlap between the two. Set entries are guaranteed to be dimensions
+        std::set<std::shared_ptr<IndexVariable>> overlaps( const std::shared_ptr<Collection>& coll ) const;
         std::string dump() const override;
     protected:
         std::vector<std::shared_ptr<IndexVariable>> vars;

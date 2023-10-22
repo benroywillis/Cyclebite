@@ -84,7 +84,7 @@ string Cyclebite::Grammar::PrintIdxVarTree( const set<shared_ptr<IndexVariable>>
     for( const auto& idx : idxVars )
     {
         dotString += getInstName(idx->getNode()->NID, idx->getNode()->getInst());
-        for( const auto& iv : idx->getIVs() )
+        for( const auto& iv : idx->getDimensions() )
         {
             dotString += getInstName(iv->getNode()->NID, iv->getNode()->getVal());
         }
@@ -95,7 +95,7 @@ string Cyclebite::Grammar::PrintIdxVarTree( const set<shared_ptr<IndexVariable>>
         {
             dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(p->getNode()->NID)+";\n";
         }
-        for( const auto& iv : idx->getIVs() )
+        for( const auto& iv : idx->getDimensions() )
         {
             dotString += "\t"+to_string(iv->getNode()->NID)+" -> "+to_string(idx->getNode()->NID)+" [style=dotted];\n";
         }
@@ -111,7 +111,7 @@ string Cyclebite::Grammar::VisualizeCollection( const shared_ptr<Collection>& co
     for( const auto& idx : coll->getIndices() )
     {
         dotString += getInstName(idx->getNode()->NID, idx->getNode()->getInst());
-        for( const auto& iv : idx->getIVs() )
+        for( const auto& iv : idx->getDimensions() )
         {
             dotString += getInstName(iv->getNode()->NID, iv->getNode()->getVal());
         }
@@ -131,7 +131,7 @@ string Cyclebite::Grammar::VisualizeCollection( const shared_ptr<Collection>& co
                 dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(p->getNode()->NID)+";\n";
             }
         }
-        for( const auto& iv : idx->getIVs() )
+        for( const auto& iv : idx->getDimensions() )
         {
             dotString += "\t"+to_string(iv->getNode()->NID)+" -> "+to_string(idx->getNode()->NID)+" [style=dotted];\n";
         }
