@@ -9,11 +9,17 @@
 
 namespace Cyclebite::Grammar
 {
+    class Cycle;
     class IndexVariable;
     class Collection;
+    /// @brief Maps file names to their lines of source code
+    extern std::map<std::string, std::vector<std::string>> fileLines;
+    extern std::map<uint32_t, std::pair<std::string,uint32_t>> blockToSource;
     // contains all datanodes (loads and stores) that touches significant memory
     extern std::set<std::shared_ptr<Cyclebite::Graph::Inst>, Cyclebite::Graph::p_GNCompare> SignificantMemInst;
+    void InitSourceMaps(const std::unique_ptr<llvm::Module>& SourceBitcode);
     void InjectSignificantMemoryInstructions(const nlohmann::json& instanceJson, const std::map<int64_t, llvm::Value*>& IDToValue);
     std::string PrintIdxVarTree( const std::set<std::shared_ptr<IndexVariable>>& idxVars );
     std::string VisualizeCollection( const std::shared_ptr<Collection>& coll );
+    void OMPAnnotateSource( const std::set<std::shared_ptr<Cycle>>& parallelSpots );
 } // namespace Cyclebite::Grammar

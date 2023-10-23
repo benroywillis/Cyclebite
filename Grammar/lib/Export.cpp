@@ -4,9 +4,10 @@
 //==------------------------------==//
 #include "Export.h"
 #include "Task.h"
-#include "Expression.h"
+#include "Reduction.h"
 #include "InductionVariable.h"
 #include "IO.h"
+#include "Graph/inc/IO.h"
 #include "Collection.h"
 #include "Util/Print.h"
 #include "Util/Exceptions.h"
@@ -23,27 +24,6 @@ string MapTaskToName( const shared_ptr<Expression>& expr )
 set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
 {
     set<shared_ptr<Cycle>> parallelSpots;
-    // a parallel cycle is one in which all of its iterations have no dependencies on its other iterations
-
-    // something to track which iteration the inputs of the cycle come from
-    // something to track where each atom goes
-    // for each input into the expression
-    //   where do you come from (this iteration, or a previous iteration)?
-    //   where do you go
-    // if (there is overlap in what the expression eats and what the expression writes)
-    //   figure out which dimension in which that overlap occurs
-    //     dimensions (generally) map to cycles, so we can trivially figure out which cycles are parallel and which are not
-    //       case: reduction -> I can't parallelize this loop
-    //       case: cycle without the expression 
-    //             subcase: cycle which doesn't overlap with any input/output -> it is fully parallelizable
-    //             subcase: cycle which has overlap with an input/output -> it is not parallelizable
-    // else
-    //   you are embarassingly parallel
-    
-    // in order to figure out whether an input "overlaps" with a previous expression output, we need to have a temporal ordering of points in the input/output space
-    // thus, we must find out what the stride pattern of the 
-    
-    // "overlaps" tracks that symbolic overlaps between an input to the task expression, and an output that came from a previous result
     set<shared_ptr<IndexVariable>> overlaps;
     shared_ptr<Collection> output = nullptr;
     if( auto array = dynamic_pointer_cast<Collection>(expr->getOutput()) )
@@ -54,6 +34,8 @@ set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
     {
         throw CyclebiteException("Cannot yet handle a task whose output is not a collection!");
     }
+    // first, find out which dimensions of the inputs to the expression overlap with the output
+    // this will tell us which dimensions cannot be parallelized
     for( const auto& input : expr->getInputs() )
     {
         if( const auto& array = dynamic_pointer_cast<Collection>(input) )
@@ -67,8 +49,50 @@ set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
                 for( const auto& o : overlap )
                 {
                     spdlog::info(o->dump());
+                    overlaps.insert(o);
                 }
             }
+        }
+    }
+    // second, look for a reduction in the expression
+    // this will unlock special optimizations for the algorithm
+    shared_ptr<ReductionVariable> rv = nullptr;
+    if( const auto& red = dynamic_pointer_cast<Reduction>(expr) )
+    {
+        rv = red->getRV();
+    }
+    // third, the parallel spots in the task are all the dimensions that don't overlap and don't reduce
+    set<shared_ptr<Cycle>> noParallel;
+    for( const auto& o : overlaps )
+    {
+        for( const auto& iv : o->getExclusiveDimensions() )
+        {
+            noParallel.insert(iv->getCycle());
+        }
+    }
+    for( const auto& c : expr->getTask()->getCycles() )
+    {
+        if( rv )
+        {
+            if( c->find( Cyclebite::Graph::DNIDMap.at(rv->getPhi()) ) )
+            {
+                noParallel.insert(c);
+                for( const auto& c : c->getChildren() )
+                {
+                    noParallel.insert(c);
+                }
+            }
+        }
+        if( !noParallel.contains(c) )
+        {
+            string print = "Cycle "+to_string(c->getID())+" ( blocks: ";
+            for( const auto& b : c->getBody() )
+            {
+                print += to_string( b->originalBlocks.front() )+" ";
+            }
+            print += ") in Task"+to_string(expr->getTask()->getID())+" is parallel!";
+            spdlog::info(print);
+            parallelSpots.insert(c);
         }
     }
     return parallelSpots;
@@ -83,16 +107,20 @@ shared_ptr<Expression> VectorizeExpression( const shared_ptr<Expression>& expr )
     return vecEx;
 }
 
-void Cyclebite::Grammar::Export( const shared_ptr<Expression>& expr )
+void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, shared_ptr<Expression>>& taskToExpr )
 {
-#ifdef DEBUG
-    for( const auto& coll : expr->getCollections() )
+    for( const auto& t : taskToExpr )
     {
-        auto dotString = VisualizeCollection(coll);
-        ofstream tStream("Task"+to_string(expr->getTask()->getID())+"_Collection"+to_string(coll->getID())+".dot");
-        tStream << dotString;
-        tStream.close();
-    }
+#ifdef DEBUG
+        for( const auto& coll : t.second->getCollections() )
+        {
+            auto dotString = VisualizeCollection(coll);
+            ofstream tStream("Task"+to_string(t.second->getTask()->getID())+"_Collection"+to_string(coll->getID())+".dot");
+            tStream << dotString;
+            tStream.close();
+        }
 #endif
-    ParallelizeCycles( expr );
+        auto parallelSpots = ParallelizeCycles( t.second );
+        OMPAnnotateSource(parallelSpots);
+    }
 }

@@ -112,6 +112,7 @@ vector<shared_ptr<InductionVariable>> getOrdering( const llvm::GetElementPtrInst
 void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
 {
     // each expression maps 1:1 with tasks from the cartographer
+    map<shared_ptr<Task>, shared_ptr<Expression>> taskToExpr;
     for( const auto& t : tasks )
     {
         try
@@ -174,7 +175,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             spdlog::info(expr->dump());
             spdlog::info("Grammar Success");
 #endif
-            Export(expr);
+            taskToExpr[t] = expr;
         }
         catch(CyclebiteException& e)
         {
@@ -184,4 +185,5 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
 #endif
         }
     }
+    Export(taskToExpr);
 }

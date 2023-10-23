@@ -3,12 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
 #pragma once
-#include <memory>
-#include <map>
+#include <llvm/Support/CommandLine.h>
 
 namespace Cyclebite::Grammar
 {
-    class Task;
-    class Expression;
-    void Export( const std::map<std::shared_ptr<Task>, std::shared_ptr<Expression>>& expr );
+    extern llvm::cl::list<std::string> SourceFiles;
 } // namespace Cyclebite::Grammar

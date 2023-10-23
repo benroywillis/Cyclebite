@@ -7,6 +7,7 @@
 
 namespace Cyclebite::Grammar
 {
+    class Cycle;
     std::set<std::shared_ptr<class Task>> getTasks(const nlohmann::json& instanceJson, 
                                                    const nlohmann::json& kernelJson, 
                                                    const std::map<int64_t, llvm::BasicBlock*>& IDToBlock);
@@ -22,8 +23,11 @@ namespace Cyclebite::Grammar
         bool find(const std::shared_ptr<Cyclebite::Graph::ControlBlock>& b) const;
         bool find(const std::shared_ptr<Cycle>& c) const;
         uint64_t getID() const;
+        std::set<std::string> getSourceFiles() const;
+        void addSourceFiles( std::set<std::string>& sources );
     private:
         uint64_t ID;
         std::set<std::shared_ptr<Cycle>> cycles;
+        std::set<std::string> sourceFiles;
     };
 } // namespace Cyclebite::Grammar

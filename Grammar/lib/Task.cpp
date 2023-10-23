@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
 #include "Task.h"
+#include "IO.h"
 #include "Util/Exceptions.h"
 #include <deque>
 
@@ -83,9 +84,20 @@ uint64_t Task::getID() const
     return ID;
 }
 
+set<string> Task::getSourceFiles() const
+{
+    return sourceFiles;
+}
+
+void Task::addSourceFiles( set<string>& sources )
+{
+    sourceFiles.insert(sources.begin(), sources.end());
+}
+
 set<shared_ptr<Task>> Cyclebite::Grammar::getTasks(const nlohmann::json& instanceJson, 
                                                     const nlohmann::json& kernelJson, 
-                                                    const std::map<int64_t, llvm::BasicBlock*>& IDToBlock) {
+                                                    const std::map<int64_t, llvm::BasicBlock*>& IDToBlock)
+{
     set<shared_ptr<Task>> tasks;
     // construct the cycles from the kernel file
     set<shared_ptr<Cycle>> taskCycles;
@@ -144,7 +156,27 @@ set<shared_ptr<Task>> Cyclebite::Grammar::getTasks(const nlohmann::json& instanc
                 parentMost = c;
             }
         }
-        tasks.insert( make_shared<Task>(group, parentMost->getID()) );
+        auto newTask = make_shared<Task>(group, parentMost->getID());
+        set<string> sources;
+        for( const auto& c : newTask->getCycles() )
+        {
+            for( const auto& b : c->getBody() )
+            {
+                for( const auto id : b->originalBlocks )
+                {
+                    if( blockToSource.contains(id) )
+                    {
+                        sources.insert( blockToSource.at(id).first );
+                    }
+                }
+            }
+        }
+        newTask->addSourceFiles(sources);
+        for( auto c : newTask->getCycles() )
+        {
+            c->addTask(newTask);
+        }
+        tasks.insert( newTask );
     }
     return tasks;
 }
