@@ -47,6 +47,7 @@ void IndexVariable::addParent( const shared_ptr<IndexVariable>& p)
 void IndexVariable::addDimension( const shared_ptr<Dimension>& indVar )
 {
     dims.insert(indVar);
+    space = getSpace();
 }
 
 void IndexVariable::addOffsetBP( const shared_ptr<BasePointer>& p )
@@ -106,6 +107,32 @@ const set<shared_ptr<Dimension>>& IndexVariable::getDimensions() const
     return dims;
 }
 
+const set<shared_ptr<Dimension>> IndexVariable::getExclusiveDimensions() const
+{
+    set<shared_ptr<Dimension>> exclusive = dims;
+    deque<shared_ptr<IndexVariable>> Q;
+    set<shared_ptr<IndexVariable>> covered;
+    Q.push_front(make_shared<IndexVariable>(*this));
+    covered.insert(Q.front());
+    while( !Q.empty() )
+    {
+        for( const auto& p : Q.front()->getParents() )
+        {
+            for( const auto& dim : p->getDimensions() )
+            {
+                exclusive.erase(dim);
+            }
+            if( !covered.contains(p) )
+            {
+                Q.push_back(p);
+                covered.insert(p);
+            }
+        }
+        Q.pop_front();
+    }
+    return exclusive;
+}
+
 const set<shared_ptr<BasePointer>>& IndexVariable::getOffsetBPs() const
 {
     return offsetBPs;
@@ -118,6 +145,52 @@ string IndexVariable::dump() const
 
 const PolySpace IndexVariable::getSpace() const
 {
+    PolySpace space;
+    auto exDims = getExclusiveDimensions();
+    if( exDims.empty() )
+    {
+        // this is a special case where we make an affine transformation to a parent idxVar, thus we have no exclusive dimension
+        // we take the exclusive dimensions(s) of our parent
+        for( const auto& p : parents )
+        {
+            for( const auto& dim : p->getExclusiveDimensions() )
+            {
+                exDims.insert(dim);
+            }
+        }
+    }
+    for( const auto& dim : exDims )
+    {
+        if( const auto& iv = dynamic_pointer_cast<Counter>(dim) )
+        {
+            // combining spaces is simply done by intersection
+            // thus, we take the greatest min, the least max, and the least stride
+            if( space.min == static_cast<int>(STATIC_VALUE::INVALID) )
+            {
+                space.min = iv->getSpace().min;
+            }
+            else if( space.min < iv->getSpace().min )
+            {
+                space.min = iv->getSpace().min;
+            }
+            if( space.max == static_cast<int>(STATIC_VALUE::INVALID) )
+            {
+                space.max = iv->getSpace().max;
+            }
+            else if( space.max > iv->getSpace().max )
+            {
+                space.max = iv->getSpace().max;
+            }
+            if( space.stride == static_cast<int>(STATIC_VALUE::INVALID) )
+            {
+                space.stride = iv->getSpace().stride;
+            }
+            else if( space.stride > iv->getSpace().stride )
+            {
+                space.stride = iv->getSpace().stride;
+            }
+        }
+    }
     return space;
 }
 
@@ -216,29 +289,147 @@ bool IndexVariable::isValueOrTransformedValue(const llvm::Value* v) const
 
 bool IndexVariable::overlaps( const shared_ptr<IndexVariable>& var1 ) const
 {
-    // for two vars to overlap, two conditions must be satisfied
+    // for two vars to overlap, three conditions must be satisfied
+    // 0. Their strides are non-zero
+    if( space.stride == 0 || var1->getSpace().stride == 0 )
+    {
+        return false;
+    }
     // 1. Their boundaries intersect
-    //if( (space.stride < 0) == (var1->getSpace().stride < 0) )
-    //{
-        if( space.min < var1->getSpace().min )
+    if( (space.min != static_cast<int>(STATIC_VALUE::UNDETERMINED)) && space.max != (static_cast<int>(STATIC_VALUE::UNDETERMINED)) )
+    {
+        if( (var1->getSpace().min != static_cast<int>(STATIC_VALUE::UNDETERMINED)) && (var1->getSpace().max != static_cast<int>(STATIC_VALUE::UNDETERMINED)) )
         {
+            // everything is determined, we can find overlap easily
+            if( space.min < var1->getSpace().min )
+            {
+                if( var1->getSpace().min > space.max )
+                {
+                    // there is no overlap at all
+                    return false;
+                }
+            }
+            else
+            {
+                // var1's min is greater than ours. Our max has to be at least greater than their min to have overlap
+                if( space.max < var1->getSpace().min )
+                {
+                    return false;
+                }
+            }
+        }
+        else if( var1->getSpace().min != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+        {
+            // var1 minimum is known. We have no overlap if this minimum is greater than our maximum
             if( var1->getSpace().min > space.max )
             {
-                // there is no overlap at all
                 return false;
             }
         }
-        else
+        else if( var1->getSpace().max != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
         {
-            // var1's min is greater than ours. Our max has to be at least greater than their min to have overlap
+            // var1 maximum is known. We have no overlap if this maximum is less than our minimum
+            if( var1->getSpace().max < space.min )
+            {
+                return false;
+            }
+        }
+    }
+    else if( space.min != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+    {
+        // we only know our minimum
+        if( (var1->getSpace().min != static_cast<int>(STATIC_VALUE::UNDETERMINED)) && (var1->getSpace().max != static_cast<int>(STATIC_VALUE::UNDETERMINED)) )
+        {
+            // we don't at all overlap with var1 if our minimum is greather than var1's max
+            if( space.min > var1->getSpace().max )
+            {
+                return false;
+            }
+        }
+        else if( var1->getSpace().min != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+        {
+            if( (space.min != var1->getSpace().min) || ( (space.stride < 0) != (var1->getSpace().stride < 0) ) )
+            {
+                // we know for sure our spaces cannot overlap because they either
+                // 1. do not start at the same place
+                // 2. do not stride in the same direction
+                spdlog::warn("Vars "+dump()+" (min: "+to_string(space.min)+") and "+var1->dump()+" (min: "+to_string(var1->getSpace().min)+") did not have determined boundaries that could confirm overlap.");
+                return false; 
+            }
+        }
+        else if( var1->getSpace().max != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+        {
+            // we cannot determine overlap at all because we don't know how large the regions are
+            spdlog::warn("Vars "+dump()+" (min: "+to_string(space.min)+") and "+var1->dump()+" (max: "+to_string(var1->getSpace().max)+") did not have determined boundaries that could confirm overlap.");
+            return false; 
+        }
+    }
+    else if( space.max != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+    {
+        // we only know our maximum
+        if( (var1->getSpace().min != static_cast<int>(STATIC_VALUE::UNDETERMINED)) && (var1->getSpace().max != static_cast<int>(STATIC_VALUE::UNDETERMINED)) )
+        {
+            // we don't have any overlap if our max is less than var1's min
             if( space.max < var1->getSpace().min )
             {
                 return false;
             }
         }
-    //}
+        else if( var1->getSpace().min != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+        {
+            // we cannot determine overlap at all because we don't know how large the regions are
+            spdlog::warn("Vars "+dump()+" (max: "+to_string(space.max)+") and "+var1->dump()+" (min: "+to_string(var1->getSpace().min)+") did not have determined boundaries that could confirm overlap.");
+            return false; 
+        }
+        else if( var1->getSpace().max != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+        {
+            if( (space.max != var1->getSpace().max) || ( (space.stride < 0) != (var1->getSpace().stride < 0) ) )
+            {
+                // we know for sure our spaces cannot overlap because they either
+                // 1. do not start at the same place
+                // 2. do not stride in the same direction
+                spdlog::warn("Vars "+dump()+" (max: "+to_string(space.max)+") and "+var1->dump()+" (max: "+to_string(var1->getSpace().max)+") did not have determined boundaries that could confirm overlap.");
+                return false;
+            }
+        }
+    }
+    else
+    {
+        // nothing is determined, we can't say anything about whether these spaces overlap
+        spdlog::warn("Vars "+dump()+" and "+var1->dump()+" did not have determined boundaries that could confirm overlap.");
+        return false;
+    }
+
     // 2. They index the same dimension of the base pointer
-    return getDimensionIndex() == var1->getDimensionIndex();
+    if( getDimensionIndex() != var1->getDimensionIndex() )
+    {
+        return false;
+    }
+    // 3. One index makes an affine offset that touches a previously-determined index
+    // to determine what a "previously-determined" index is, we evaluate the stride pattern to find the ordering of integers in the space
+    if( space.stride != static_cast<int>(STATIC_VALUE::UNDETERMINED) && var1->getSpace().stride != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+    {
+        if( space.stride != static_cast<int>(STATIC_VALUE::INVALID) && var1->getSpace().stride != static_cast<int>(STATIC_VALUE::INVALID) )
+        {
+            if( (getOffset().coefficient != static_cast<int>(STATIC_VALUE::UNDETERMINED)) && (var1->getSpace().stride != static_cast<int>(STATIC_VALUE::UNDETERMINED)) )
+            {
+                if( (getOffset().coefficient < 0) != (var1->getSpace().stride < 0) )
+                {
+                    // our coefficient goes against the stride, indicating that this var touches a previous integer in the var1 space; this is overlap
+                    return true;
+                }
+            }
+        }
+        else
+        {
+            spdlog::warn("When overlapping "+dump()+" and "+var1->dump()+" the stride patterns were not valid.");
+        }
+    }
+    else
+    {
+        spdlog::warn("When overlapping "+dump()+" and "+var1->dump()+" the stride patterns could not be determined.");
+    }
+    return false;
 }
 
 DimensionOffset IndexVariable::getOffset() const
