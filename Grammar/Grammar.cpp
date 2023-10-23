@@ -2,7 +2,6 @@
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
-#include "Grammar.h"
 #include "Util/Format.h"
 #include "Util/Print.h"
 #include "Util/IO.h"
@@ -32,7 +31,6 @@ cl::opt<string> BitcodeFileName("b", cl::desc("Specify input bitcode filename"),
 cl::opt<string> BlockInfoFilename("bi", cl::desc("Specify input BlockInfo filename"), cl::value_desc("BlockInfo filename"));
 cl::opt<string> ProfileFileName("p", cl::desc("Specify input profile filename"), cl::value_desc("profile filename"));
 cl::opt<string> OutputFile("o", cl::desc("Specify output json filename"), cl::value_desc("json filename"));
-cl::list<string> Cyclebite::Grammar::SourceFiles(cl::Positional, cl::desc("<source0.c source1.c ...>"), cl::value_desc("C/C++ filename"));
 
 int main(int argc, char *argv[])
 {
@@ -109,13 +107,13 @@ int main(int argc, char *argv[])
     LLVMContext context;
     SMDiagnostic smerror;
     auto SourceBitcode = parseIRFile(BitcodeFileName, smerror, context);
-    Cyclebite::Util::Format(*SourceBitcode);
-    // build IR to source maps
-    InitSourceMaps(SourceBitcode);
+    Cyclebite::Util::Format(*SourceBitcode, false);
     // construct its callgraph
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;
     Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    // build IR to source maps (must be done after ID maps are initialized)
+    InitSourceMaps(SourceBitcode);
 
     // construct static call graph from the input bitcode
     llvm::CallGraph staticCG(*SourceBitcode);

@@ -7,7 +7,6 @@
 #include "InductionVariable.h"
 #include "BasePointer.h"
 #include "Collection.h"
-#include "Grammar.h"
 #include "Task.h"
 #include "Graph/inc/IO.h"
 #include "Util/Exceptions.h"
@@ -26,6 +25,7 @@ set<shared_ptr<Cyclebite::Graph::Inst>, Cyclebite::Graph::p_GNCompare> Cyclebite
 
 void Cyclebite::Grammar::InitSourceMaps(const std::unique_ptr<llvm::Module>& SourceBitcode)
 {
+    set<string> foundSources;
     // first, map basic block IDs to their source code lines
     for (auto f = SourceBitcode->begin(); f != SourceBitcode->end(); f++)
     {
@@ -41,6 +41,7 @@ void Cyclebite::Grammar::InitSourceMaps(const std::unique_ptr<llvm::Module>& Sou
                         string dir = string(scope->getFile()->getDirectory());
                         dir.append("/");
                         dir.append(scope->getFile()->getFilename());
+                        foundSources.insert(dir);
                         //SourceBitcodeFiles[to_string(Cyclebite::Util::GetBlockID(cast<llvm::BasicBlock>(b)))][dir].insert(LOC.getLine());
                         blockToSource[(uint32_t)Cyclebite::Util::GetBlockID(cast<llvm::BasicBlock>(b))] = pair(dir, LOC.getLine());
                     }
@@ -49,7 +50,7 @@ void Cyclebite::Grammar::InitSourceMaps(const std::unique_ptr<llvm::Module>& Sou
         }
     }
     // second, map source files to their lines in a way that makes line injection convenient
-    for( const auto& file : SourceFiles )
+    for( const auto& file : foundSources )
     {
         ifstream fin(file);
         string line;
@@ -226,5 +227,19 @@ void Cyclebite::Grammar::OMPAnnotateSource( const set<shared_ptr<Cycle>>& parall
             }
             InjectParallelFor( spot, blockID );
         }
+    }
+    // dump annotated source file
+    for( const auto& source : fileLines )
+    {
+        auto start = source.first.find(".");
+        string name = source.first.substr(0, start)+".annotated_omp"+source.first.substr(start);
+        ofstream newSource(name);
+        string fileString = "";
+        for( const auto& line : source.second )
+        {
+            fileString += line + "\n";
+        }
+        newSource << fileString;
+        newSource.close();
     }
 }
