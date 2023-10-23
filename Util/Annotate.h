@@ -125,28 +125,6 @@ namespace Cyclebite::Util
         }
     }
 
-    inline int64_t SetIDAndMap(llvm::Value *val, std::map<int64_t, llvm::Value *> &IDToValue, bool artificial = false)
-    {
-        int64_t newID;
-        if (artificial)
-        {
-            newID = IDState::Artificial;
-        }
-        else
-        {
-            newID = std::prev(IDToValue.end())->first + 1;
-        }
-        if (auto inst = llvm::dyn_cast<llvm::Instruction>(val))
-        {
-            llvm::MDNode *newMD = llvm::MDNode::get(inst->getParent()->getContext(), llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(llvm::Type::getInt64Ty(inst->getParent()->getContext()), (uint64_t)newID)));
-            inst->setMetadata("ValueID", newMD);
-            IDToValue[newID] = val;
-            return newID;
-        }
-        return IDState::Uninitialized;
-    }
-
-
     inline void Annotate(llvm::Module& M)
     {
         static uint64_t CyclebiteIndex = 0;
@@ -155,11 +133,17 @@ namespace Cyclebite::Util
         {
             for (auto bb = F.begin(); bb != F.end(); bb++)
             {
-                SetBlockID(llvm::cast<llvm::BasicBlock>(bb), (int64_t)CyclebiteIndex);
-                CyclebiteIndex++;
-                for (auto ii = bb->begin(); ii != bb->end(); ii++)
+                if( !llvm::isa<llvm::DbgInfoIntrinsic>(bb) )
                 {
-                    SetValueIDs(llvm::cast<llvm::Value>(ii), CyclebiteValueIndex);
+                    SetBlockID(llvm::cast<llvm::BasicBlock>(bb), (int64_t)CyclebiteIndex);
+                    CyclebiteIndex++;
+                    for (auto ii = bb->begin(); ii != bb->end(); ii++)
+                    {
+                        if( !llvm::isa<llvm::DbgInfoIntrinsic>(ii) )
+                        {
+                            SetValueIDs(llvm::cast<llvm::Value>(ii), CyclebiteValueIndex);
+                        }
+                    }
                 }
             }
         }
@@ -281,6 +265,10 @@ namespace Cyclebite::Util
 
     inline void RecurseThroughOperands(llvm::Value *val, std::map<int64_t, llvm::Value *> &IDToValue)
     {
+        if( llvm::isa<llvm::DbgInfoIntrinsic>(val) )
+        {
+            return;
+        }
         if (auto inst = llvm::dyn_cast<llvm::Instruction>(val))
         {
             if (GetValueID(inst) < 0)
@@ -356,10 +344,7 @@ namespace Cyclebite::Util
                 for (auto it = block->begin(); it != block->end(); it++)
                 {
                     auto inst = llvm::cast<llvm::Instruction>(it);
-                    if (auto val = llvm::dyn_cast<llvm::Value>(inst))
-                    {
-                        RecurseThroughOperands(val, IDToValue);
-                    }
+                    RecurseThroughOperands(inst, IDToValue);
                 }
             }
         }
