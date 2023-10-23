@@ -11,6 +11,7 @@
 
 namespace Cyclebite::Grammar
 {
+    class Task;
     std::set<std::shared_ptr<class Cycle>> ConstructCycles(const nlohmann::json& instanceJson, 
                                                            const nlohmann::json& kernelJson, 
                                                            const std::map<int64_t, llvm::BasicBlock*>& IDToBlock,
@@ -34,15 +35,18 @@ namespace Cyclebite::Grammar
         const std::set<const llvm::Instruction*> getNonCycleExits() const;
         const std::set<std::shared_ptr<class Cycle>>& getChildren() const;
         const std::set<std::shared_ptr<class Cycle>>& getParents() const;
+        const std::shared_ptr<Task>& getTask() const;
         const std::set<std::shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare>& getBody() const;
         bool find(const std::shared_ptr<Cyclebite::Graph::DataValue>& v) const;
         bool find(const std::shared_ptr<Cyclebite::Graph::Inst>& n) const;
         bool find(const std::shared_ptr<Cyclebite::Graph::ControlBlock>& b) const;
         void addChild(const std::shared_ptr<class Cycle>& c);
         void addParent(const std::shared_ptr<class Cycle>& p);
+        void addTask(const std::shared_ptr<Task>& t);
         uint64_t getID() const;
     private:
         uint64_t ID;
+        std::shared_ptr<Task> task;
         std::set<const llvm::Instruction*> exits;
         std::set<std::shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare> blocks;
         std::set<std::shared_ptr<class Cycle>> children;

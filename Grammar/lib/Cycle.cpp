@@ -175,9 +175,19 @@ void Cycle::addParent( const shared_ptr<Cycle>& p)
     parents.insert(p);
 }
 
+void Cycle::addTask( const shared_ptr<Task>& t )
+{
+    task = t;
+}
+
 uint64_t Cycle::getID() const
 {
     return ID;
+}
+
+const shared_ptr<Task>& Cycle::getTask() const
+{
+    return task;
 }
 
 set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json& instanceJson, 
