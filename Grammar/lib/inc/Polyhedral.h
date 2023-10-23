@@ -15,19 +15,26 @@ namespace Cyclebite::Grammar
         Sequential,
         Random
     };
-
-    struct PolySpace
-    {
-        uint32_t min;
-        uint32_t max;
-        uint32_t stride;
-        StridePattern pattern;
-    };
     
     enum class STATIC_VALUE 
     {
         INVALID = INT_MIN,
         UNDETERMINED = INT_MIN+1
+    };
+
+    struct PolySpace
+    {
+        int min;
+        int max;
+        int stride;
+        StridePattern pattern;
+        PolySpace()
+        {
+            min     = static_cast<int>(STATIC_VALUE::INVALID);
+            max     = static_cast<int>(STATIC_VALUE::INVALID);
+            stride  = static_cast<int>(STATIC_VALUE::INVALID);
+            pattern = StridePattern::Random;
+        }
     };
 
     struct AffineOffset
