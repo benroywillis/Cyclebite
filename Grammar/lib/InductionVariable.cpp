@@ -152,6 +152,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         }
     }
     auto bin = *bins.begin();
+    int stride = static_cast<int>(STATIC_VALUE::INVALID);
     switch(bin->getOpcode())
     {
         case 13: // add
@@ -159,7 +160,12 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
             {
                 if( auto con = llvm::dyn_cast<llvm::Constant>(bin->getOperand(i)) )
                 {
-                    space.stride = (uint32_t)*con->getUniqueInteger().getRawData();
+                    stride = (int)*con->getUniqueInteger().getRawData();
+                    break;
+                }
+                else
+                {
+                    stride = static_cast<int>(STATIC_VALUE::UNDETERMINED);
                 }
             }
             break;
@@ -206,6 +212,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
             if( auto con = llvm::dyn_cast<llvm::Constant>(phi->getIncomingValue(i)) )
             {
                 initValue = (int)*con->getUniqueInteger().getRawData();
+                break;
             }
             else if( phi->getIncomingBlock(i) != phi->getParent() )
             {
@@ -259,6 +266,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         if( auto con = llvm::dyn_cast<llvm::Constant>(targetCmp->getOperand(i)) )
         {
             cmpBoundary = (int)*con->getUniqueInteger().getRawData();
+            break;
         }
         else
         {
@@ -274,6 +282,69 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
 #endif
         throw CyclebiteException("Could not find a valid boundary for an induction variable!");
     }
+    if( initValue != static_cast<int>(STATIC_VALUE::UNDETERMINED) && (cmpBoundary != static_cast<int>(STATIC_VALUE::UNDETERMINED)) && (stride != static_cast<int>(STATIC_VALUE::UNDETERMINED)) )
+    {
+        space.min = initValue < cmpBoundary ? initValue : cmpBoundary;
+        space.max = space.min == initValue ? cmpBoundary : initValue;
+        space.stride = stride;
+        space.pattern = StridePattern::Sequential;
+    }
+    else if( initValue != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+    {
+        // the cmpBoundary is undetermined
+        // the stride sign determines whether min/max gets initValue
+        if( stride == static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+        {
+            // we just arbitrarily assign initValue to min
+            space.min = initValue;
+            space.max = static_cast<int>(STATIC_VALUE::UNDETERMINED);
+            space.stride = stride;
+            space.pattern = StridePattern::Random;
+        }
+        else if( stride < 0 )
+        {
+            space.min = static_cast<int>(STATIC_VALUE::UNDETERMINED);
+            space.max = initValue;
+            space.stride = stride;
+            space.pattern = StridePattern::Sequential;
+        }
+        else 
+        {
+            space.min = initValue;
+            space.max = static_cast<int>(STATIC_VALUE::UNDETERMINED);
+            space.stride = stride;
+            space.pattern = StridePattern::Sequential;
+        }
+    }
+    else if( cmpBoundary != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+    {
+        // the initValue is undetermined
+        // the stride sign determines whether min/max gets cmpBoundary
+        if( stride == static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+        {
+            // we just arbitrarily assign cmpBoundary to max
+            space.min = static_cast<int>(STATIC_VALUE::UNDETERMINED);
+            space.max = cmpBoundary;
+            space.stride = stride;
+            space.pattern = StridePattern::Random;
+        }
+        else if( stride < 0 )
+        {
+            space.min = cmpBoundary;
+            space.max = static_cast<int>(STATIC_VALUE::UNDETERMINED);
+            space.stride = stride;
+            space.pattern = StridePattern::Sequential;
+        }
+        else 
+        {
+            space.min = static_cast<int>(STATIC_VALUE::UNDETERMINED);
+            space.max = cmpBoundary;
+            space.stride = stride;
+            space.pattern = StridePattern::Sequential;
+        }
+    }
+
+    /*
     switch(targetCmp->getPredicate())
     {
         case 32: // integer equal
@@ -390,7 +461,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
             break;
         default:
             throw CyclebiteException("Cannot handle an induction variable whose comparator opcode is "+to_string(targetCmp->getPredicate()));
-    }
+    }*/
     // sanity check, does the polyhedral space make sense
 /*    switch(targetCmp->getPredicate())
     {
