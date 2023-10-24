@@ -31,19 +31,19 @@ void Cyclebite::Grammar::InitSourceMaps(const std::unique_ptr<llvm::Module>& Sou
     {
         for (auto b = f->begin(); b != f->end(); b++)
         {
-            if (b->getFirstInsertionPt()->hasMetadata())
+            for( auto ii = b->begin(); ii != b->end(); ii++ )
             {
-                const auto &LOC = b->getFirstInsertionPt()->getDebugLoc();
-                if (LOC.getAsMDNode() != nullptr)
+                const auto& LOC = ii->getDebugLoc();
+                if( LOC.getAsMDNode() != nullptr )
                 {
-                    if (auto scope = dyn_cast<llvm::DIScope>(LOC.getScope()))
+                    if( auto scope = llvm::dyn_cast<llvm::DIScope>(LOC.getScope()) )
                     {
                         string dir = string(scope->getFile()->getDirectory());
                         dir.append("/");
                         dir.append(scope->getFile()->getFilename());
                         foundSources.insert(dir);
-                        //SourceBitcodeFiles[to_string(Cyclebite::Util::GetBlockID(cast<llvm::BasicBlock>(b)))][dir].insert(LOC.getLine());
                         blockToSource[(uint32_t)Cyclebite::Util::GetBlockID(cast<llvm::BasicBlock>(b))] = pair(dir, LOC.getLine());
+                        break;
                     }
                 }
             }
@@ -184,7 +184,7 @@ string Cyclebite::Grammar::VisualizeCollection( const shared_ptr<Collection>& co
     return dotString;
 }
 
-void InjectParallelFor( const shared_ptr<Cycle>& spot, uint32_t blockID )
+void InjectParallelFor( const shared_ptr<Cycle>& spot, uint32_t lineNo )
 {
     auto injectString = "#pragma omp parallel for";
     if( spot->getTask()->getSourceFiles().size() != 1 )
@@ -192,14 +192,12 @@ void InjectParallelFor( const shared_ptr<Cycle>& spot, uint32_t blockID )
         throw CyclebiteException("Cannot yet support exporting OMP pragmas to tasks that map to more than one source file!");
     }
     auto injectSource = *(spot->getTask()->getSourceFiles().begin());
-    auto injectSiteIt = std::find( fileLines.at(injectSource).begin(), fileLines.at(injectSource).end(), fileLines.at(injectSource).at( blockToSource.at(blockID).second ) );
-    fileLines[injectSource].insert(injectSiteIt, injectString);
+    fileLines[injectSource].insert(prev( fileLines.at(injectSource).begin()+lineNo), injectString);
 
     // now update the blockToSource map to move everyone that sits "below" this injected line up one
-    auto oldLine = blockToSource.at(blockID).second;
     for( auto& block : blockToSource )
     {
-        if( block.second.second >= oldLine )
+        if( block.second.second >= lineNo )
         {
             block.second.second++;
         }
@@ -213,19 +211,34 @@ void Cyclebite::Grammar::OMPAnnotateSource( const set<shared_ptr<Cycle>>& parall
     {
         if( spot->getParents().empty() )
         {
-            uint32_t blockID = UINT32_MAX;
+            uint32_t lineNo = UINT32_MAX;
             for( const auto& b : spot->getBody() )
             {
                 // the line we want to inject before is the lowest number
                 for( const auto id : b->originalBlocks )
                 {
-                    if( id < blockID )
+                    // sometimes blocks will contain no debug info, which means we can't find a location to inject anything at the beginning of this cycle
+                    if( blockToSource.contains(id) )
                     {
-                        blockID = id;
+                        if( (blockToSource.at(id).second) && (blockToSource.at(id).second < lineNo) )
+                        {
+                            lineNo = blockToSource.at(id).second;
+                        }
+                    }
+                    else
+                    {
+                        spdlog::warn("Basic block "+to_string(id)+" did not contain any location info. OMP pragma injection at this parallel cycle is impossible.");
                     }
                 }
             }
-            InjectParallelFor( spot, blockID );
+            if( !lineNo )
+            {
+                spdlog::warn("Could not find a valid line number for parallel cycle "+to_string(spot->getID())+" in Task"+to_string(spot->getTask()->getID()));
+            }
+            else
+            {
+                InjectParallelFor( spot, lineNo );
+            }
         }
     }
     // dump annotated source file
