@@ -74,7 +74,7 @@ set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
     {
         if( rv )
         {
-            if( c->find( Cyclebite::Graph::DNIDMap.at(rv->getPhi()) ) )
+            if( c->find( rv->getAddress() ) )
             {
                 noParallel.insert(c);
                 for( const auto& c : c->getChildren() )
@@ -98,13 +98,23 @@ set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
     return parallelSpots;
 }
 
-shared_ptr<Expression> VectorizeExpression( const shared_ptr<Expression>& expr )
+/// @brief Vectorizes reductions
+///
+/// The inner-most loop of the reduction will be vectorized with "#pragma omp simd"
+/// We assume that all reductions, regardless of their underlying data type, to be fully associated.
+/// This will result in an error as described in https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html
+/// @param red  The reduction to vectorize. Only its inner-most loop will be vectorized with "pragma omp simd"
+set<shared_ptr<Cycle>> VectorizeExpression( const shared_ptr<Expression>& expr )
 {
-    shared_ptr<Expression> vecEx = nullptr;
-
-
-
-    return vecEx;
+    set<shared_ptr<Cycle>> reductionCycles;
+    if( const auto& red = dynamic_pointer_cast<Reduction>(expr) )
+    {
+        if( red->isParallelReduction() )
+        {
+            reductionCycles.insert(red->getReductionCycle());
+        }
+    }
+    return reductionCycles;
 }
 
 void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, shared_ptr<Expression>>& taskToExpr )
@@ -121,6 +131,7 @@ void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, shared_ptr<Expressi
         }
 #endif
         auto parallelSpots = ParallelizeCycles( t.second );
-        OMPAnnotateSource(parallelSpots);
+        auto vectorSpots   = VectorizeExpression( t.second );
+        OMPAnnotateSource(parallelSpots, vectorSpots);
     }
 }

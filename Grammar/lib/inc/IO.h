@@ -21,5 +21,5 @@ namespace Cyclebite::Grammar
     void InjectSignificantMemoryInstructions(const nlohmann::json& instanceJson, const std::map<int64_t, llvm::Value*>& IDToValue);
     std::string PrintIdxVarTree( const std::set<std::shared_ptr<IndexVariable>>& idxVars );
     std::string VisualizeCollection( const std::shared_ptr<Collection>& coll );
-    void OMPAnnotateSource( const std::set<std::shared_ptr<Cycle>>& parallelSpots );
+    void OMPAnnotateSource( const std::set<std::shared_ptr<Cycle>>& parallelSpots, const std::set<std::shared_ptr<Cycle>>& vectorSpots );
 } // namespace Cyclebite::Grammar
