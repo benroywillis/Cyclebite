@@ -37,8 +37,11 @@ namespace Cyclebite::Grammar
         const std::set<std::shared_ptr<class Cycle>>& getParents() const;
         const std::shared_ptr<Task>& getTask() const;
         const std::set<std::shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare>& getBody() const;
+        /// Returns true only if the input parameter is within the cycle blocks. Does not explore child or parent cycles.
         bool find(const std::shared_ptr<Cyclebite::Graph::DataValue>& v) const;
+        /// Returns true only if the input parameter is within the cycle blocks. Does not explore child or parent cycles.
         bool find(const std::shared_ptr<Cyclebite::Graph::Inst>& n) const;
+        /// Returns true only if the input parameter is a cycle block. Does not explore child or parent cycles.
         bool find(const std::shared_ptr<Cyclebite::Graph::ControlBlock>& b) const;
         void addChild(const std::shared_ptr<class Cycle>& c);
         void addParent(const std::shared_ptr<class Cycle>& p);
