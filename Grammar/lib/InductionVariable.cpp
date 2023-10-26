@@ -255,11 +255,6 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     // here we figure out what the means for the induction variable
     // for example, if the IV is in position 0 of the comparator, then the comparator's operation does not need to be inverted (e.g., IV < thresh means the lt can be taken literally)
     // if the IV is in position 1 of the IV, the operation needs to be inverted (e.g., thresh < IV means the lt actually needs to be gt)
-    bool invert = false;
-    if( targetCmp->getOperand(1) == node->getVal() )
-    {
-        invert = true;
-    }
     int cmpBoundary = static_cast<int>(STATIC_VALUE::INVALID);
     for( unsigned i = 0; i < targetCmp->getNumOperands(); i++ )
     {
