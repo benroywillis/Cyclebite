@@ -13,20 +13,21 @@
 using namespace std;
 using namespace Cyclebite::Grammar;
 
-ReductionVariable::ReductionVariable( const shared_ptr<InductionVariable>& iv, const shared_ptr<Cyclebite::Graph::DataValue>& n ) : Symbol("rv"), iv(iv), node(n)
+ReductionVariable::ReductionVariable( const shared_ptr<InductionVariable>& iv, const shared_ptr<Cyclebite::Graph::DataValue>& n, const shared_ptr<Cyclebite::Graph::DataValue>& addr ) : Symbol("rv"), iv(iv), node(n), address(addr)
 {
-    if( const auto& intrin = llvm::dyn_cast<llvm::IntrinsicInst>(node->getVal()) )
+    // incoming datanode must map to a binary operation
+    if( const auto& op = llvm::dyn_cast<llvm::BinaryOperator>(n->getVal()) )
+    {
+        bin = Cyclebite::Graph::GetOp(op->getOpcode());
+    }
+    else if( const auto& intrin = llvm::dyn_cast<llvm::IntrinsicInst>(node->getVal()) )
     {
         if( llvm::Intrinsic::getBaseName( intrin->getIntrinsicID() ) != "llvm.fmuladd" )
         {
             PrintVal(node->getVal());
             throw CyclebiteException("Cannot yet handle this intrinsic as a reduction variable!");
         }
-    }
-    // incoming datanode must map to a binary operation
-    if( const auto& op = llvm::dyn_cast<llvm::BinaryOperator>(n->getVal()) )
-    {
-        bin = Cyclebite::Graph::GetOp(op->getOpcode());
+        bin = Cyclebite::Graph::Operation::fadd;
     }
 }
 
@@ -45,7 +46,12 @@ const shared_ptr<Cyclebite::Graph::DataValue>& ReductionVariable::getNode() cons
     return node;
 }
 
-const llvm::PHINode* ReductionVariable::getPhi() const
+const shared_ptr<Cyclebite::Graph::DataValue>& ReductionVariable::getAddress() const
+{
+    return address;
+}
+
+/*const llvm::PHINode* ReductionVariable::getPhi() const
 {
     set<const llvm::PHINode*> phis;
     deque<const llvm::Value*> Q;
@@ -118,7 +124,7 @@ const llvm::PHINode* ReductionVariable::getPhi() const
         }
     }
     return nullptr;
-}
+}*/
 
 set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(const shared_ptr<Task>& t, const set<shared_ptr<InductionVariable>>& vars)
 {
@@ -185,7 +191,6 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     // we only expect this cycle to involve two nodes, thus a check of the phis users suffices to find the complete cycle
                     if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(Q.front()) )
                     {
-                        auto binOnde = Cyclebite::Graph::DNIDMap.at(bin);
                         if( Cyclebite::Graph::DNIDMap.at(bin)->isPredecessor(Cyclebite::Graph::DNIDMap.at(phi)) )
                         {
                             // we have found a cycle between a binary op and a phi, likely indicating an induction variable, thus add it to the set of dimensions
@@ -230,7 +235,7 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     if( reductionOp )
                     {
                         // first piece of criteria: we have a ld/st pair that uses the same pointer and saves the reductionOp
-                        if( (s->getPointerOperand() == ld->getPointerOperand()) && (s->getValueOperand() == reductionOp->getVal() ) )
+                        if( (s->getPointerOperand() == ld->getPointerOperand()) && (s->getValueOperand() == reductionOp->getVal()) )
                         {
                             bool candidate = true;
                             // second piece: the pointer must be constant throughout the local-most cycle
@@ -335,7 +340,7 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                 PrintVal(can->getVal());
                 throw CyclebiteException("Cannot map this reduction variable to an induction variable!");
             }
-            rvs.insert( make_shared<ReductionVariable>(iv, reductionOp) );
+            rvs.insert( make_shared<ReductionVariable>(iv, reductionOp, can) );
         }
     }
     return rvs;

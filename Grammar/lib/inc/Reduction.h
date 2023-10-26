@@ -19,7 +19,8 @@ namespace Cyclebite::Grammar
                    const std::shared_ptr<Symbol>& out = nullptr );
         ~Reduction() = default;
         const std::shared_ptr<ReductionVariable>& getRV() const;
-        const std::shared_ptr<Cycle>& getReductionCycles() const;
+        const std::shared_ptr<Cycle>& getReductionCycle() const;
+        bool isParallelReduction() const;
         std::string dump() const override;
     private:
         std::shared_ptr<ReductionVariable> rv;
