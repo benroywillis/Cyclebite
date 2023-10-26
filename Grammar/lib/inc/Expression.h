@@ -27,7 +27,6 @@ namespace Cyclebite::Grammar
         /// @return All input values to the expression including Collections, TaskParameters, TaskRegisters, and other Expressions 
         const std::vector<std::shared_ptr<Symbol>>& getSymbols() const;
         const std::vector<Cyclebite::Graph::Operation>& getOps() const;
-        const std::set<std::shared_ptr<Dimension>>& getVars() const;
         /// Returns the collections that input into the expression
         const std::set<std::shared_ptr<Collection>> getCollections() const;
         /// @brief Returns all memory-related inputs required to evaluate this expression
@@ -43,9 +42,6 @@ namespace Cyclebite::Grammar
         /// - in some cases, the expression is stored in a memory address. Thus, it may be used in a future computation somewhere
         /// @retval Either a Collection or TaskRegister that this expression is stored to after its evaluation. If the expression is not stored, nullptr is returned.
         const std::shared_ptr<Symbol>& getOutput() const;
-        /// @brief Returns the cycle objects from within this task whose iterations are fully parallel
-        /// @return All cycles within the task whose iterations are embarassingly parallel
-        const std::set<std::shared_ptr<Cycle>> getParallelCycles() const;
         std::string dump() const override;
     protected:
         /// the task in which the expression is derived
@@ -53,8 +49,6 @@ namespace Cyclebite::Grammar
         // contains all collections referenced by this expression
         std::set<std::shared_ptr<Symbol>> inputs;
         std::shared_ptr<Symbol> output;
-        // contains the IVs that define the iterator space of this expression
-        std::set<std::shared_ptr<Dimension>> vars;
         // contains operators that lie in between each symbol entry. Will always be of size (symbols.size() - 1)
         std::vector<Cyclebite::Graph::Operation> ops;
         // contains the symbols, in op order, for the expression. Will always be of size (ops.size() + 1)

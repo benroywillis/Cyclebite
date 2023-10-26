@@ -118,11 +118,6 @@ const vector<Cyclebite::Graph::Operation>& Expression::getOps() const
     return ops;
 }
 
-const set<shared_ptr<Dimension>>& Expression::getVars() const
-{
-    return vars;
-}
-
 const set<shared_ptr<Collection>> Expression::getCollections() const
 {
     set<shared_ptr<Collection>> collections;
@@ -144,90 +139,6 @@ const set<shared_ptr<Symbol>>& Expression::getInputs() const
 const shared_ptr<Symbol>& Expression::getOutput() const
 {
     return output;
-}
-
-const set<shared_ptr<Cycle>> Expression::getParallelCycles() const
-{
-    set<shared_ptr<Cycle>> parallelCycles;
-
-    // we start at the parent-most cycle and evaluate to the child-most
-    deque<shared_ptr<Cycle>> Q;
-    set<shared_ptr<Cycle>> covered;
-    for( const auto& var : vars )
-    {
-        if( var->getCycle()->getParents().empty() )
-        {
-            Q.push_back(var->getCycle());
-            covered.insert(var->getCycle());
-        }
-    }
-
-    while( !Q.empty() )
-    {
-        // to determine if the current cycle is parallel, we evaluate the inputs this cycle requires, and if they depend on prior iterations of this cycle (or its parents), its not parallel
-        set<shared_ptr<Collection>> cycleInputs;
-        for( const auto& in : inputs )
-        {
-            // Ben 2023-10-17 for now we are only concerned with collections i.e. collections are the only inputs that show this cycle is dependent on other iterations or cycles
-            if( const auto& coll = dynamic_pointer_cast<Collection>(in) )
-            {
-                for( const auto& e : coll->getElementPointers() )
-                {
-                    if( Q.front()->find(Graph::DNIDMap.at(e)))
-                    {
-                        cycleInputs.insert(coll);
-                    }
-                }
-            }
-        }
-        if( cycleInputs.empty() )
-        {
-            // if there are no inputs to this cycle, we are fully parallel
-            parallelCycles.insert(Q.front());
-        }
-        else
-        {
-            // decides whether this cycle contains an input that comes from a prior cycle instance
-            bool parallel = false;
-            for( const auto& i : cycleInputs )
-            {
-                bool depends = false;
-                for( const auto& var : i->getIndices() )
-                {
-                    // we determine dependence by looking at transformations to the loop iterator
-                    // first, find the loop iterator
-                    for( const auto& iv : var->getDimensions() )
-                    {
-                        // this is a loop iterator we depend on, if it is transformed to reference a previous iteration, we're sunk
-                        // we judget this by measuring the sign of the offset with the sign of the stride in the idxVar
-                        /*if( (var->getOffset(iv) < 0) == (iv->getSpace().stride < 0) )
-                        {
-                            depends = true;
-                        }*/
-                    }
-                }
-                if( depends )
-                {
-                    parallel = false;
-                    break;
-                }
-            }
-        }
-        for( const auto& c : Q.front()->getChildren() )
-        {
-            if( t->find(c) )
-            {
-                if( !covered.contains(c) )
-                {
-                    Q.push_back(c);
-                    covered.insert(c);
-                }
-            }
-        }
-        Q.pop_front();
-    }
-
-    return parallelCycles;
 }
 
 vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::Inst>& node,
@@ -534,9 +445,9 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
     // but not the rv's node - the node is a binary operator that carries out the reduction (it is accounted for in the reduction expression)
     if( rv )
     {
-        if( rv->getPhi() )
+        if( rv->getAddress() )
         {
-            nodeToExpr[Graph::DNIDMap.at(rv->getPhi())] = rv;
+            nodeToExpr[rv->getAddress()] = rv;
         }
         nodeToExpr[rv->getNode()] = rv;
     }
@@ -667,19 +578,24 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
                     vec.push_back(news);
                 }
             }
-            if( rv )
-            {
-                expr = make_shared<Reduction>(t, rv, vec, ops, symbolOutput);
-                nodeToExpr[rv->getNode()] = expr;
-            }
-            else
-            {
-                expr = make_shared<Expression>(t, vec, ops, symbolOutput);
-            }
+            expr = make_shared<Expression>(t, vec, ops, symbolOutput);
         }
         nodeToExpr[node] = expr;
     }
-    if( !expr )
+    if( expr )
+    {
+        if( rv )
+        {
+            // wrap the constructed expr in a reduction
+            vector<shared_ptr<Symbol>> redVec;
+            vector<Cyclebite::Graph::Operation> redOp;
+            redVec.push_back(expr);
+            auto red = make_shared<Reduction>(t, rv, redVec, redOp, expr->getOutput());
+            nodeToExpr[rv->getNode()] = red;
+            expr = red;
+        }
+    }
+    else
     {
         if( rv && insts.empty() )
         {
