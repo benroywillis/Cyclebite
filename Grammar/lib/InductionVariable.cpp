@@ -169,8 +169,26 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
                 }
             }
             break;
+        case 26: // shift right
+            for( unsigned i = 0; i < bin->getNumOperands(); i++ )
+            {
+                if( const auto& con = llvm::dyn_cast<llvm::Constant>(bin->getOperand(i)) )
+                {
+                    auto conInt = (int)*con->getUniqueInteger().getRawData();
+                    // we shift to the right by this much in each iteration... which is not consistant
+                    // this is basically a divide-by-constant at each iteration
+                    // for now we just make the stride the divide-by factor
+                    stride = conInt;
+                    break;
+                }
+                else
+                {
+                    stride = static_cast<int>(STATIC_VALUE::UNDETERMINED);
+                }
+            }
+            break;
         default:
-            throw CyclebiteException("Cannot yet handle opcode "+to_string(bin->getOpcode())+" that offsets an IV!");
+            throw CyclebiteException("Cannot yet handle opcode "+string(Cyclebite::Graph::OperationToString.at(Cyclebite::Graph::GetOp(bin->getOpcode())))+" (opcode "+to_string(bin->getOpcode())+") that offsets an IV!");
     }
     // find out how the IV is initialized through its stores or phis
     int initValue = static_cast<int>(STATIC_VALUE::INVALID);
@@ -189,42 +207,85 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     }
     else if( !phis.empty() )
     {
-        // likely the optimized case
-        // we can only handle the case with one phi
-        if( phis.size() != 1 )
+        // we want the phi that is directly used in the target exit
+        const llvm::PHINode* targetPhi = nullptr;
+        if( phis.size() == 1 )
+        {
+            targetPhi = *phis.begin();
+        }
+        else
         {
             for( const auto& phi : phis )
             {
-                PrintVal(phi);
+                deque<const llvm::Value*> instQ;
+                set<const llvm::Value*> instCovered;
+                if( const auto& br = llvm::dyn_cast<llvm::BranchInst>(targetExit) )
+                {
+                    instQ.push_front(br->getCondition());
+                    instCovered.insert(br->getCondition());
+                }
+                else
+                {
+                    PrintVal(targetExit);
+                    throw CyclebiteException("Cannot yet handle this targetExit type when searching for initial IV value!");
+                }
+                while( !instQ.empty() )
+                {
+                    if( instQ.front() == phi )
+                    {
+                        targetPhi = phi;
+                        break;
+                    }
+                    if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(instQ.front()) )
+                    {
+                        for( const auto& op : inst->operands() )
+                        {
+                            if( !instCovered.contains(op) )
+                            {
+                                instQ.push_back(op);
+                                instCovered.insert(op);
+                            }
+                        }
+                    }
+                    instQ.pop_front();
+                }
+                if( targetPhi )
+                {
+                    break;
+                }
             }
-            throw CyclebiteException("Cannot handle an IV that is touched by more than one phi!");
         }
         // the phi should have two cases, one where the IV gets a value and one where the IV gets a constant
         // we want the constant case (the init value)
-        auto phi = *phis.begin();
-        for( unsigned i = 0; i < phi->getNumIncomingValues(); i++ )
+        for( unsigned i = 0; i < targetPhi->getNumIncomingValues(); i++ )
         {
             // we need to figure out if this is the initialization value of the phi
             // this can be found out in two ways
             // first, the incoming value is a constant - this *most likely* points to the initialization value
             // second, the incoming value comes from a block that is not this one (most of the time, when the optimizer is on, the incoming value from a block outside the current is the init)
             // third, throw an error because the space becomes more complicated and we haven't had a reason to solve this problem yet
-            if( auto con = llvm::dyn_cast<llvm::Constant>(phi->getIncomingValue(i)) )
+            if( auto con = llvm::dyn_cast<llvm::Constant>(targetPhi->getIncomingValue(i)) )
             {
                 initValue = (int)*con->getUniqueInteger().getRawData();
                 break;
             }
-            else if( phi->getIncomingBlock(i) != phi->getParent() )
+            else if( targetPhi->getIncomingBlock(i) != targetPhi->getParent() )
             {
                 // the init value is not a constant, we use the dynamically observed information to find out what the frequency of this block was
                 // the frequency of the block *probably* tells us what the frequency of this task was
                 // this breaks down when the task was called repeatedly 
                 //  - for now, the belief is that this doesn't matter. EP ensures the task we are evaluating is a good accelerator candidate, and we trust EP
                 // TODO: the IO.cpp/BuildDFG() method doesn't yet populate the edges between ControlBlocks, so this will always return 0
-                //initValue = (int)BBCBMap.at(phi->getParent())->getFrequency();
+                //initValue = (int)BBCBMap.at(targetPhi->getParent())->getFrequency();
                 initValue = static_cast<int>(STATIC_VALUE::UNDETERMINED);
             }
         }
+    }
+    else
+    {
+        PrintVal(n->getVal());
+        PrintVal(targetExit);
+        throw CyclebiteException("Could not find a starting place to determine the initial value of an IV!");
     }
     if( initValue == static_cast<int>(STATIC_VALUE::INVALID) )
     {

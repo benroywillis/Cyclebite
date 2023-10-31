@@ -18,6 +18,7 @@ namespace Cyclebite::Grammar
         const PolySpace getSpace() const;
     protected:
         StridePattern pat;
+        /// Warning: when the stride pattern is irregular (e.g., FFT shifting right each iteration), the stride pattern cannot be truly captured
         PolySpace space;
     };
     //std::set<std::shared_ptr<InductionVariable>> getCounters(const std::shared_ptr<Task>& t);
