@@ -743,6 +743,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                     else
                     {
                         // we don't know what the affine offset is (for sure), so just push + 1
+                        PrintVal(phi);
+                        spdlog::warn("Could not figure out ;exactly what the offset for this phi should be, setting to + 1");
                         of.constant = 1;
                         of.transform = Cyclebite::Graph::Operation::add;
                     }

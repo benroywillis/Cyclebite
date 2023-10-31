@@ -141,6 +141,13 @@ const shared_ptr<Symbol>& Expression::getOutput() const
     return output;
 }
 
+/// @brief Recursively builds an expression out of an LLVM instruction
+/// @param node The node of the highest-level instruction of this expression. This argument is simply used to get access to the original LLVM::Module of the instruction
+/// @param t The task in which this expression should belong
+/// @param op The llvm::Value to build an expression for. This op may or may not belong to "node" (it may belong to a predecessor of "node")
+/// @param nodeToExpr A map from DataValue to Symbol. Updated every time this method creates a new symbol
+/// @param colls The collections that feed into this task. They are used (when possible) to represent loads and stores in the expressions that are built
+/// @return A vector of symbols that represents the op argument that is passed. When op is a vector, this vector will have more than one entry. Single entry otherwise.
 vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::Inst>& node,
                                             const shared_ptr<Task>& t,  
                                             const llvm::Value* op, 
@@ -278,9 +285,45 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
         else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(op) )
         {
             // phis imply a loop-loop dependence or predication
-            // if twe have made it this far, this phi doesn't map to an RV.. so at this point it is an error
-            PrintVal(phi);
-            throw CyclebiteException("phi node use implies predication or loop-loop dependence!");
+            // if we have made it this far, this phi doesn't map to an RV.. it likely represents task predication
+            // in order to know that we need a predication expression, more than one of the incoming values must be live
+            set<const llvm::Value*> liveIncomingValues;
+            for( unsigned i = 0; i < phi->getNumIncomingValues(); i++ )
+            {
+                auto incomingBlock = phi->getIncomingBlock(i);
+                if( Cyclebite::Graph::BBCBMap.contains(incomingBlock) )
+                {
+                    // it is live, put the value in the live set
+                    liveIncomingValues.insert(phi->getIncomingValue(i));
+                }
+            }
+            if( liveIncomingValues.size() > 1 )
+            {
+                /*auto predExpr = make_shared<PredicationExpression>(phi);
+                nodeToExpr[ opNode ] = predExpr;
+                newSymbols.push_back(predExpr);*/
+                PrintVal(phi);
+                throw CyclebiteException("Cannot yet build predication expressions for this task!");
+            }
+            else if( liveIncomingValues.empty() )
+            {
+                PrintVal(phi);
+                throw CyclebiteException("Could not find a live incoming value for this phi that is used in the task expression!");
+            }
+            else
+            {
+                // we just need to build out values for the lone live value
+                vector<shared_ptr<Symbol>> args;
+                for( const auto& news : buildExpression(node, t, *liveIncomingValues.begin(), nodeToExpr, colls) )
+                {
+                    args.push_back( news );
+                }
+                vector<Cyclebite::Graph::Operation> binOps;
+                binOps.push_back( Cyclebite::Graph::GetOp(bin->getOpcode()) );
+                auto binExpr = make_shared<Expression>( t, args, binOps );
+                nodeToExpr[ opNode ] = binExpr;
+                newSymbols.push_back(binExpr);
+            }
         }
         else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(op) )
         {
