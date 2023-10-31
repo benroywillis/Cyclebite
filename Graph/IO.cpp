@@ -3172,7 +3172,10 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
         dotString += "\t\tlabel=\"Basic Block " + to_string(*BB->originalBlocks.begin()) + "\";\n";
         for (auto i : BB->instructions)
         {
-            dotString += "\t\t" + to_string(i->NID) + ";\n";
+            if( !llvm::isa<llvm::DbgInfoIntrinsic>(i->getInst()) )
+            {
+                dotString += "\t\t" + to_string(i->NID) + ";\n";
+            }
         }
         dotString += "\t}\n";
         j++;
@@ -3183,6 +3186,10 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
         // label nodes based on their operations
         for (const auto &node : BB->instructions)
         {
+            if( llvm::isa<llvm::DbgInfoIntrinsic>(node->getInst()) )
+            {
+                continue;
+            }
             if (node->isState())
             {
                 dotString += "\t" + to_string(node->NID) + " [color=red,label=\"" + OperationToString[node->getOp()] + "\"];\n";
@@ -3203,6 +3210,10 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
         // now build out the nodes in the graph
         for (const auto &node : BB->instructions)
         {
+            if( llvm::isa<llvm::DbgInfoIntrinsic>(node->getInst()) )
+            {
+                continue;
+            }
             for (const auto &n : node->getSuccessors())
             {
                 dotString += "\t" + to_string(n->getSrc()->NID) + " -> " + to_string(n->getSnk()->NID) + ";\n";
