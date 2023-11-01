@@ -22,15 +22,15 @@ namespace Cyclebite::Grammar
 
     struct NodeColor
     {
-        llvm::Instruction *inst;
+        const llvm::Instruction *inst;
         std::set<OpColor> colors;
         NodeColor() {}
-        NodeColor(llvm::Instruction *Inst, OpColor color)
+        NodeColor(const llvm::Instruction *Inst, OpColor color)
         {
             inst = Inst;
             colors.insert(color);
         }
-        NodeColor(llvm::Instruction *Inst, std::set<OpColor> Colors)
+        NodeColor(const llvm::Instruction *Inst, std::set<OpColor> Colors)
         {
             inst = Inst;
             colors = Colors;
@@ -46,8 +46,8 @@ namespace Cyclebite::Grammar
         }
     };
 
-    std::set<int64_t> findFunction(const std::map<std::string, std::set<llvm::BasicBlock *>> &kernelSets);
-    std::set<int64_t> findState(const std::map<std::string, std::set<llvm::BasicBlock *>> &kernelSets);
-    std::set<int64_t> findMemory(const std::map<std::string, std::set<llvm::BasicBlock *>> &kernelSets);
-    std::map<std::string, std::set<int64_t>> colorNodes( const std::map<std::string, std::set<llvm::BasicBlock *>> &kernelSets);
+    std::set<int64_t> findFunction(const std::map<std::string, std::set<const llvm::BasicBlock *>> &kernelSets);
+    std::set<int64_t> findState(const std::map<std::string, std::set<const llvm::BasicBlock *>> &kernelSets);
+    std::set<int64_t> findMemory(const std::map<std::string, std::set<const llvm::BasicBlock *>> &kernelSets);
+    std::map<std::string, std::set<int64_t>> colorNodes( const std::map<std::string, std::set<const llvm::BasicBlock *>> &kernelSets);
 } // namespace Cyclebite::Grammar

@@ -4,6 +4,7 @@
 //==------------------------------==//
 #include "Categorize.h"
 #include <deque>
+#include "Graph/inc/IO.h"
 #include "Util/IO.h"
 #include "Util/Exceptions.h"
 
@@ -18,16 +19,16 @@ using namespace std;
 /// Red: values that are stored and did not come from a load
 /// Blue: values that are loaded but do not get stored
 /// Red&&Blue: values that are both loaded and stored (this is the "function" of the kernel)
-set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicBlock *>> &kernelSets)
+set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<const llvm::BasicBlock *>> &kernelSets)
 {
     // colors for each instruction found during DFG investigation
     set<shared_ptr<NodeColor>, NCCompare> colors;
     for (auto k : kernelSets)
     {
         // set of ld instructions that were the first lds seen when walking back from sts
-        set<llvm::Instruction *> lds;
+        set<const llvm::Instruction *> lds;
         // set of sts that receive kernel function fan-out
-        set<llvm::Instruction *> sts;
+        set<const llvm::Instruction *> sts;
         // First pass
         for (auto bb : k.second)
         {
@@ -38,9 +39,9 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
                     // walk fan-in to store
                     // we explore users until we find a gep or ld
                     // nodes that precede a store before a gep or ld are always interesting
-                    set<llvm::Instruction *> localFanIn;
-                    deque<llvm::Instruction *> Q;
-                    set<llvm::Value *> covered;
+                    set<const llvm::Instruction *> localFanIn;
+                    deque<const llvm::Instruction *> Q;
+                    set<const llvm::Value *> covered;
                     if (auto inst = llvm::dyn_cast<llvm::Instruction>(st->getValueOperand()))
                     {
                         auto r = colors.insert(make_shared<NodeColor>(inst, OpColor::Red));
@@ -129,8 +130,8 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
         {
             // walk fan-out from ld
             // we explore users until we run out of instructions, coloring everything blue as we go
-            deque<llvm::Instruction *> Q;
-            set<llvm::User *> covered;
+            deque<const llvm::Instruction *> Q;
+            set<const llvm::User *> covered;
             Q.push_front(ld);
             covered.insert(ld);
             while (!Q.empty())
@@ -199,25 +200,25 @@ set<int64_t> Cyclebite::Grammar::findFunction(const map<string, set<llvm::BasicB
 /// Blue: state values that are stored
 /// Red&&Blue: values that are both used to determine the next state and are stored
 /// Any node that has a color belongs in the "state" box
-set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBlock *>> &kernelSets)
+set<int64_t> Cyclebite::Grammar::findState(const map<string, set<const llvm::BasicBlock *>> &kernelSets)
 {
     // colors for each instruction found during DFG investigation
     set<shared_ptr<NodeColor>, NCCompare> colors;
     for (auto k : kernelSets)
     {
-        // set of load instructions found in the kernel DFG
-        set<llvm::LoadInst *> lds;
-        // set of load instructions that load state (these loads were later used to determine the next state)
-        set<llvm::LoadInst *> stateLds;
+        // we are interested in finding the instructions that are used to determine whether to exit the task
+        // inside of the task is a set of instruction(s) that can either enter or exit each cycle
+        // these are our starting points when finding state instructions
+
         // set of store instructions that store state (these stores use the same pointer used to load state)
-        set<llvm::StoreInst *> stateSts;
+        set<const llvm::StoreInst *> stateSts;
         // set of terminator instructions that were used to determine a new state
-        set<llvm::Instruction *> terms;
+        set<const llvm::Instruction *> terms;
         // set of values that point to values used to determine the behavior of terminators (induction variables)
-        set<llvm::Value *> stateP;
+        set<const llvm::Value *> stateP;
 
         // this set holds all instructions that determine a state. Their operands likely lead back to a value that stores state - an induction variable
-        set<llvm::Instruction*> targets;
+        set<const llvm::Instruction*> targets;
         // First pass finds the induction variables in the program (that is, across all tasks)
         for (auto bb : k.second)
         {
@@ -225,43 +226,44 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
             {
                 if (auto inst = llvm::dyn_cast<llvm::Instruction>(i))
                 {
-                    if (auto ld = llvm::dyn_cast<llvm::LoadInst>(inst))
-                    {
-                        lds.insert(ld);
-                    }
-                    else if (inst->isTerminator())
+                    if (inst->isTerminator())
                     {
                         // target value that determines a state
                         // this value leads back to an origin somewhere, likely a load, and this code is supposed to find it
-                        llvm::Instruction *target = nullptr;
                         if (auto br = llvm::dyn_cast<llvm::BranchInst>(inst))
                         {
-                            //if (br->isConditional())
-                            //{
-                                //if (auto cond = llvm::dyn_cast<llvm::Instruction>(br->getCondition()))
-                                //{
-                                    target = br;
-                                //}
-                            //}
-                        }
-                        else if (auto se = llvm::dyn_cast<llvm::SelectInst>(inst))
-                        {
-                            //if (se->getNumSuccessors() > 1)
-                            //{
-                                //if (auto cond = llvm::dyn_cast<llvm::Instruction>(se->getCondition()))
-                                //{
-                                    //target = cond;
-                                    target = se;
-                                //}
-                            //}
+                            // we are only concerned with the live successors of this branch
+                            set<const llvm::BasicBlock*> liveSuccessors;
+                            for( unsigned i = 0; i < br->getNumSuccessors(); i++ )
+                            {
+                                if( Cyclebite::Graph::NIDMap.contains(vector<unsigned>((unsigned)Cyclebite::Util::GetBlockID(br->getSuccessor(i))) ))
+                                {
+                                    liveSuccessors.insert(br->getSuccessor(i));
+                                }
+                            }
+                            if( liveSuccessors.size() > 1 )
+                            {
+                                for( const auto& succ : liveSuccessors )
+                                {
+                                    if( !k.second.contains(succ) )
+                                    {
+                                        targets.insert(br);
+                                    }
+                                }
+                            }
                         }
                         else if (auto sw = llvm::dyn_cast<llvm::SwitchInst>(inst))
                         {
-                            //if (auto cond = llvm::dyn_cast<llvm::Instruction>(sw->getCondition()))
-                            //{
-                                //target = cond;
-                                target = sw;
-                            //}
+                            if( sw->getNumSuccessors() > 1 )
+                            {
+                                for( unsigned i = 0; i < sw->getNumSuccessors(); i++ )
+                                {
+                                    if( !k.second.contains(sw->getSuccessor(i)) )
+                                    {
+                                        targets.insert(sw);
+                                    }
+                                }
+                            }
                         }
                         else if (auto ret = llvm::dyn_cast<llvm::ReturnInst>(inst))
                         {
@@ -269,11 +271,25 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
                         }
                         else if( auto invoke = llvm::dyn_cast<llvm::InvokeInst>(inst) )
                         {
-                            // this is a function call with two possible return destinations, but the logic to choose which destination is hidden within the called function (the exception handling logic)
-                            // thus we are stuck with a problem: we have possibly many conditions that can lead to the unwind destination
-                            // this is a generalization of a conditional branch instruction
-                            // for now (12/19/22) we are making the invoke instruction the target, thus downstream processing will select the function args as a
-                            target = invoke;
+                            // we are only concerned with the live successors of this branch
+                            set<const llvm::BasicBlock*> liveSuccessors;
+                            for( unsigned i = 0; i < invoke->getNumSuccessors(); i++ )
+                            {
+                                if( Cyclebite::Graph::NIDMap.contains(vector<unsigned>((unsigned)Cyclebite::Util::GetBlockID(invoke->getSuccessor(i))) ))
+                                {
+                                    liveSuccessors.insert(invoke->getSuccessor(i));
+                                }
+                            }
+                            if( liveSuccessors.size() > 1 )
+                            {
+                                for( const auto& succ : liveSuccessors )
+                                {
+                                    if( !k.second.contains(succ) )
+                                    {
+                                        targets.insert(invoke);
+                                    }
+                                }
+                            }
                         }
                         else if( auto res = llvm::dyn_cast<llvm::ResumeInst>(inst) )
                         {
@@ -289,10 +305,6 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
                         {
                             throw CyclebiteException("This terminator is not yet supported: " + PrintVal(inst, false));
                         }
-                        if (target)
-                        {
-                            targets.insert(target);
-                        }
                     }
                 }
             }
@@ -302,9 +314,9 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
         // 2. we find a cycle between a binary op and a PHINode (found in optimized code when the IV lives inside a value not the heap)
         for( const auto& target : targets )
         {
-            set<llvm::Instruction *> localFanIn;
-            deque<llvm::Instruction *> Q;
-            set<llvm::Value *> covered;
+            set<const llvm::Instruction *> localFanIn;
+            deque<const llvm::Instruction *> Q;
+            set<const llvm::Value *> covered;
             auto r = colors.insert(make_shared<NodeColor>(target, OpColor::Red));
             if (!r.second)
             {
@@ -419,9 +431,9 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
             if (auto valueInst = llvm::dyn_cast<llvm::Instruction>(st->getValueOperand()))
             {
                 // walk fan-in to state store (data only)
-                set<llvm::Instruction *> localFanIn;
-                deque<llvm::Instruction *> Q;
-                set<llvm::Value *> covered;
+                set<const llvm::Instruction *> localFanIn;
+                deque<const llvm::Instruction *> Q;
+                set<const llvm::Value *> covered;
                 auto r = colors.insert(make_shared<NodeColor>(valueInst, OpColor::Blue));
                 if (!r.second)
                 {
@@ -475,14 +487,14 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<llvm::BasicBloc
 /// @brief Identifies all instructions that access memory or manipulate memory accesses
 ///
 /// First pass: for each memory instruction, walk the fan-in to their pointers and mark all those instructions blue
-set<int64_t> Cyclebite::Grammar::findMemory(const map<string, set<llvm::BasicBlock *>> &kernelSets)
+set<int64_t> Cyclebite::Grammar::findMemory(const map<string, set<const llvm::BasicBlock *>> &kernelSets)
 {
     // colors for each instruction found during DFG investigation
     set<shared_ptr<NodeColor>, NCCompare> colors;
     for (const auto &k : kernelSets)
     {
-        set<llvm::LoadInst *> lds;
-        set<llvm::StoreInst *> sts;
+        set<const llvm::LoadInst *> lds;
+        set<const llvm::StoreInst *> sts;
         // Before any passes find all loads and stored
         for (const auto &b : k.second)
         {
@@ -499,38 +511,8 @@ set<int64_t> Cyclebite::Grammar::findMemory(const map<string, set<llvm::BasicBlo
             }
         }
         // First Pass
-        deque<llvm::Instruction *> Q;
-        set<llvm::Value *> covered;
-        // for each load pointer
-        /*for (const auto &ld : lds)
-        {
-            if (auto valueInst = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()))
-            {
-                // walk fan-in to state store (data only)
-                auto r = colors.insert(make_shared<NodeColor>(valueInst, OpColor::Blue));
-                if (!r.second)
-                {
-                    (*r.first)->colors.insert(OpColor::Blue);
-                }
-                Q.push_front(valueInst);
-                covered.insert(valueInst);
-            }
-        }
-        // for each store pointer
-        for (const auto &st : sts)
-        {
-            if (auto valueInst = llvm::dyn_cast<llvm::Instruction>(st->getPointerOperand()))
-            {
-                // walk fan-in to state store (data only)
-                auto r = colors.insert(make_shared<NodeColor>(valueInst, OpColor::Blue));
-                if (!r.second)
-                {
-                    (*r.first)->colors.insert(OpColor::Blue);
-                }
-                Q.push_front(valueInst);
-                covered.insert(valueInst);
-            }
-        }*/
+        deque<const llvm::Instruction *> Q;
+        set<const llvm::Value *> covered;
         for( const auto& ld : lds )
         {
             if( const auto& ptr = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()) )
@@ -595,7 +577,7 @@ set<int64_t> Cyclebite::Grammar::findMemory(const map<string, set<llvm::BasicBlo
     return memInstructions;
 }
 
-map<string, set<int64_t>> Cyclebite::Grammar::colorNodes( const map<string, set<llvm::BasicBlock *>>& kernelSets )
+map<string, set<int64_t>> Cyclebite::Grammar::colorNodes( const map<string, set<const llvm::BasicBlock *>>& kernelSets )
 {
     map<string, set<int64_t>> categories;
     categories["KF"] = findFunction(kernelSets);

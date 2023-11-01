@@ -35,25 +35,17 @@ cl::opt<string> OutputFile("o", cl::desc("Specify output json filename"), cl::va
 int main(int argc, char *argv[])
 {
     cl::ParseCommandLineOptions(argc, argv);
-    // load input kernels
-    // the instance file only contains the parent-most kernel, but we are interested in the entire hierarchy
-    // thus we will combine all kernels together to form the entire hierarchy
     ifstream kernelFile(KernelFile);
     nlohmann::json kernelJson;
     kernelFile >> kernelJson;
     kernelFile.close();
-    map<string, vector<int64_t>> kernels;
-    for (auto &[k, l] : kernelJson["Kernels"].items())
+    set<const llvm::BasicBlock*> kernelBlocks;
+    set<const llvm::BasicBlock*> deadBlocks;
+    for( auto &[k, l] : kernelJson["Kernels"].items() )
     {
-        string index = k;
-        nlohmann::json kernel = l["Blocks"];
-        if( kernel.size() )
+        if( l["Blocks"].size() )
         {
-            kernels[index] = kernel.get<vector<int64_t>>();
-        }
-        else
-        {
-            kernels[index] = vector<int64_t>();
+
         }
     }
     ifstream instanceFile(InstanceFile);
@@ -120,7 +112,7 @@ int main(int argc, char *argv[])
     // construct program control graph and call graph
     ControlGraph cg;
     Cyclebite::Graph::CallGraph dynamicCG;
-    getDynamicInformation(cg, dynamicCG, ProfileFileName, SourceBitcode, staticCG, blockCallers, threadStarts, IDToBlock, false );
+    getDynamicInformation( cg, dynamicCG, ProfileFileName, SourceBitcode, staticCG, blockCallers, threadStarts, IDToBlock, false );
     // construct block ID to node ID mapping
     map<int64_t, shared_ptr<ControlNode>> blockToNode;
     for (const auto &it : NIDMap)
@@ -132,7 +124,7 @@ int main(int argc, char *argv[])
     }
 
     // generate sets of basic blocks for each kernel
-    map<string, set<BasicBlock *>> kernelSets;
+    map<string, set<const BasicBlock *>> kernelSets;
     for (auto kid : tasks)
     {
         for (auto bid : kid.second)
