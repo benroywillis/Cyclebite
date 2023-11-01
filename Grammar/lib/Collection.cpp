@@ -184,7 +184,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
     {
         for( const auto& b : c->getBody() )
         {
-            for( const auto& i : b->instructions )
+            for( const auto& i : b->getInstructions() )
             {
                 if( i->getOp() == Cyclebite::Graph::Operation::load )
                 {

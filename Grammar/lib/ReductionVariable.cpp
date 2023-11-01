@@ -135,7 +135,7 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
     {
         for( const auto& b : c->getBody() )
         {
-            for( const auto& i : b->instructions )
+            for( const auto& i : b->getInstructions() )
             {
                 if( const auto st = llvm::dyn_cast<llvm::StoreInst>(i->getVal()) )
                 {

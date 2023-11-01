@@ -508,7 +508,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
     {
         for ( const auto& b : c->getBody() )
         {
-            for( const auto& i : b->instructions )
+            for( const auto& i : b->getInstructions() )
             {
                 if( i->isFunction() )
                 {

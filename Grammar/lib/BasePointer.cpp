@@ -355,7 +355,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
     {
         for( const auto& b : c->getBody() )
         {
-            for( const auto& n : b->instructions )
+            for( const auto& n : b->getInstructions() )
             {
                 if( n->getOp() == Operation::load || n->getOp() == Operation::store )
                 {

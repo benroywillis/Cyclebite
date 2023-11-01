@@ -705,7 +705,7 @@ shared_ptr<Expression> Cyclebite::Grammar::getExpression(const shared_ptr<Task>&
     {
         for( const auto& block : c->getBody() )
         {
-            for( const auto& node : block->instructions )
+            for( const auto& node : block->getInstructions() )
             {
                 if( covered.find(node) == covered.end() )
                 {

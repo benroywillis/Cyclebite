@@ -152,7 +152,7 @@ bool Cycle::find(const shared_ptr<Inst>& n) const
 {
     for( const auto& b : blocks )
     {
-        if( b->instructions.find(n) != b->instructions.end() )
+        if( b->getInstructions().find(n) != b->getInstructions().end() )
         {
             return true;
         }
@@ -209,7 +209,7 @@ set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json&
         set<const llvm::Instruction*> exiters;
         for( const auto& b : blocks )
         {
-            for( const auto& i : b->instructions )
+            for( const auto& i : b->getInstructions() )
             {
                 if( i->isTerminator() )
                 {
