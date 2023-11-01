@@ -236,7 +236,9 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<const llvm::Bas
                             set<const llvm::BasicBlock*> liveSuccessors;
                             for( unsigned i = 0; i < br->getNumSuccessors(); i++ )
                             {
-                                if( Cyclebite::Graph::NIDMap.contains(vector<unsigned>((unsigned)Cyclebite::Util::GetBlockID(br->getSuccessor(i))) ))
+                                vector<unsigned> blockID;
+                                blockID.push_back((unsigned)Cyclebite::Util::GetBlockID(br->getSuccessor(i)) );
+                                if( Cyclebite::Graph::NIDMap.contains( blockID ))
                                 {
                                     liveSuccessors.insert(br->getSuccessor(i));
                                 }
@@ -275,7 +277,9 @@ set<int64_t> Cyclebite::Grammar::findState(const map<string, set<const llvm::Bas
                             set<const llvm::BasicBlock*> liveSuccessors;
                             for( unsigned i = 0; i < invoke->getNumSuccessors(); i++ )
                             {
-                                if( Cyclebite::Graph::NIDMap.contains(vector<unsigned>((unsigned)Cyclebite::Util::GetBlockID(invoke->getSuccessor(i))) ))
+                                vector<unsigned> blockID;
+                                blockID.push_back((unsigned)Cyclebite::Util::GetBlockID(invoke->getSuccessor(i)) );
+                                if( Cyclebite::Graph::NIDMap.contains( blockID ))
                                 {
                                     liveSuccessors.insert(invoke->getSuccessor(i));
                                 }
