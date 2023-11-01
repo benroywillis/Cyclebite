@@ -35,62 +35,6 @@ cl::opt<string> OutputFile("o", cl::desc("Specify output json filename"), cl::va
 int main(int argc, char *argv[])
 {
     cl::ParseCommandLineOptions(argc, argv);
-    ifstream kernelFile(KernelFile);
-    nlohmann::json kernelJson;
-    kernelFile >> kernelJson;
-    kernelFile.close();
-    set<const llvm::BasicBlock*> kernelBlocks;
-    set<const llvm::BasicBlock*> deadBlocks;
-    for( auto &[k, l] : kernelJson["Kernels"].items() )
-    {
-        if( l["Blocks"].size() )
-        {
-
-        }
-    }
-    ifstream instanceFile(InstanceFile);
-    nlohmann::json instanceJson;
-    instanceFile >> instanceJson;
-    instanceFile.close();
-    map<string, vector<int64_t>> tasks;
-    for (auto &[i, l] : instanceJson["Kernels"].items())
-    {
-        string index = i;
-        nlohmann::json instance = l["Blocks"];
-        set<int64_t> blocks;
-        for( const auto& id : instance.get<vector<int64_t>>() )
-        {
-            blocks.insert(id);
-        }
-        // group in its children... which must be done recursively
-        deque<string> Q;
-        set<string> covered;
-        for( const auto& c : l["Children"] )
-        {
-            string childID = to_string(c.get<int64_t>());
-            Q.push_front(childID);
-            covered.insert(childID);
-        }
-        while( !Q.empty() )
-        {
-            nlohmann::json ck = kernelJson["Kernels"][Q.front()];
-            for( const auto& id : ck["Blocks"].get<vector<int64_t>>() )
-            {
-                blocks.insert(id);
-            }
-            for( const auto& c : ck["Children"] )
-            {
-                string id = to_string(c.get<int64_t>());
-                if( covered.find( id ) == covered.end() )
-                {
-                    Q.push_back(id);
-                    covered.insert(id);
-                }
-            }
-            Q.pop_front();
-        }
-        tasks[index] = vector<int64_t>(blocks.begin(), blocks.end());
-    }
     // load dynamic source code information
     auto blockCallers = ReadBlockInfo(BlockInfoFilename);
     auto blockLabels = ReadBlockLabels(BlockInfoFilename);
@@ -123,79 +67,51 @@ int main(int argc, char *argv[])
         }
     }
 
-    // generate sets of basic blocks for each kernel
-    map<string, set<const BasicBlock *>> kernelSets;
-    for (auto kid : tasks)
-    {
-        for (auto bid : kid.second)
-        {
-            kernelSets[kid.first].insert(IDToBlock.at(bid));
-        }
-    }
-
-    // maps a special string "KF", "IV", "BP" to a set of value IDs that will be specially colored for rendering
-    // ["kernel function", "induction variable", "base pointer"]
-    map<string, set<int64_t>> specialInstructions;
-    // for each kernel, go through its blocks and find loads in them
-    // we are only concerned with the "last" load instructions. These loads are the final loads in the serial DFG chain ie GEPs are not paid attention to
-    try
-    {
-        specialInstructions = colorNodes(kernelSets);
-    }
-    catch (CyclebiteException& e)
-    {
-        spdlog::critical(e.what());
-        return EXIT_FAILURE;
-    }
-
     /* this section constructs the data flow and shared_ptr<ControlBlock> */
+    ifstream kernelFile(KernelFile);
+    nlohmann::json kernelJson;
+    kernelFile >> kernelJson;
+    kernelFile.close();
+    ifstream instanceFile(InstanceFile);
+    nlohmann::json instanceJson;
+    instanceFile >> instanceJson;
+    instanceFile.close();
     // BBsubgraphs of the program
     set<shared_ptr<ControlBlock>, p_GNCompare> programFlow;
     // data flow of the program
     DataGraph dGraph;
-
-    if (BuildDFG(SourceBitcode.get(), dynamicCG, blockToNode, programFlow, dGraph, specialInstructions, IDToBlock))
-    {
-        throw CyclebiteException("Failed to build DFG!");
-    }
+    BuildDFG(programFlow, dGraph, SourceBitcode, dynamicCG, blockToNode, IDToBlock);
     // takes the information from EP about which loads and stores touch significant memory chunks and injects that info into the DFG
     InjectSignificantMemoryInstructions(instanceJson, IDToValue);
-    auto taskCycles = getTasks(instanceJson, kernelJson, IDToBlock);
-
-    // interpret the tasks in the DFG
-    Process(taskCycles);
-
-    // print tasks with specialInstructions highlighted
-    for (auto kern : tasks)
+    auto tasks = getTasks(instanceJson, kernelJson, IDToBlock);
+    // color the nodes of the graph
+    colorNodes(tasks);
+    for( const auto& t : tasks )
     {
-        set<shared_ptr<ControlBlock>, p_GNCompare> kernelgraph;
-        for (auto block : kern.second)
+        for( const auto& c : t->getCycles() )
         {
-            auto n = blockToNode.find(block);
-            if( n == blockToNode.end() )
-            { 
-                spdlog::warn("Could not find a kernel block in the dynamic program structure!");
-                continue;
-            }
-            auto flowBlock = programFlow.find(blockToNode.at(block)->NID);
-            if( flowBlock == programFlow.end() )
+            for( const auto& b : c->getBody() )
             {
-                spdlog::warn("Could not find a kernel block in the dynamic program dataflow!");
-                continue;
+                for( const auto& i : b->getInstructions() )
+                {
+                    if( i->isFunction() )
+                    {
+                        PrintVal(i->getInst());
+                    }
+                }
             }
-            kernelgraph.insert(*flowBlock);
         }
-        ofstream DFGDot("DFG_kernel" + kern.first + ".dot");
-        auto dataGraph = GenerateBBSubgraphDot(kernelgraph);
-        DFGDot << dataGraph << "\n";
-        DFGDot.close();
     }
+    // print for everyone to see
+    PrintDFGs(tasks);
+    // interpret the tasks in the DFG
+    Process(tasks);
 
     // output json file with special instruction information
-    auto outputMap = specialInstructions;
     uint64_t staticInstructions  = 0;
     uint64_t dynamicInstructions = 0;
     uint64_t kernelInstructions  = 0;
+    uint64_t labeledInstructions = 0;
     for( auto f = SourceBitcode->begin(); f != SourceBitcode->end(); f++ )
     {
         for( auto b = f->begin(); b != f->end(); b++ )
@@ -206,30 +122,30 @@ int main(int argc, char *argv[])
                 blockInstCount++;
             }
             staticInstructions += blockInstCount;
-            auto blockID = Cyclebite::Util::GetBlockID(cast<BasicBlock>(b));
-            if( blockToNode.find(blockID) != blockToNode.end() )
+            if( BBCBMap.contains(llvm::cast<BasicBlock>(b)) )
             {
                 dynamicInstructions += blockInstCount;
-                bool found = false;
-                for( const auto& kern : tasks )
+            }
+        }
+    }
+    for( const auto& t : tasks )
+    {
+        for( const auto& c : t->getCycles() )
+        {
+            for( const auto& b : c->getBody() )
+            {
+                for( const auto& i : b->getInstructions() )
                 {
-                    if( std::find(kern.second.begin(), kern.second.end(), blockID) != kern.second.end() )
+                    kernelInstructions++;
+                    if( i->isFunction() || i->isMemory() || i->isState() )
                     {
-                        kernelInstructions += blockInstCount;
+                        labeledInstructions++;
                     }
                 }
             }
         }
     }
-    uint64_t labeledInstructions = 0;
-    for( const auto& cat : specialInstructions )
-    {
-        for( const auto& entry : cat.second )
-        {
-            labeledInstructions++;
-        }
-    }
-    nlohmann::json output = outputMap;
+    nlohmann::json output;
     output["Statistics"]["StaticInstCount"]  = staticInstructions;
     output["Statistics"]["DynamicInstCount"] = dynamicInstructions;
     output["Statistics"]["KernelInstCount"]  = kernelInstructions;
@@ -237,29 +153,28 @@ int main(int argc, char *argv[])
     
     // kernel function histogram
     map<string, uint64_t> hist;
-    for( unsigned i = 0; i < static_cast<int>(Cyclebite::Graph::Operation::nop); i++ )
+    for( const auto& t : tasks )
     {
-        auto op = static_cast<Cyclebite::Graph::Operation>(i);
-        hist[Cyclebite::Graph::OperationToString.at(static_cast<Cyclebite::Graph::Operation>(i))] = 0;
-    }
-    for( const auto& entry : specialInstructions["KF"] )
-    {
-        auto val = IDToValue.at(entry);
-        if( auto inst = llvm::dyn_cast<Instruction>(val) )
+        for( const auto& c : t->getCycles() )
         {
-            try
+            for( const auto& b : c->getBody() )
             {
-                hist.at(Cyclebite::Graph::OperationToString.at(GetOp(inst->getOpcode())))++;
+                for( const auto& i : b->getInstructions() )
+                {
+                    if( i->isFunction() )
+                    {
+                        try
+                        {
+                            hist[Cyclebite::Graph::OperationToString.at(i->getOp())]++;
+                        }
+                        catch( exception& e )
+                        {
+                            spdlog::critical("OpToString map failed on the following instruction: ");
+                            PrintVal(i->getInst());
+                        }
+                    }
+                }
             }
-            catch( exception& e )
-            {
-                spdlog::critical("OpToString map failed on the following instruction: ");
-                PrintVal(inst);
-            }
-        }
-        else
-        {
-            hist.at(Cyclebite::Graph::OperationToString.at(Cyclebite::Graph::Operation::nop))++;
         }
     }
     output["Statistics"]["FunctionHistogram"] = hist;

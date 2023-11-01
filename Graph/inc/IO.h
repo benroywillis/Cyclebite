@@ -51,7 +51,12 @@ namespace Cyclebite::Graph
     int BuildCFG(Graph &graph, const std::string &filename, bool HotCodeDetection);
     const Cyclebite::Graph::CallGraph getDynamicCallGraph(llvm::Module *mod, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock);
     void CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebite::Graph::CallGraph &DCG, const Graph &dynamicGraph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock);
-    int BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Graph::CallGraph& dynamicCG, std::map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, std::set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, DataGraph &graph, std::map<std::string, std::set<int64_t>> &specialInstructions, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock);
+    void BuildDFG( std::set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, 
+                   DataGraph &graph, 
+                   const std::unique_ptr<llvm::Module>& SourceBitcode, 
+                   const Cyclebite::Graph::CallGraph& dynamicCG, 
+                   const std::map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, 
+                   const std::map<int64_t, llvm::BasicBlock*>& IDToBlock);
     std::map<std::string, std::map<std::string, std::map<std::string, int>>> ProfileKernels(const std::map<std::string, std::set<int64_t>> &kernels, llvm::Module *M, const std::map<int64_t, uint64_t> &blockCounts);
     std::set<std::pair<int64_t, int64_t>> findOriginalBlockIDs(const std::shared_ptr<UnconditionalEdge>& edge);
     void WriteKernelFile(const ControlGraph &graph, const std::set<std::shared_ptr<MLCycle>, KCompare> &kernels, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const EntropyInfo &info, const std::string &OutputFileName, bool hotCode = false);

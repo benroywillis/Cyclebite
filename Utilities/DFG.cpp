@@ -71,42 +71,13 @@ int main(int argc, char *argv[])
     {
         spdlog::critical("Couldn't open loop file " + string(LoopFileName) + ": " + string(e.what()));
     }
-    // build map of special instructions
-    map<string, set<int64_t>> specials;
-    for (int i = 0; i < (int)loopjson["Loops"].size(); i++)
-    {
-        if (loopjson["Loops"][(uint64_t)i].find("IV") != loopjson["Loops"][(uint64_t)i].end())
-        {
-            for (auto IV : loopjson["Loops"][(uint64_t)i]["IV"].get<vector<int64_t>>())
-            {
-                specials["IV"].insert(IV);
-            }
-        }
-        if (loopjson["Loops"][(uint64_t)i].find("BasePointers") != loopjson["Loops"][(uint64_t)i].end())
-        {
-            for (auto base : loopjson["Loops"][(uint64_t)i]["BasePointers"].get<vector<int64_t>>())
-            {
-                specials["BP"].insert(base);
-            }
-        }
-        if (loopjson["Loops"][(uint64_t)i].find("Functions") != loopjson["Loops"][(uint64_t)i].end())
-        {
-            for (auto base : loopjson["Loops"][(uint64_t)i]["Functions"].get<vector<int64_t>>())
-            {
-                specials["KF"].insert(base);
-            }
-        }
-    }
 
     /* this section constructs the data flow and ControlBlock */
     // BBsubgraphs of the program
     set<shared_ptr<ControlBlock>, p_GNCompare> programFlow;
     // data flow of the program
     DataGraph dGraph;
-    if (BuildDFG(SourceBitcode.get(), dynamicCG, blockToNode, programFlow, dGraph, specials, IDToBlock))
-    {
-        throw CyclebiteException("Failed to build DFG!");
-    }
+    BuildDFG( programFlow, dGraph, SourceBitcode, dynamicCG, blockToNode, IDToBlock);
 
     ofstream DFGDot("DFG.dot");
     auto dataGraph = GenerateDataDot(dGraph.getDataNodes());

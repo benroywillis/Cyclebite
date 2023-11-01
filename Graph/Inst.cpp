@@ -127,3 +127,8 @@ bool Inst::isComparator() const
     }
     return false;
 }
+
+void Inst::setColor(DNC color) 
+{
+    type = color;
+}

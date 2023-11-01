@@ -35,6 +35,7 @@ namespace Cyclebite::Graph
         bool isBinaryOp() const;
         bool isCastOp() const;
         bool isComparator() const;
+        void setColor(DNC color);
     private:
         const llvm::Instruction* inst;
         DNC type;

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
 #pragma once
+#include "Graph/inc/DataGraph.h"
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/IR/Instruction.h>
 #include <cstdint>
@@ -45,9 +46,6 @@ namespace Cyclebite::Grammar
             return lhs->inst < rhs->inst;
         }
     };
-
-    std::set<int64_t> findFunction(const std::map<std::string, std::set<const llvm::BasicBlock *>> &kernelSets);
-    std::set<int64_t> findState(const std::map<std::string, std::set<const llvm::BasicBlock *>> &kernelSets);
-    std::set<int64_t> findMemory(const std::map<std::string, std::set<const llvm::BasicBlock *>> &kernelSets);
-    std::map<std::string, std::set<int64_t>> colorNodes( const std::map<std::string, std::set<const llvm::BasicBlock *>> &kernelSets);
+    class Task;
+    void colorNodes( const std::set<std::shared_ptr<Task>>& tasks );
 } // namespace Cyclebite::Grammar
