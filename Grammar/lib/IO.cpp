@@ -339,3 +339,19 @@ void Cyclebite::Grammar::OMPAnnotateSource( const set<shared_ptr<Cycle>>& parall
         newSource.close();
     }
 }
+
+void Cyclebite::Grammar::PrintDFGs(const set<shared_ptr<Task>>& tasks)
+{
+    for (const auto& t : tasks)
+    {
+        set<shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare> taskBlocks;
+        for( const auto& c : t->getCycles() )
+        {
+            taskBlocks.insert(c->getBody().begin(), c->getBody().end());
+        }
+        ofstream DFGDot("DFG_kernel"+to_string(t->getID())+".dot");
+        auto dataGraph = Cyclebite::Graph::GenerateBBSubgraphDot(taskBlocks);
+        DFGDot << dataGraph << "\n";
+        DFGDot.close();
+    }
+}
