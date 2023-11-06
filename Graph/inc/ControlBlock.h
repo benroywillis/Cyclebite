@@ -17,6 +17,7 @@ namespace Cyclebite::Graph
     public:
         ControlBlock(std::shared_ptr<ControlNode> node, std::set<std::shared_ptr<Inst>, p_GNCompare> inst);
         const std::set<std::shared_ptr<Inst>, p_GNCompare>& getInstructions() const;
+        const std::set<std::shared_ptr<Inst>, p_GNCompare> getNonDbgInsts() const;
         bool find( const std::shared_ptr<DataValue>& f ) const;
         uint64_t getFrequency() const;
         void addInstruction( const std::shared_ptr<Inst>& newInst );

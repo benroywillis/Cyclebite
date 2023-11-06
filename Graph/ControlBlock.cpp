@@ -6,6 +6,7 @@
 #include "Inst.h"
 #include "DataValue.h"
 #include "UnconditionalEdge.h"
+#include <llvm/IR/IntrinsicInst.h>
 
 using namespace std;
 using namespace Cyclebite::Graph;
@@ -18,6 +19,19 @@ ControlBlock::ControlBlock(std::shared_ptr<ControlNode> node, std::set<std::shar
 const set<shared_ptr<Inst>, p_GNCompare>& ControlBlock::getInstructions() const
 {
     return instructions;
+}
+
+const set<shared_ptr<Inst>, p_GNCompare> ControlBlock::getNonDbgInsts() const
+{
+    set<shared_ptr<Inst>, p_GNCompare> insts;
+    for( const auto& inst : instructions )
+    {
+        if( !llvm::isa<llvm::DbgInfoIntrinsic>(inst->getInst()) )
+        {
+            insts.insert(inst);
+        }
+    }
+    return insts;
 }
 
 bool ControlBlock::find( const shared_ptr<DataValue>& f ) const
