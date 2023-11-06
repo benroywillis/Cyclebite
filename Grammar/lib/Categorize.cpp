@@ -69,6 +69,20 @@ set<shared_ptr<Cyclebite::Graph::DataValue>> findFunction(const set<shared_ptr<T
                             {
                                 // in the case where results of a function group are stored in a register, this captures them
                                 lds.insert(phi);
+                                // there's also a case when the phi leads to other phis that lead us to more function group instructions
+                                // (see 2DConv/PERFECT/ task 12 [BBs 102-108])
+                                // thus we walk backward through them
+                                for( const auto& op : Q.front()->operands() )
+                                {
+                                    if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+                                    {
+                                        if( !covered.contains(opInst) )
+                                        {
+                                            Q.push_back(opInst);
+                                            covered.insert(opInst);
+                                        }
+                                    }
+                                }
                             }
                             else if( auto call = llvm::dyn_cast<llvm::CallBase>(Q.front()) )
                             {

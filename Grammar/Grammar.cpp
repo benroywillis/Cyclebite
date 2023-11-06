@@ -86,22 +86,6 @@ int main(int argc, char *argv[])
     auto tasks = getTasks(instanceJson, kernelJson, IDToBlock);
     // color the nodes of the graph
     colorNodes(tasks);
-    for( const auto& t : tasks )
-    {
-        for( const auto& c : t->getCycles() )
-        {
-            for( const auto& b : c->getBody() )
-            {
-                for( const auto& i : b->getInstructions() )
-                {
-                    if( i->isFunction() )
-                    {
-                        PrintVal(i->getInst());
-                    }
-                }
-            }
-        }
-    }
     // print for everyone to see
     PrintDFGs(tasks);
     // interpret the tasks in the DFG

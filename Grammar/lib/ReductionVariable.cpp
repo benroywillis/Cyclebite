@@ -170,10 +170,18 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
         {
             for( auto& use : Q.front()->operands() )
             {
-                // binary instructions should be the only type of instruction to lead us to a phi
-                if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(use.get()) )
+                if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(use.get()) )
                 {
-                    if( seen.find(bin) == seen.end() )
+                    if( !seen.contains(cast) )
+                    {
+                        Q.push_back(cast);
+                        seen.insert(cast);
+                    }
+                }
+                // binary instructions should be the only type of instruction to lead us to a phi
+                else if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(use.get()) )
+                {
+                    if( !seen.contains(bin) )
                     {
                         // we only mark the binary op we see that is closest to the store
                         if( !reductionOp )
@@ -183,48 +191,113 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                         Q.push_back(bin);
                         seen.insert(bin);
                     }
+                    // sometimes we have to evaluate the case where the current instruction under investigation is a phi and its operand is a binary
+                    // (this is just the reverse case of phi operand to a binary op - they both cycle with each other so both cases are equivalent)
+                    for( const auto& user : bin->users() )
+                    {
+                        if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(user) )
+                        {
+                            // make sure it cycles with this bin
+                            if( Cyclebite::Graph::DNIDMap.at(phi)->isPredecessor(Cyclebite::Graph::DNIDMap.at(bin)) )
+                            {
+                                // we have found a cycle between a phi and a binary op, likely indicating a reduction variable
+                                seen.insert(bin);
+                                seen.insert(phi);
+                                reductionOp = Cyclebite::Graph::DNIDMap.at(bin);
+                                reductionCandidates.insert(Cyclebite::Graph::DNIDMap.at(phi));
+                            }
+                        }
+                    }
+                }
+                // sometimes llvm will insert intrinsics into the code that hide reductions
+                // llvm.fmuladd is an example
+                // so look for an llvm intrinsic that can create a reduction
+                else if( const auto& intrin = llvm::dyn_cast<llvm::IntrinsicInst>(use.get()) )
+                {
+                    auto intrinName = string(llvm::Intrinsic::getBaseName(intrin->getIntrinsicID()));
+                    if( intrinName == "llvm.fmuladd" )
+                    {
+                        // this is a reductionOp candidate
+                        reductionOp = Cyclebite::Graph::DNIDMap.at(intrin);
+                    }
+                    else
+                    {
+                        spdlog::warn("Cannot yet handle this intrinsic when evaluating reduction variables:");
+                        PrintVal(intrin);
+                    }
+                    if( !seen.contains(intrin) )
+                    {
+                        Q.push_back(intrin);
+                        seen.insert(intrin);
+                    }
+                    // sometimes we have to evaluate the case where the current instruction under investigation is a phi and its operand is an llvm:intrinsic (like fmuladd)
+                    // (this is just the reverse case of phi operand to an intrinsic - they both cycle with each other so both cases are equivalent)
+                    for( const auto& user : intrin->users() )
+                    {
+                        if( auto phi = llvm::dyn_cast<llvm::PHINode>(user) )
+                        {
+                            if( Cyclebite::Graph::DNIDMap.at(phi)->isPredecessor(Cyclebite::Graph::DNIDMap.at(intrin)) )
+                            {
+                                // we have found a cycle between a phi and an intrinsic, likely indicating a reduction variable
+                                seen.insert(intrin);
+                                seen.insert(phi);
+                                reductionOp = Cyclebite::Graph::DNIDMap.at(intrin);
+                                reductionCandidates.insert(Cyclebite::Graph::DNIDMap.at(phi));
+                            }
+                        }
+                    }
                 }
                 else if( auto phi = llvm::dyn_cast<llvm::PHINode>(use.get()) )
                 {
+                    // phis can lead to more function instructions (see 2DConv/PERFECT/ Task 12 [BBs102-108])
+                    // thus we have to walk backward through the phi to its operands (that is, if we haven't found an RV candidate yet)
+                    if( !seen.contains(phi) )
+                    {
+                        Q.push_back(phi);
+                        seen.insert(phi);
+                    }
                     // case found in optimized programs when an induction variable lives in a value (not the heap) and has a DFG cycle between an add and a phi node
                     // in order for this phi to be a reduction variable candidate, it must form a cycle with a binary operator
                     // we only expect this cycle to involve two nodes, thus a check of the phis users suffices to find the complete cycle
-                    if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(Q.front()) )
+                    for( const auto& user : phi->users() )
                     {
-                        if( Cyclebite::Graph::DNIDMap.at(bin)->isPredecessor(Cyclebite::Graph::DNIDMap.at(phi)) )
+                        if( auto bin = llvm::dyn_cast<llvm::BinaryOperator>(user) )
                         {
-                            // we have found a cycle between a binary op and a phi, likely indicating an induction variable, thus add it to the set of dimensions
-                            seen.insert(bin);
-                            seen.insert(phi);
-                            reductionOp = Cyclebite::Graph::DNIDMap.at(bin);
-                            reductionCandidates.insert(Cyclebite::Graph::DNIDMap.at(phi));
-                        }
-                    }
-                    // sometimes llvm will insert intrinsics into the code that hide reductions
-                    // llvm.fmuladd is an example
-                    // so look for an llvm intrinsic that can create a reduction
-                    else if( const auto& intrin = llvm::dyn_cast<llvm::IntrinsicInst>(Q.front()) )
-                    {
-                        auto intrinName = string(llvm::Intrinsic::getBaseName(intrin->getIntrinsicID()));
-                        if( intrinName == "llvm.fmuladd" )
-                        {
-                            // confirm the phi is the third argument in the function call - this is a 
-                            if( intrin->getNumOperands() == 4 ) // three arg operands + the function
+                            if( Cyclebite::Graph::DNIDMap.at(bin)->isPredecessor(Cyclebite::Graph::DNIDMap.at(phi)) )
                             {
-                                if( phi == intrin->getOperand(2) )
-                                {
-                                    // confirmed, this phi is a reduction candidate
-                                    seen.insert(intrin);
-                                    seen.insert(phi);
-                                    reductionOp = Cyclebite::Graph::DNIDMap.at(intrin);
-                                    reductionCandidates.insert(Cyclebite::Graph::DNIDMap.at(phi));
-                                }
+                                // we have found a cycle between a binary op and a phi, likely indicating reduction variable
+                                seen.insert(bin);
+                                seen.insert(phi);
+                                reductionOp = Cyclebite::Graph::DNIDMap.at(bin);
+                                reductionCandidates.insert(Cyclebite::Graph::DNIDMap.at(phi));
                             }
                         }
-                        else
+                        // sometimes llvm will insert intrinsics into the code that hide reductions
+                        // llvm.fmuladd is an example
+                        // so look for an llvm intrinsic that can create a reduction
+                        else if( const auto& intrin = llvm::dyn_cast<llvm::IntrinsicInst>(user) )
                         {
-                            spdlog::warn("Cannot yet handle this intrinsic when evaluating reduction variables:");
-                            PrintVal(intrin);
+                            auto intrinName = string(llvm::Intrinsic::getBaseName(intrin->getIntrinsicID()));
+                            if( intrinName == "llvm.fmuladd" )
+                            {
+                                // confirm the phi is the third argument in the function call - this is a 
+                                if( intrin->getNumOperands() == 4 ) // three arg operands + the function
+                                {
+                                    if( phi == intrin->getOperand(2) )
+                                    {
+                                        // confirmed, this phi is a reduction candidate
+                                        seen.insert(intrin);
+                                        seen.insert(phi);
+                                        reductionOp = Cyclebite::Graph::DNIDMap.at(intrin);
+                                        reductionCandidates.insert(Cyclebite::Graph::DNIDMap.at(phi));
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                spdlog::warn("Cannot yet handle this intrinsic when evaluating reduction variables:");
+                                PrintVal(intrin);
+                            }
                         }
                     }
                 }
@@ -275,25 +348,6 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     }
                     seen.insert(ld);
                 }
-                // sometimes llvm will insert intrinsics into the code that hide reductions
-                // llvm.fmuladd is an example
-                // so look for an llvm intrinsic that can create a reduction
-                else if( const auto& intrin = llvm::dyn_cast<llvm::IntrinsicInst>(use.get()) )
-                {
-                    auto intrinName = string(llvm::Intrinsic::getBaseName(intrin->getIntrinsicID()));
-                    if( intrinName == "llvm.fmuladd" )
-                    {
-                        // this is a reductionOp candidate
-                        reductionOp = Cyclebite::Graph::DNIDMap.at(intrin);
-                    }
-                    else
-                    {
-                        spdlog::warn("Cannot yet handle this intrinsic when evaluating reduction variables:");
-                        PrintVal(intrin);
-                    }
-                    Q.push_back(intrin);
-                    seen.insert(intrin);
-                }
                 else if( auto st = llvm::dyn_cast<llvm::StoreInst>(use.get()) )
                 {
                     // shouldn't encounter this case, we started from the store and walked backwards
@@ -316,7 +370,10 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     break;
                 }
             }
-            if( skip ) { continue; }
+            if( skip ) 
+            {
+                continue;
+            }
             shared_ptr<InductionVariable> iv = nullptr;
             // the store value operand is within the cycle that contains the RV
             if( const auto& v = llvm::dyn_cast<llvm::Instruction>(s->getValueOperand()) )
