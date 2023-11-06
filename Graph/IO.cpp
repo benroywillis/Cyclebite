@@ -1572,7 +1572,7 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode,
                                     const llvm::CallBase* call, 
                                     const Cyclebite::Graph::CallGraph& dynamicCG, 
                                     const map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, 
-                                    const set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, 
+                                    set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, 
                                     const std::map<int64_t, llvm::BasicBlock*>& IDToBlock )
 {
     // upgrade to a CallNode
@@ -1589,7 +1589,6 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode,
             // if the function call is statically resolvable and the callee is non-empty, we don't need to map anything
             // just get the destination block of the call instruction and map it to a Cyclebite::Graph::ControlBlock (by finding an existing one or making one)
             auto firstBlock = cast<llvm::BasicBlock>(call->getCalledFunction()->begin());
-            shared_ptr<ControlBlock> dest = nullptr;
             auto blockID = Cyclebite::Util::GetBlockID(firstBlock);
             bool skip = false;
             if( blockID == Cyclebite::Util::IDState::Uninitialized )
@@ -1611,10 +1610,10 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode,
             }
             if( !skip )
             {
-                auto destIt = programFlow.find( blockID );
-                if( destIt != programFlow.end() )
+                shared_ptr<ControlBlock> dest = nullptr;
+                if( BBCBMap.contains(firstBlock) )
                 {
-                    dest = *destIt;
+                    dest = BBCBMap.at(firstBlock);
                 }
                 else
                 {
@@ -1622,6 +1621,8 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode,
                     // later we will "upgrade" this block when its instructions are ready
                     set<shared_ptr<Inst>, p_GNCompare> insts;
                     dest = make_shared<ControlBlock>(blockToNode.at( blockID ), insts);
+                    programFlow.insert(dest);
+                    BBCBMap.insert(pair<const llvm::BasicBlock*, const shared_ptr<ControlBlock>>(firstBlock, dest));
                 }
                 dests.insert( dest );
             }
@@ -1674,10 +1675,9 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode,
                 {
                     auto firstBlock = llvm::cast<llvm::BasicBlock>(parent->begin());
                     shared_ptr<ControlBlock> dest = nullptr;
-                    auto destIt = programFlow.find( Cyclebite::Util::GetBlockID(firstBlock) );
-                    if( destIt != programFlow.end() )
+                    if( BBCBMap.contains(firstBlock) )
                     {
-                        dest = *destIt;
+                        dest = BBCBMap.at(firstBlock);
                     }
                     else
                     {
@@ -1685,6 +1685,8 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode,
                         // later we will "upgrade" this block when its instructions are ready
                         set<shared_ptr<Inst>, p_GNCompare> insts;
                         dest = make_shared<ControlBlock>(blockToNode.at(Cyclebite::Util::GetBlockID(firstBlock)), insts);
+                        programFlow.insert(dest);
+                        BBCBMap.insert(pair<const llvm::BasicBlock*, const shared_ptr<ControlBlock>>(firstBlock, dest));
                     }
                     dests.insert( dest );
                 }
@@ -3156,23 +3158,40 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
             // build edges from the terminator of this basic block to the successors in the control flow graph
             if (node->isTerminator())
             {
-                for (const auto &succ : node->parent->getSuccessors())
+                // make sure the branch doesn't contain a call edge, then build its edge
+                bool noCallEdge = true;
+                for( const auto& n : node->parent->getInstructions() )
                 {
-                    if (BBs.find(succ->getSnk()->NID) != BBs.end())
+                    if( auto call = dynamic_pointer_cast<CallNode>(n) )
                     {
-                        dotString += "\t" + to_string(node->NID) + " -> " + to_string((*((*BBs.find(succ->getSnk()->NID))->getInstructions().begin()))->NID) + " [style=dashed,lhead=cluster_" + to_string(BBToSubgraph[(*BBs.find(succ->getSnk()->NID))->NID]) + ",label=" + to_string_float(succ->getWeight()) + "];\n";
+                        if( !call->getDestinations().empty() )
+                        {
+                            noCallEdge = false;
+                            break;
+                        }
                     }
-                    // else this is a block outside the kernel... a kernel exit
+                }
+                if( noCallEdge )
+                {
+                    for (const auto &succ : node->parent->getSuccessors())
+                    {
+                        if (BBs.find(succ->getSnk()->NID) != BBs.end())
+                        {
+                            // 
+                            dotString += "\t" + to_string(node->NID) + " -> " + to_string((*((*BBs.find(succ->getSnk()->NID))->getNonDbgInsts().begin()))->NID) + " [style=dashed,lhead=cluster_" + to_string(BBToSubgraph[(*BBs.find(succ->getSnk()->NID))->NID]) + ",label=" + to_string_float(succ->getWeight()) + "];\n";
+                        }
+                        // else this is a block outside the kernel... a kernel exit
+                    }
                 }
             }
             // draw lines from call instructions to their function bodies (if possible) then from their return instructions back to the caller
-            else if( auto call = dynamic_pointer_cast<CallNode>(node) )
+            if( auto call = dynamic_pointer_cast<CallNode>(node) )
             {
-                for( const auto& dest : call->getDestinations() )
+                for( const auto& dest : call->getDestinationFirstInsts() )
                 {
-                    if( BBs.find(dest->NID) != BBs.end() )
+                    if( BBs.find(dest->parent->NID) != BBs.end() )
                     {
-                        dotString += "\t" + to_string(call->NID) + " -> " + to_string((*((*BBs.find(dest->NID))->getInstructions().begin()))->NID) + " [style=dotted,lhead=cluster_" + to_string(BBToSubgraph[(*BBs.find(dest->NID))->NID]) + "];\n";
+                        dotString += "\t" + to_string(call->NID) + " -> " + to_string(dest->NID) + " [style=dashed,lhead=cluster_" + to_string(BBToSubgraph[dest->parent->NID]) + ",label=\"CallEdge\"];\n";
                     }
                 }
             }
