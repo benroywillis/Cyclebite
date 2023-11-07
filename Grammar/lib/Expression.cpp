@@ -285,7 +285,8 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
         else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(op) )
         {
             // phis imply a loop-loop dependence or predication
-            // if we have made it this far, this phi doesn't map to an RV.. it likely represents task predication
+            // if we have made it this far, this phi doesn't map to an RV.. 
+            // but its operands might... multi-dimensional reductions store their result inside yet other phis...
             // in order to know that we need a predication expression, more than one of the incoming values must be live
             set<const llvm::Value*> liveIncomingValues;
             for( unsigned i = 0; i < phi->getNumIncomingValues(); i++ )
@@ -469,7 +470,6 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
 {
     shared_ptr<Expression> expr;
 
-    vector<Cyclebite::Graph::Operation> ops;
     map<shared_ptr<Graph::DataValue>, shared_ptr<Symbol>> nodeToExpr;
     // there are a few DataValues that need to be mapped to their symbols before we start generating this expression
     // first, the loads and stores of collections (these will be used to find the input and output values of the expression)
@@ -488,13 +488,14 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
     // but not the rv's node - the node is a binary operator that carries out the reduction (it is accounted for in the reduction expression)
     if( rv )
     {
-        if( rv->getAddress() )
+        for( const auto& addr : rv->getAddresses() )
         {
-            nodeToExpr[rv->getAddress()] = rv;
+            nodeToExpr[ addr ] = rv;
         }
-        nodeToExpr[rv->getNode()] = rv;
+        //nodeToExpr[rv->getNode()] = rv;
     }
     // now we iterate (from start to finish) over the instructions in the expression, each time building a Symbol for each one, until all instructions in the expression have a symbol built for them
+    vector<Cyclebite::Graph::Operation> ops;
     for( const auto& node : insts )
     {
         if( nodeToExpr.contains(node) )
@@ -697,10 +698,6 @@ shared_ptr<Expression> Cyclebite::Grammar::getExpression(const shared_ptr<Task>&
     deque<shared_ptr<Cyclebite::Graph::Inst>> Q;
     set<shared_ptr<Cyclebite::Graph::DataValue>, Cyclebite::Graph::p_GNCompare> covered;
     set<shared_ptr<Cyclebite::Graph::Inst>, Cyclebite::Graph::p_GNCompare> functionGroup;
-    // 2. find the loads that feed each group
-    set<const llvm::LoadInst*> lds;
-    // 3. find the stores that store each group
-    set<const llvm::StoreInst*> sts;
     for( const auto& c : t->getCycles() )
     {
         for( const auto& block : c->getBody() )
@@ -730,7 +727,6 @@ shared_ptr<Expression> Cyclebite::Grammar::getExpression(const shared_ptr<Task>&
                                 // we expect eating stores to happen only after functional groups
                                 if( const auto st = llvm::dyn_cast<llvm::StoreInst>(user) )
                                 {
-                                    sts.insert(st);
                                     covered.insert(Cyclebite::Graph::DNIDMap.at(st));
                                 }
                                 else if( const auto userInst = llvm::dyn_cast<llvm::Instruction>(user) )
@@ -759,7 +755,6 @@ shared_ptr<Expression> Cyclebite::Grammar::getExpression(const shared_ptr<Task>&
                                 // we expect feeding loads to happen only prior to functional groups
                                 if( const auto ld = llvm::dyn_cast<llvm::LoadInst>(use) )
                                 {
-                                    lds.insert(ld);
                                     covered.insert(Cyclebite::Graph::DNIDMap.at(ld));
                                 }
                                 else if( const auto useInst = llvm::dyn_cast<llvm::Instruction>(use) )
@@ -783,93 +778,58 @@ shared_ptr<Expression> Cyclebite::Grammar::getExpression(const shared_ptr<Task>&
             }
         }
     }
-    // 3. construct expressions
-    // - walk the function group from start to finish
-    //   -- for each datanode, construct an expression
-    //      --- if the datanode is a reduction variable, construct a reduction
-    // maps each node to expressions, which makes it convenient to construct expressions that use other expressions
-
-    // in order for expression generation to go well, ops need to be done in the right order (producer to consumer)
-    // thus, the following logic attempts to order the instructions such that the instructions at the beginning of the group are done first
-    // this way, the expressions that use earlier expressions have an expression to refer to
-    // each binary operation in the function group is recorded in order, this will give us the operators in the expression
-    // in order to find the ordering of the group, we find the instruction that doesn't use any other instruction in the group
-    // then we walk the DFG to find all subsequent instructions
+    if( functionGroup.empty() )
+    {
+        throw CyclebiteException("Function group is empty!");
+    }
+    // 2. order the instructions from first (the instruction that doesn't have any function group inputs) to last (the instruction that feeds the store)
+    // 2a. find the first instruction
     shared_ptr<Cyclebite::Graph::Inst> first = nullptr;
-    // there are two checks here
-    // 1. the group forms a phi -> op(s) -> phi... cycle
-    //    - in this case the phi is the first instruction, since it has the initial value of whatever variable we are dealing with
-    // 2. the group does not form a cycle
-    //    - then we loop for members of the group whose operands are all outside the group
-    set<shared_ptr<Cyclebite::Graph::UnconditionalEdge>, Cyclebite::Graph::GECompare> edges;
-    for( const auto& n : functionGroup )
+    // look for an instruction that has only inputs from the memory group
+    // if there isn't an instruction with only memory inputs (like a reduction expression), we pick the one with the most memory inputs
+    map<shared_ptr<Graph::Inst>, uint32_t> memoryInputs;
+    for( const auto& inst : functionGroup )
     {
-        for( const auto& p : n->getPredecessors() )
+        bool allMemory = true;
+        for( const auto& pred : inst->getPredecessors() )
         {
-            edges.insert(static_pointer_cast<Cyclebite::Graph::UnconditionalEdge>(p));
-        }
-        for( const auto& s : n->getSuccessors() )
-        {
-            edges.insert(static_pointer_cast<Cyclebite::Graph::UnconditionalEdge>(s));
-        }
-    }
-    Cyclebite::Graph::DataGraph dg(functionGroup, edges);
-    if( Cyclebite::Graph::FindCycles(dg) ) // forms a cycle
-    {
-        // get the phi and set a user of it (that is within the function group) as the first instruction
-        // the phi itself does not belong in the function group (because phis create false dependencies and are not important to the expression)
-        set<const llvm::PHINode*> phis;
-        for( const auto& n : functionGroup )
-        {
-            if( const auto phi = llvm::dyn_cast<llvm::PHINode>(n->getVal()) )
+            if( const auto& predInst = dynamic_pointer_cast<Graph::Inst>(pred->getSrc()) )
             {
-                phis.insert(phi);
-            }
-        }
-        if( phis.size() == 1 )
-        {
-            first = static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(*phis.begin()));
-        }
-        else
-        {
-#ifdef DEBUG
-            for( const auto& n : functionGroup ) 
-            {
-                PrintVal(n->getVal());
-            }
-#endif
-            throw CyclebiteException("Cannot handle the case where a cycle in the DFG contains multiple phis!");
-        }
-    }
-    else
-    {
-        for( const auto& n : functionGroup )
-        {
-            bool allOutside = true;
-            for( const auto& op : n->getInst()->operands() )
-            {
-                if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(op) )
+                if( !predInst->isMemory() )
                 {
-                    if( functionGroup.find(Cyclebite::Graph::DNIDMap.at(inst)) != functionGroup.end() )
-                    {
-                        allOutside = false;
-                        break;
-                    }
+                    allMemory = false;
+                }
+                else
+                {
+                    memoryInputs[inst]++;
                 }
             }
-            if( allOutside )
-            {
-                first = n;
-                break;
-            }
+        }
+        if( allMemory )
+        {
+            first = inst;
         }
     }
     if( !first )
     {
-        throw CyclebiteException("Could not find first instruction in the instruction group!");
+        // pick the inst with the most memory inputs
+        // if there is a tie, we throw exception
+        map<uint32_t, set<shared_ptr<Graph::Inst>>> sortedWinners;
+        for( const auto& inst : memoryInputs )
+        {
+            sortedWinners[inst.second].insert(inst.first);
+        }
+        if( sortedWinners.begin()->second.size() > 1 )
+        {
+            throw CyclebiteException("Could not find first instruction in the instruction group!");
+        }
+        else
+        {
+            first = *sortedWinners.begin()->second.begin();
+        }
     }
 
-    // now we need to find the order of operations
+    // 2b. order the function group starting from the first instruction
     vector<shared_ptr<Cyclebite::Graph::Inst>> order;
     order.push_back(first);
     deque<const llvm::Instruction*> instQ;
@@ -928,45 +888,5 @@ shared_ptr<Expression> Cyclebite::Grammar::getExpression(const shared_ptr<Task>&
         }
         instQ.pop_front();
     }
-
-    vector<shared_ptr<Cyclebite::Graph::Inst>> insts;
-    // make a quick mapping from datanode to reduction variable
-    // a reduction should be a cycle starting at a phi, followed by ops (binary or cast), that ultimately feed a reduction variable
-    // we must separate the phi from the binary ops from the RV, then construct the expression for the reduction (which is just the binary ops), then add the reduction to it (which sets the operator next to the equal sign e.g. "+=")
-    shared_ptr<ReductionVariable> rv = nullptr;
-    if( !rvs.empty() )
-    {
-        map<shared_ptr<Cyclebite::Graph::DataValue>, shared_ptr<ReductionVariable>> dnToRv;
-        for( const auto& node : order )
-        {
-            for( const auto& rv : rvs )
-            {
-                // TODO: having to use the llvm objects here implies there is more than one node for a single llvm::value
-                // this will likely lead to more bugs and should be investigated
-                if( rv->getNode()->getVal() == node->getInst() )
-                {
-                    dnToRv[node] = rv;
-                    break;
-                }
-            }
-        }
-        for( const auto& node : order )
-        {
-            if( dnToRv.find(node) != dnToRv.end() )
-            {
-                rv = dnToRv.at(node);
-            }
-            /*else
-            {
-                insts.push_back(node);
-            }*/
-            insts.push_back(node);
-
-        }
-    }
-    else
-    {
-        insts = order;
-    }
-    return constructExpression(t, insts, rv, colls);
+    return constructExpression(t, order, *rvs.begin(), colls);
 }

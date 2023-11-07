@@ -74,12 +74,15 @@ set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
     {
         if( rv )
         {
-            if( c->find( rv->getAddress() ) )
+            for( const auto& addr : rv->getAddresses() )
             {
-                noParallel.insert(c);
-                for( const auto& c : c->getChildren() )
+                if( c->find( addr ) )
                 {
                     noParallel.insert(c);
+                    for( const auto& c : c->getChildren() )
+                    {
+                        noParallel.insert(c);
+                    }
                 }
             }
         }
