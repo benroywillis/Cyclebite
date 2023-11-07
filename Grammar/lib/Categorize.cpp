@@ -67,6 +67,11 @@ set<shared_ptr<Cyclebite::Graph::DataValue>> findFunction(const set<shared_ptr<T
                             }
                             else if( auto phi = llvm::dyn_cast<llvm::PHINode>(Q.front()) )
                             {
+                                auto r = colors.insert(make_shared<NodeColor>(phi, OpColor::Red));
+                                if (!r.second)
+                                {
+                                    (*r.first)->colors.insert(OpColor::Red);
+                                }
                                 // in the case where results of a function group are stored in a register, this captures them
                                 lds.insert(phi);
                                 // there's also a case when the phi leads to other phis that lead us to more function group instructions
