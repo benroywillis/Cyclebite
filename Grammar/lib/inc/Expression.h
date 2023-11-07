@@ -62,7 +62,11 @@ namespace Cyclebite::Grammar
     /// @param rv A reduction variable, if necessary. If this argument is non-null, the returned expression is a Reduction. Otherwise it is an Expression.
     /// @param colls The collections in the task
     /// @return An expression that describes the entire function group. Member symbols may contain symbols within them.
-    const std::shared_ptr<Expression> constructExpression( const std::shared_ptr<Task>& t, const std::vector<std::shared_ptr<Graph::Inst>>& insts, const std::shared_ptr<ReductionVariable>& rv, const std::set<std::shared_ptr<Collection>>& colls );
+    const std::shared_ptr<Expression> constructExpression( const std::shared_ptr<Task>& t, 
+                                                           const std::vector<std::shared_ptr<Graph::Inst>>& insts, 
+                                                           const std::shared_ptr<ReductionVariable>& rv, 
+                                                           const std::set<std::shared_ptr<Collection>>& colls,
+                                                           const std::set<std::shared_ptr<InductionVariable>>& vars );
     /// @brief Creates expressions from collections and function nodes
     ///
     /// Expressions use the collections of functions and the found collections of data to generate the rhs of a function
@@ -75,5 +79,8 @@ namespace Cyclebite::Grammar
     /// @param DG 
     /// @param colls 
     /// @return 
-    std::shared_ptr<Expression> getExpression(const std::shared_ptr<Task>& t, const std::set<std::shared_ptr<Collection>>& colls, const std::set<std::shared_ptr<ReductionVariable>>& rvs);
+    std::shared_ptr<Expression> getExpression( const std::shared_ptr<Task>& t, 
+                                               const std::set<std::shared_ptr<Collection>>& colls, 
+                                               const std::set<std::shared_ptr<ReductionVariable>>& rvs,
+                                               const std::set<std::shared_ptr<InductionVariable>>& vars );
 } // namespace Cyclebite::Grammar

@@ -169,7 +169,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>>& tasks)
             }
 #endif
             // each task should have exactly one expression
-            auto expr = getExpression(t, cs, rvs);
+            auto expr = getExpression(t, cs, rvs, vars);
 #ifdef DEBUG
             spdlog::info("Expression:");
             spdlog::info(expr->dump());

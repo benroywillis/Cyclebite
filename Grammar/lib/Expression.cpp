@@ -152,7 +152,8 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                                             const shared_ptr<Task>& t,  
                                             const llvm::Value* op, 
                                             map<shared_ptr<Cyclebite::Graph::DataValue>, shared_ptr<Symbol>>& nodeToExpr, 
-                                            const set<shared_ptr<Collection>>& colls )
+                                            const set<shared_ptr<Collection>>& colls,
+                                            const set<shared_ptr<InductionVariable>>& vars )
 {
     vector<shared_ptr<Symbol>> newSymbols;
     if( const auto inst = llvm::dyn_cast<llvm::Instruction>(op) )
@@ -262,7 +263,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 vector<shared_ptr<Symbol>> args;
                 for( const auto& binOp : bin->operands() )
                 {
-                    for( const auto& news : buildExpression(nodeInst, t, binOp, nodeToExpr, colls) )
+                    for( const auto& news : buildExpression(nodeInst, t, binOp, nodeToExpr, colls, vars) )
                     {
                         args.push_back( news );
                     }
@@ -315,7 +316,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             {
                 // we just need to build out values for the lone live value
                 vector<shared_ptr<Symbol>> args;
-                for( const auto& news : buildExpression(node, t, *liveIncomingValues.begin(), nodeToExpr, colls) )
+                for( const auto& news : buildExpression(node, t, *liveIncomingValues.begin(), nodeToExpr, colls, vars) )
                 {
                     args.push_back( news );
                 }
@@ -334,7 +335,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 for( const auto& castOp : cast->operands() )
                 {
                     // call expression builder
-                    for( const auto& news : buildExpression(nodeInst, t, castOp, nodeToExpr, colls) )
+                    for( const auto& news : buildExpression(nodeInst, t, castOp, nodeToExpr, colls, vars) )
                     {
                         args.push_back( news );
                     }
@@ -346,6 +347,16 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             else
             {
                 throw CyclebiteException("Cast instruction is not a Graph::Inst!");
+            }
+        }
+        else if( const auto& extr = llvm::dyn_cast<llvm::ExtractValueInst>(op) )
+        {
+            // this shims a vector to, say, a function argument that must be a scalar
+            // thus we just skip this instruction and go to the source of its vector
+            for( const auto& news : buildExpression(node, t, extr->getAggregateOperand(), nodeToExpr, colls, vars) )
+            {
+                nodeToExpr[ opNode ] = news;
+                newSymbols.push_back(news);
             }
         }
     }
@@ -429,7 +440,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     continue;
                 }
                 // call expression builder
-                for( const auto& news : buildExpression(node, t, argOp.get(), nodeToExpr, colls) )
+                for( const auto& news : buildExpression(node, t, argOp.get(), nodeToExpr, colls, vars) )
                 {
                     args.push_back( news );
                 }
@@ -466,13 +477,22 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
     return newSymbols;
 }
 
-const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shared_ptr<Task>& t, const vector<shared_ptr<Graph::Inst>>& insts, const shared_ptr<ReductionVariable>& rv, const set<shared_ptr<Collection>>& colls )
+const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shared_ptr<Task>& t, 
+                                                                      const vector<shared_ptr<Graph::Inst>>& insts, 
+                                                                      const shared_ptr<ReductionVariable>& rv, 
+                                                                      const set<shared_ptr<Collection>>& colls, 
+                                                                      const set<shared_ptr<InductionVariable>>& vars )
 {
     shared_ptr<Expression> expr;
 
     map<shared_ptr<Graph::DataValue>, shared_ptr<Symbol>> nodeToExpr;
     // there are a few DataValues that need to be mapped to their symbols before we start generating this expression
-    // first, the loads and stores of collections (these will be used to find the input and output values of the expression)
+    // first, induction variables in case their integers are used in the expression for some weird reason
+    for( const auto& var : vars )
+    {
+        nodeToExpr[ var->getNode() ] = var;
+    }
+    // second, the loads and stores of collections (these will be used to find the input and output values of the expression)
     for( const auto& coll : colls )
     {
         if( coll->getLoad() )
@@ -541,7 +561,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
                 for( const auto& argOp : llvm::cast<llvm::CallBase>(node->getInst())->args() )
                 {
                     // call expression builder
-                    for( const auto& news : buildExpression(node, t, argOp.get(), nodeToExpr, colls) )
+                    for( const auto& news : buildExpression(node, t, argOp.get(), nodeToExpr, colls, vars) )
                     {
                         if( Graph::DNIDMap.contains(argOp.get()) )
                         {
@@ -596,7 +616,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
                 for( const auto& op : node->getInst()->operands() )
                 {
                     // call expression builder
-                    for( const auto& news : buildExpression(node, t, op, nodeToExpr, colls) )
+                    for( const auto& news : buildExpression(node, t, op, nodeToExpr, colls, vars) )
                     {
                         if( Graph::DNIDMap.contains(op) )
                         {
@@ -613,7 +633,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
             ops.push_back( Cyclebite::Graph::GetOp(node->getInst()->getOpcode()) );
             for( const auto& op : node->getInst()->operands() )
             {
-                for( const auto& news : buildExpression(node, t, op, nodeToExpr, colls) )
+                for( const auto& news : buildExpression(node, t, op, nodeToExpr, colls, vars) )
                 {
                     if( Graph::DNIDMap.contains(op) )
                     {
@@ -691,7 +711,10 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
     return expr;
 }
 
-shared_ptr<Expression> Cyclebite::Grammar::getExpression(const shared_ptr<Task>& t, const set<shared_ptr<Collection>>& colls, const set<shared_ptr<ReductionVariable>>& rvs)
+shared_ptr<Expression> Cyclebite::Grammar::getExpression( const shared_ptr<Task>& t, 
+                                                          const set<shared_ptr<Collection>>& colls, 
+                                                          const set<shared_ptr<ReductionVariable>>& rvs, 
+                                                          const set<shared_ptr<InductionVariable>>& vars )
 {
     // the following DFG walk does both 1 and 2
     // 1. Group all function nodes together
@@ -888,5 +911,5 @@ shared_ptr<Expression> Cyclebite::Grammar::getExpression(const shared_ptr<Task>&
         }
         instQ.pop_front();
     }
-    return constructExpression(t, order, *rvs.begin(), colls);
+    return constructExpression(t, order, *rvs.begin(), colls, vars);
 }
