@@ -13,7 +13,9 @@
 using namespace std;
 using namespace Cyclebite::Grammar;
 
-ReductionVariable::ReductionVariable( const shared_ptr<InductionVariable>& iv, const shared_ptr<Cyclebite::Graph::DataValue>& n, const shared_ptr<Cyclebite::Graph::DataValue>& addr ) : Symbol("rv"), iv(iv), node(n), address(addr)
+ReductionVariable::ReductionVariable( const set<shared_ptr<Dimension>, DimensionSort>& dims, 
+                                      const vector<shared_ptr<Graph::DataValue>>& addrs, 
+                                      const shared_ptr<Cyclebite::Graph::DataValue>& n ) : Symbol("rv"), dimensions(dims), addresses(addrs), node(n)
 {
     // incoming datanode must map to a binary operation
     if( const auto& op = llvm::dyn_cast<llvm::BinaryOperator>(n->getVal()) )
@@ -46,9 +48,14 @@ const shared_ptr<Cyclebite::Graph::DataValue>& ReductionVariable::getNode() cons
     return node;
 }
 
-const shared_ptr<Cyclebite::Graph::DataValue>& ReductionVariable::getAddress() const
+const set<shared_ptr<Dimension>, DimensionSort>& ReductionVariable::getDimensions() const
 {
-    return address;
+    return dimensions;
+}
+
+const vector<shared_ptr<Cyclebite::Graph::DataValue>>& ReductionVariable::getAddresses() const
+{
+    return addresses;
 }
 
 /*const llvm::PHINode* ReductionVariable::getPhi() const
@@ -397,7 +404,62 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                 PrintVal(can->getVal());
                 throw CyclebiteException("Cannot map this reduction variable to an induction variable!");
             }
-            rvs.insert( make_shared<ReductionVariable>(iv, reductionOp, can) );
+
+            // now that we have the candidate, we need to figure out how many dimensions it has
+            // we do this by walking the DFG starting from the RV store until we find the reduction itself, each time jotting down the phi's we see
+            // this yields all the phis that touch the reduction variable (in the set phis)
+            set<const llvm::PHINode*> phis;
+            {
+                deque<const llvm::Value*> Q;
+                set<const llvm::Value*> covered;
+                Q.push_front(s->getValueOperand());
+                covered.insert(s->getValueOperand());
+                while( !Q.empty() )
+                {
+                    if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(Q.front()) )
+                    {
+                        phis.insert(phi);
+                    }
+                    else if( llvm::isa<llvm::LoadInst>(Q.front()) )
+                    {
+                        // skip loads, we don't care about them (if this is loading the reduction variable, we already got the pointer from the store)
+                        Q.pop_front();
+                        continue;
+                    }
+                    if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
+                    {
+                        for( const auto& op : inst->operands() )
+                        {
+                            if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+                            {
+                                if( !covered.contains(opInst) )
+                                {
+                                    Q.push_back(opInst);
+                                    covered.insert(opInst);
+                                }
+                            }
+                        }
+                    }
+                    Q.pop_front();
+                }
+            }
+            // the ivs the dimensions of the reduction
+            // to find them we look through all phis that touch the RV and see what the dimension is that facilitates that phi's cycle
+            set<shared_ptr<Dimension>, DimensionSort> ivs;
+            // the addresses are the phis that handle the reduction
+            vector<shared_ptr<Graph::DataValue>> addresses;
+            for( const auto& phi : phis )
+            {
+                addresses.push_back( Graph::DNIDMap.at(phi) );
+                for( const auto& iv : vars )
+                {
+                    if( iv->getCycle()->find( Graph::DNIDMap.at(phi)) )
+                    {
+                        ivs.insert(iv);
+                    }
+                }
+            }
+            rvs.insert( make_shared<ReductionVariable>(ivs, addresses, reductionOp) );
         }
     }
     return rvs;

@@ -27,9 +27,12 @@ const shared_ptr<Cycle>& Reduction::getReductionCycle() const
     set<shared_ptr<Cycle>> reduxCycles;
     for( const auto& c : t->getCycles() )
     {
-        if( c->find(rv->getAddress()) )
+        for( const auto& addr : rv->getAddresses() )
         {
-            return c;
+            if( c->find(addr) )
+            {
+                return c;
+            }
         }
     }
     throw CyclebiteException("Could not find reduction variable cycle!");
