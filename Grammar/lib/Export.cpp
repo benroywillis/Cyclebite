@@ -133,8 +133,15 @@ void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, shared_ptr<Expressi
             tStream.close();
         }
 #endif
-        auto parallelSpots = ParallelizeCycles( t.second );
-        auto vectorSpots   = VectorizeExpression( t.second );
-        OMPAnnotateSource(parallelSpots, vectorSpots);
+        try
+        {
+            auto parallelSpots = ParallelizeCycles( t.second );
+            auto vectorSpots   = VectorizeExpression( t.second );
+            OMPAnnotateSource(parallelSpots, vectorSpots);
+        }
+        catch( CyclebiteException& e )
+        {
+            spdlog::critical(e.what());
+        }
     }
 }
