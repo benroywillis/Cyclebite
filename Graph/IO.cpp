@@ -1568,11 +1568,12 @@ void Cyclebite::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebi
     // who is empty in the static callgraph? Do they have edges to non-empty functions? Have we accounted for them all in the dynamic graph?
 }
 
-shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode, 
+shared_ptr<Inst> ConstructCallNode( DataGraph& graph, 
+                                    set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, 
+                                    const shared_ptr<Inst>& newNode, 
                                     const llvm::CallBase* call, 
                                     const Cyclebite::Graph::CallGraph& dynamicCG, 
                                     const map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, 
-                                    set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, 
                                     const std::map<int64_t, llvm::BasicBlock*>& IDToBlock )
 {
     // upgrade to a CallNode
@@ -1706,7 +1707,30 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode,
         }
     }
     // do the upgrading
-    return make_shared<Cyclebite::Graph::CallNode>(newNode.get(), dests);
+    auto callNode = make_shared<Cyclebite::Graph::CallNode>(newNode.get(), dests);
+    auto oldPreds = callNode->getPredecessors();
+    auto oldSuccs = callNode->getSuccessors();
+    for( auto pred : oldPreds )
+    {
+        auto newPred = make_shared<UnconditionalEdge>(pred->getSrc(), callNode);
+        pred->getSrc()->removeSuccessor(pred);
+        callNode->removePredecessor(pred);
+        pred->getSrc()->addSuccessor(newPred);
+        callNode->addPredecessor(newPred);
+        graph.removeEdge(pred);
+        graph.addEdge(newPred);
+    }
+    for( auto succ : oldSuccs )
+    {
+        auto newSucc = make_shared<UnconditionalEdge>(callNode, succ->getSnk());
+        succ->getSnk()->removePredecessor(succ);
+        callNode->removeSuccessor(succ);
+        succ->getSnk()->addPredecessor(succ);
+        callNode->addSuccessor(newSucc);
+        graph.removeEdge(succ);
+        graph.addEdge(newSucc);
+    }
+    return callNode;
 }
 
 void Cyclebite::Graph::BuildDFG( set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, 
@@ -1739,7 +1763,7 @@ void Cyclebite::Graph::BuildDFG( set<std::shared_ptr<ControlBlock>, p_GNCompare>
                     newNode = make_shared<Inst>(inst);
                     if( auto call = dyn_cast<CallBase>(inst) )
                     {
-                        newNode = ConstructCallNode(newNode, call, dynamicCG, blockToNode, programFlow, IDToBlock);
+                        newNode = ConstructCallNode(graph, programFlow, newNode, call, dynamicCG, blockToNode, IDToBlock);
                     }
                     graph.addNode(newNode);
                 }
@@ -1750,7 +1774,7 @@ void Cyclebite::Graph::BuildDFG( set<std::shared_ptr<ControlBlock>, p_GNCompare>
                     if( auto call = llvm::dyn_cast<llvm::CallBase>(inst) )
                     {
                         graph.removeNode(newNode);
-                        newNode = ConstructCallNode(newNode, call, dynamicCG, blockToNode, programFlow, IDToBlock);
+                        newNode = ConstructCallNode(graph, programFlow, newNode, call, dynamicCG, blockToNode, IDToBlock);
                         graph.addNode(newNode);
                     }
                 }
@@ -3153,6 +3177,10 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
             }
             for (const auto &n : node->getSuccessors())
             {
+                if( const auto& call = dynamic_pointer_cast<CallNode>(node) )
+                {
+                    bool doNothing = true;
+                }
                 dotString += "\t" + to_string(n->getSrc()->NID) + " -> " + to_string(n->getSnk()->NID) + ";\n";
             }
             // build edges from the terminator of this basic block to the successors in the control flow graph
@@ -3177,10 +3205,13 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
                     {
                         if (BBs.find(succ->getSnk()->NID) != BBs.end())
                         {
-                            // 
                             dotString += "\t" + to_string(node->NID) + " -> " + to_string((*((*BBs.find(succ->getSnk()->NID))->getNonDbgInsts().begin()))->NID) + " [style=dashed,lhead=cluster_" + to_string(BBToSubgraph[(*BBs.find(succ->getSnk()->NID))->NID]) + ",label=" + to_string_float(succ->getWeight()) + "];\n";
                         }
-                        // else this is a block outside the kernel... a kernel exit
+                        else
+                        {
+                            // else this is a block outside the kernel... a kernel exit
+                            dotString += "\t" + to_string(node->NID) + " -> " + to_string(succ->getSnk()->NID) + " [style=dashed,label=\"Task Exit," + to_string_float(succ->getWeight()) + "\"];\n";
+                        }
                     }
                 }
             }
