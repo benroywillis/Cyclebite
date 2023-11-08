@@ -70,12 +70,19 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
             {
                 phis.insert(phi);
             }
-            else if( auto inst = llvm::dyn_cast<llvm::Instruction>(user) )
+            // stay away from uses in the function group
+            else if( Cyclebite::Graph::DNIDMap.contains(user) )
             {
-                if( covered.find(inst) == covered.end() )
+                if( const auto& inst = dynamic_pointer_cast<Cyclebite::Graph::Inst>( Cyclebite::Graph::DNIDMap.at(user) ) )
                 {
-                    Q.push_back(inst);
-                    covered.insert(inst);
+                    if( !inst->isFunction() )
+                    {
+                        if( covered.find(inst->getInst()) == covered.end() )
+                        {
+                            Q.push_back(inst->getInst());
+                            covered.insert(inst->getInst());
+                        }
+                    }
                 }
             }
         }
