@@ -421,22 +421,41 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                             else if( auto alloc = llvm::dyn_cast<llvm::AllocaInst>(Q.front()) )
                             {
                                 // an originating alloc indicates a base pointer, if it is big enough
-                                auto allocSize = alloc->getAllocationSizeInBits(alloc->getParent()->getParent()->getParent()->getDataLayout())->getFixedValue()/8;
-                                if( allocSize >= ALLOC_THRESHOLD )
+                                PrintVal(alloc);
+                                auto allocParam = alloc->getAllocationSizeInBits(alloc->getParent()->getParent()->getParent()->getDataLayout());
+                                if( allocParam )
                                 {
-                                    bpCandidates.insert(alloc);
+                                    auto allocSize = allocParam->getFixedValue()/8;
+                                    if( allocSize >= ALLOC_THRESHOLD )
+                                    {
+                                        bpCandidates.insert(alloc);
+                                        covered.insert(alloc);
+                                    }
+                                    else
+                                    {
+                                        spdlog::warn("Found allocation of size "+to_string(allocSize)+" bytes, which does not meet the minimum allocation size of "+to_string(ALLOC_THRESHOLD)+" for a base pointer.");
+                                        // when we encounter allocs and they are too small, this likely means our base pointer is being stored to a pointer which contains the base pointer
+                                        // thus, we need to add the users of this alloc to the queue
+                                        for( const auto& user : alloc->users() )
+                                        {
+                                            if( covered.find(user) == covered.end() )
+                                            {
+                                                Q.push_back(user);
+                                                covered.insert(user);
+                                            }
+                                        }
+                                    }
                                 }
                                 else
                                 {
-                                    spdlog::warn("Found allocation of size "+to_string(allocSize)+" bytes, which does not meet the minimum allocation size of "+to_string(ALLOC_THRESHOLD)+" for a base pointer.");
-                                    // when we encounter allocs and they are too small, this likely means our base pointer is being stored to a pointer which contains the base pointer
-                                    // thus, we need to add the users of this alloc to the queue
-                                    for( const auto& user : alloc->users() )
+                                    // when an alloca inst takes a dynamic parameter, we can't determine whether that pointer is useful (dynamically) 
+                                    // thankfully we have significant memory instructions to count on
+                                    if( Cyclebite::Graph::DNIDMap.contains(alloc) )
                                     {
-                                        if( covered.find(user) == covered.end() )
+                                        if( SignificantMemInst.contains( Cyclebite::Graph::DNIDMap.at(alloc) ) )
                                         {
-                                            Q.push_back(user);
-                                            covered.insert(user);
+                                            bpCandidates.insert(alloc);
+                                            covered.insert(alloc);
                                         }
                                     }
                                 }
