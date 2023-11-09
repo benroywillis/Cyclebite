@@ -15,10 +15,100 @@
 using namespace std;
 using namespace Cyclebite::Grammar;
 
+string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vector<int> outputDimensions, bool reduction, int reductionDimensions )
+{
+    // LUT
+    // Task     | # of inputs | # of outputs | # of input dimensions | # of output dimensions | reduction | reduction dimensions | special  |
+    // RandInit |      0      |      any     |          any          |           any          |     0     |           -          | "rand()" |
+    // ZIP      |      2      |       1      |        any,any        |           any          |     0     |           -          |          |
+    // Foreach  |      1      |       1      |          any          |       same as input    |     0     |           -          |          |
+    // GEMV     |      2      |       1      |          2,1          |            1           |     1     |           1          |          |
+    // GEMM     |      2      |       1      |          2,2          |            2           |     1     |           1          |          |
+    // Stencil  |      1      |       1      |           2           |       same as input    |     1     |           2          |          |
+    switch( noInputs )
+    {
+        case 0:
+        {
+            return "Init";
+        }
+        case 1:
+        {
+            return reduction ? "Stencil" : "Foreach";
+        }
+        case 2: 
+        {
+            if( reduction )
+            {
+                if( std::find(inputDimensions.begin(), inputDimensions.end(), 1) != inputDimensions.end() )
+                {
+                    return "GEMV";
+                }
+                else
+                {
+                    return "GEMM";
+                }
+            }
+            else
+            {
+                return "ZIP";
+            }
+        }
+        default: return "Unknown";
+    }
+}
+
 string MapTaskToName( const shared_ptr<Expression>& expr )
 {
-    // get polyhedral space for each input collection
-    // check to see if 
+    // measures
+    // 1. number of inputs
+    // 2. number of outputs
+    // 3. number of input dimensions
+    // 4. number of output dimensions
+    // 5. reduction
+    // 6. reduction dimensions
+    
+    // input dimensions are measured by the max number of dimensions in an input
+    vector<int> inDims;
+    int inMax = INT_MAX;
+    for( const auto& in : expr->getInputs() )
+    {
+        if( const auto& coll = dynamic_pointer_cast<Collection>(in) )
+        {
+            inDims.push_back((int)coll->getNumDims());
+            inMax = (int)coll->getNumDims() < inMax ? (int)coll->getNumDims() : inMax;
+        }
+        else
+        {
+            inDims.push_back(0);
+        }
+    }
+    vector<int> outDims;
+    if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
+    {
+        outDims.push_back((int)coll->getNumDims());
+    }
+    else
+    {
+        outDims.push_back(0);
+    }
+    int redDims = 0;
+    if( const auto& red = dynamic_pointer_cast<Reduction>(expr) )
+    {
+        // reduction dimension is number of input dimensions - output dimension
+        set<shared_ptr<Dimension>> inputDims;
+        for( const auto& in : expr->getInputs() )
+        {
+            if( const auto& coll = dynamic_pointer_cast<Collection>(in) )
+            {
+                for( const auto& dim : coll->getDimensions() )
+                {
+                    inputDims.insert(dim);
+                }
+            }
+        }
+        redDims = inputDims.size() - (int)*outDims.begin();
+    }
+    return labelLUT( (int)expr->getInputs().size(), expr->getOutput() ? 1 : 0, inDims, outDims, (bool)redDims, redDims);    
 }
 
 set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
@@ -122,6 +212,14 @@ set<shared_ptr<Cycle>> VectorizeExpression( const shared_ptr<Expression>& expr )
 
 void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, shared_ptr<Expression>>& taskToExpr )
 {
+    // first, task name
+    cout << endl;
+    for( const auto& t : taskToExpr )
+    {
+        spdlog::info("Cyclebite-Template Label: Task"+to_string(t.first->getID())+" -> "+MapTaskToName(t.second));
+    }
+    cout << endl;
+    // second, task optimization and export
     for( const auto& t : taskToExpr )
     {
 #ifdef DEBUG
