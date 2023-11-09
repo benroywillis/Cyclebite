@@ -49,6 +49,11 @@ const set<shared_ptr<Dimension>> Collection::getDimensions() const
     return dims;
 }
 
+uint32_t Collection::getNumDims() const
+{
+    return (uint32_t)getDimensions().size();
+}
+
 vector<PolySpace> Collection::getPolyhedralSpace() const
 {
     vector<PolySpace> dims;
