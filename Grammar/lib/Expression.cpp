@@ -170,10 +170,30 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                                             const set<shared_ptr<Collection>>& colls,
                                             const set<shared_ptr<InductionVariable>>& vars )
 {
+    // This vector holds the symbols we generate for this object
     vector<shared_ptr<Symbol>> newSymbols;
     if( const auto inst = llvm::dyn_cast<llvm::Instruction>(op) )
     {
         const auto opNode = Cyclebite::Graph::DNIDMap.at(inst);
+        // this parameter maps to the place this object is stored
+        // (see Cyclebite::Grammar::Expression::getStored() documentation for more on this)
+        shared_ptr<Symbol> symbolOutput = nullptr;
+        auto succs = opNode->getSuccessors();
+        for( const auto& succ : opNode->getSuccessors() )
+        {
+            if( const auto& succInst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(succ->getSnk()) )
+            {
+                if( succInst->getOp() == Cyclebite::Graph::Operation::store )
+                {
+                    if( !nodeToExpr.contains(succInst) )
+                    {
+                        throw CyclebiteException("Could not map an expression's store to a Symbol!");
+                    }
+                    symbolOutput = nodeToExpr.at(succInst);
+                    break;
+                }
+            }
+        }
         if( nodeToExpr.find(opNode) != nodeToExpr.end() )
         {
             // this value comes from a previous function group operator, thus it should be a symbol in the expression
@@ -285,7 +305,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 }
                 vector<Cyclebite::Graph::Operation> binOps;
                 binOps.push_back( Cyclebite::Graph::GetOp(bin->getOpcode()) );
-                auto binExpr = make_shared<Expression>( t, args, binOps );
+                auto binExpr = make_shared<Expression>( t, args, binOps, symbolOutput );
                 nodeToExpr[ opNode ] = binExpr;
                 newSymbols.push_back(binExpr);
             }
@@ -293,10 +313,6 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             {
                 throw CyclebiteException("Embedded binary instruction is not a Graph::Inst!");
             }
-            // an in-task binary op should already have an expression in nodeToExpr, throw an error
-            //PrintVal(bin);
-            //PrintVal(opNode->getVal());
-            //throw CyclebiteException("Cannot map this instruction to an expression!");
         }
         else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(op) )
         {
@@ -316,9 +332,6 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             }
             if( liveIncomingValues.size() > 1 )
             {
-                /*auto predExpr = make_shared<PredicationExpression>(phi);
-                nodeToExpr[ opNode ] = predExpr;
-                newSymbols.push_back(predExpr);*/
                 PrintVal(phi);
                 throw CyclebiteException("Cannot yet build predication expressions for this task!");
             }
@@ -336,8 +349,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     args.push_back( news );
                 }
                 vector<Cyclebite::Graph::Operation> binOps;
-                binOps.push_back( Cyclebite::Graph::GetOp(bin->getOpcode()) );
-                auto binExpr = make_shared<Expression>( t, args, binOps );
+                auto binExpr = make_shared<Expression>( t, args, binOps, symbolOutput );
                 nodeToExpr[ opNode ] = binExpr;
                 newSymbols.push_back(binExpr);
             }
@@ -355,13 +367,74 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                         args.push_back( news );
                     }
                 }
-                auto castExpr = make_shared<OperatorExpression>( t, Cyclebite::Graph::GetOp(cast->getOpcode()), args );
+                auto castExpr = make_shared<OperatorExpression>( t, Cyclebite::Graph::GetOp(cast->getOpcode()), args, symbolOutput );
                 nodeToExpr[ opNode ] = castExpr;
                 newSymbols.push_back(castExpr);
             }
             else
             {
                 throw CyclebiteException("Cast instruction is not a Graph::Inst!");
+            }
+        }
+        else if( const auto& call = llvm::dyn_cast<llvm::CallBase>(op) )
+        {
+            if( const auto nodeInst = dynamic_pointer_cast<Cyclebite::Graph::Inst>( opNode ) )
+            {
+                vector<shared_ptr<Symbol>> args;
+                for( const auto& argOp : llvm::cast<llvm::CallBase>(nodeInst->getInst())->args() )
+                {
+                    // call expression builder
+                    for( const auto& news : buildExpression(nodeInst, t, argOp.get(), nodeToExpr, colls, vars) )
+                    {
+                        if( Cyclebite::Graph::DNIDMap.contains(argOp.get()) )
+                        {
+                            nodeToExpr[ Cyclebite::Graph::DNIDMap.at(argOp.get()) ] = news;
+                        }
+                        args.push_back( news );
+                    }
+                }
+                const llvm::Function* f;
+                if( llvm::cast<llvm::CallBase>(nodeInst->getInst())->getCalledFunction() == nullptr )
+                {
+                    // we have to find it in our dynamic information
+                    for( const auto& succ : nodeInst->parent->getSuccessors() )
+                    {
+                        auto targetParent = static_pointer_cast<Cyclebite::Graph::ControlNode>(succ->getSnk());
+                        for( const auto& bb : Cyclebite::Graph::BBCBMap )
+                        {
+                            if( bb.second == targetParent )
+                            {
+                                f = bb.first->getParent();
+                                // confirm this function is not the same as the caller function
+                                // this will break under recursion
+                                if( f != nodeInst->getInst()->getParent()->getParent() )
+                                {
+                                    break;
+                                }
+                                else
+                                {
+                                    // wrong function, must have searched the wrong nodeInst successor
+                                    f = nullptr;
+                                }
+                            }
+                        }
+                        if( f )
+                        {
+                            break;
+                        }
+                    }
+                    if( !f )
+                    {
+                        throw CyclebiteException("Could not determine the function of a functionexpression!");
+                    }
+                }
+                else
+                {
+                    f = llvm::cast<llvm::CallBase>(nodeInst->getInst())->getCalledFunction();
+                }
+                auto funcExpr = make_shared<FunctionExpression>( t, f, args, symbolOutput );
+                nodeToExpr[ opNode ] = funcExpr;
+                newSymbols.push_back(funcExpr);
             }
         }
         else if( const auto& extr = llvm::dyn_cast<llvm::ExtractValueInst>(op) )
@@ -373,6 +446,15 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 nodeToExpr[ opNode ] = news;
                 newSymbols.push_back(news);
             }
+        }
+        else if( const auto& shuffle = llvm::dyn_cast<llvm::ShuffleVectorInst>(op) )
+        {
+            // shuffles appear to be useful for concatenating elemnents of different vectors into the same vector
+            // the only example so far that has used this is optimized (-O3) StencilChain/Naive, which uses an "identity shuffle" (example, StencilChain/Naive)
+            // we don't support shufflevectors yet because they usually contain more than one operation at once, and may be transformed later
+            // example: StencilChain/Naive/DFG_Kernel15.svg (shufflevector transforms i8 to i32, then i32 is converted to float before the MAC takes place)
+            PrintVal(node->getInst());
+            throw CyclebiteException("Cannot support shufflevector instructions yet!");
         }
     }
     else if( auto con = llvm::dyn_cast<llvm::Constant>(op) )
@@ -531,152 +613,10 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
     }
     // now we iterate (from start to finish) over the instructions in the expression, each time building a Symbol for each one, until all instructions in the expression have a symbol built for them
     vector<Cyclebite::Graph::Operation> ops;
-    for( const auto& node : insts )
+    auto builtExpr = buildExpression( *insts.rbegin(), t, (*insts.rbegin())->getInst(), nodeToExpr, colls, vars );
+    if( rv )
     {
-        if( nodeToExpr.contains(node) )
-        {
-            // you have already been accounted for by a recursive symbol build (probably for an operatorExpression of some kind)
-            // so we skip you entirely (because you are already embedded in someone else's expression)
-            continue;
-        }
-        if( const auto& shuffle = llvm::dyn_cast<llvm::ShuffleVectorInst>(node->getInst()) )
-        {
-            // shuffles appear to be useful for concatenating elemnents of different vectors into the same vector
-            // the only example so far that has used this is optimized (-O3) StencilChain/Naive, which uses an "identity shuffle" (example, StencilChain/Naive)
-            // we don't support shufflevectors yet because they usually contain more than one operation at once, and may be transformed later
-            // example: StencilChain/Naive/DFG_Kernel15.svg (shufflevector transforms i8 to i32, then i32 is converted to float before the MAC takes place)
-            PrintVal(node->getInst());
-            throw CyclebiteException("Cannot support shufflevector instructions yet!");
-        }
-        // this parameter maps to the place this instruction is stored
-        // (see Cyclebite::Grammar::Expression::getStored() documentation for more on this)
-        shared_ptr<Symbol> symbolOutput = nullptr;
-        for( const auto& succ : node->getSuccessors() )
-        {
-            if( const auto& inst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(succ->getSnk()) )
-            {
-                if( inst->getOp() == Cyclebite::Graph::Operation::store )
-                {
-                    if( !nodeToExpr.contains(inst) )
-                    {
-                        throw CyclebiteException("Could not map an expression's store to a Symbol!");
-                    }
-                    symbolOutput = nodeToExpr.at(inst);
-                    break;
-                }
-            }
-        }
-        vector<shared_ptr<Symbol>> vec;
-        if( node->isFunctionCall() || node->isCastOp() )
-        {
-            // build an operatorExpression for these
-            vector<shared_ptr<Symbol>> args;
-            if( node->isFunctionCall() )
-            {
-                for( const auto& argOp : llvm::cast<llvm::CallBase>(node->getInst())->args() )
-                {
-                    // call expression builder
-                    for( const auto& news : buildExpression(node, t, argOp.get(), nodeToExpr, colls, vars) )
-                    {
-                        if( Graph::DNIDMap.contains(argOp.get()) )
-                        {
-                            nodeToExpr[ Graph::DNIDMap.at(argOp.get()) ] = news;
-                        }
-                        args.push_back( news );
-                    }
-                }
-                const llvm::Function* f;
-                if( llvm::cast<llvm::CallBase>(node->getInst())->getCalledFunction() == nullptr )
-                {
-                    // we have to find it in our dynamic information
-                    for( const auto& succ : node->parent->getSuccessors() )
-                    {
-                        auto targetParent = static_pointer_cast<Cyclebite::Graph::ControlNode>(succ->getSnk());
-                        for( const auto& bb : Cyclebite::Graph::BBCBMap )
-                        {
-                            if( bb.second == targetParent )
-                            {
-                                f = bb.first->getParent();
-                                // confirm this function is not the same as the caller function
-                                // this will break under recursion
-                                if( f != node->getInst()->getParent()->getParent() )
-                                {
-                                    break;
-                                }
-                                else
-                                {
-                                    // wrong function, must have searched the wrong node successor
-                                    f = nullptr;
-                                }
-                            }
-                        }
-                        if( f )
-                        {
-                            break;
-                        }
-                    }
-                    if( !f )
-                    {
-                        throw CyclebiteException("Could not determine the function of a functionexpression!");
-                    }
-                }
-                else
-                {
-                    f = llvm::cast<llvm::CallBase>(node->getInst())->getCalledFunction();
-                }
-                expr = make_shared<FunctionExpression>(t, f, args, symbolOutput);
-            }
-            else
-            {
-                for( const auto& op : node->getInst()->operands() )
-                {
-                    // call expression builder
-                    for( const auto& news : buildExpression(node, t, op, nodeToExpr, colls, vars) )
-                    {
-                        if( Graph::DNIDMap.contains(op) )
-                        {
-                            nodeToExpr[ Graph::DNIDMap.at(op) ] = news;
-                        }
-                        args.push_back( news );
-                    }
-                }
-                expr = make_shared<OperatorExpression>(t, node->getOp(), args, symbolOutput);
-            }
-        }
-        else
-        {
-            ops.push_back( Cyclebite::Graph::GetOp(node->getInst()->getOpcode()) );
-            for( const auto& op : node->getInst()->operands() )
-            {
-                for( const auto& news : buildExpression(node, t, op, nodeToExpr, colls, vars) )
-                {
-                    if( Graph::DNIDMap.contains(op) )
-                    {
-                        nodeToExpr[ Graph::DNIDMap.at(op) ] = news;
-                    }
-                    vec.push_back(news);
-                }
-            }
-            expr = make_shared<Expression>(t, vec, ops, symbolOutput);
-        }
-        nodeToExpr[node] = expr;
-    }
-    if( expr )
-    {
-        if( rv )
-        {
-            // wrap the constructed expr in a reduction
-            vector<shared_ptr<Symbol>> redVec;
-            vector<Cyclebite::Graph::Operation> redOp;
-            redVec.push_back(expr);
-            auto red = make_shared<Reduction>(t, rv, redVec, redOp, expr->getOutput());
-            nodeToExpr[rv->getNode()] = red;
-            expr = red;
-        }
-    }
-    else
-    {
-        if( rv && insts.empty() )
+        if( builtExpr.empty() )
         {
             vector<shared_ptr<Symbol>> vec;
             // we have a "counter" expression, where we just load something, add to it, then store it back
@@ -718,10 +658,18 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
             }
             expr = make_shared<Reduction>(t, rv, vec, ops);
         }
-        if( !expr )
+        else
         {
-            throw CyclebiteException("Could not generate an expression!");
+            // wrap the constructed expr in a reduction
+            vector<Cyclebite::Graph::Operation> redOp;
+            auto red = make_shared<Reduction>(t, rv, builtExpr, redOp, static_pointer_cast<Expression>((*builtExpr.rbegin()))->getOutput() );
+            nodeToExpr[rv->getNode()] = red;
+            expr = red;
         }
+    }
+    else
+    {
+        expr = static_pointer_cast<Expression>(*builtExpr.rbegin());
     }
     return expr;
 }
