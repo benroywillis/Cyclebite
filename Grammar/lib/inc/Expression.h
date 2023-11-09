@@ -54,6 +54,7 @@ namespace Cyclebite::Grammar
         // contains the symbols, in op order, for the expression. Will always be of size (ops.size() + 1)
         std::vector<std::shared_ptr<Symbol>> symbols;
         static bool printedName;
+        static void FindInputs( Expression* expr );
     };
     class ReductionVariable;
     /// @brief Expression builder for a function expression

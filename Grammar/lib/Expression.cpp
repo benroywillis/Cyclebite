@@ -22,30 +22,47 @@ using namespace Cyclebite::Grammar;
 
 bool Expression::printedName = false;
 
-Expression::Expression( const std::shared_ptr<Task>& ta, const vector<shared_ptr<Symbol>>& in, const vector<Cyclebite::Graph::Operation>& o, const shared_ptr<Symbol>& out, const string name ) : Symbol(name), t(ta), output(out), ops(o), symbols(in)
+void Expression::FindInputs( Expression* expr )
 {
-    if( in.empty() && o.empty() )
-    {
-        throw CyclebiteException("Expression cannot be empty!");
-    }
-    printedName = false;
     // lets find all our inputs
     // symbols are hierarchically grouped, thus we need to search under the input list to find them all
     deque<shared_ptr<Symbol>> Q;
     set<shared_ptr<Symbol>> covered;
-    for( const auto& sym : in )
+    if( const auto& opExpr = dynamic_cast<Cyclebite::Grammar::OperatorExpression*>(expr) )
     {
-        Q.push_front(sym);
-        covered.insert(sym);
+        for( const auto& ar : opExpr->getArgs() )
+        {
+            Q.push_front(ar);
+            covered.insert(ar);
+        }
+    }
+    else
+    {
+        for( const auto& s : expr->getSymbols() )
+        {
+            Q.push_front(s);
+            covered.insert(s);
+        }
     }
     while( !Q.empty() )
     {
         if( const auto& coll = dynamic_pointer_cast<Collection>(Q.front()) )
         {
             // collections present in the expression are always inputs
-            inputs.insert(coll);
+            expr->inputs.insert(coll);
         }
-        if( const auto& expr = dynamic_pointer_cast<Expression>(Q.front()) )
+        else if( const auto& opExpr = dynamic_pointer_cast<OperatorExpression>(Q.front()) )
+        {
+            for( const auto& child : opExpr->getArgs() )
+            {
+                if( !covered.contains(child) )
+                {
+                    Q.push_back(child);
+                    covered.insert(child);
+                }
+            }
+        }
+        else if( const auto& expr = dynamic_pointer_cast<Expression>(Q.front()) )
         {
             for( const auto& child : expr->getSymbols() )
             {
@@ -58,18 +75,16 @@ Expression::Expression( const std::shared_ptr<Task>& ta, const vector<shared_ptr
         }
         Q.pop_front();
     }
-    /*else if( o.size() != s.size()-1 )
+}
+
+Expression::Expression( const std::shared_ptr<Task>& ta, const vector<shared_ptr<Symbol>>& in, const vector<Cyclebite::Graph::Operation>& o, const shared_ptr<Symbol>& out, const string name ) : Symbol(name), t(ta), output(out), ops(o), symbols(in)
+{
+    if( in.empty() && o.empty() )
     {
-        for( const auto& op : o )
-        {
-            cout << Graph::OperationToString.at(op) << endl;
-        }
-        for( const auto& sym : s )
-        {
-            sym->dump();
-        }
-        throw CyclebiteException("There should be "+to_string(symbols.size()-1)+" operations for an expression with "+to_string(symbols.size())+" symbols! Operation count: "+to_string(o.size()));
-    }*/
+        throw CyclebiteException("Expression cannot be empty!");
+    }
+    printedName = false;
+    FindInputs(this);
 } 
 
 const shared_ptr<Task>& Expression::getTask() const
