@@ -25,6 +25,38 @@ string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vecto
     // GEMV     |      2      |       1      |          2,1          |            1           |     1     |           1          |          |
     // GEMM     |      2      |       1      |          2,2          |            2           |     1     |           1          |          |
     // Stencil  |      1      |       1      |           2           |       same as input    |     1     |           2          |          |
+#if DEBUG
+    string inDimString = "";
+    if( !inputDimensions.empty() )
+    {
+        auto it = inputDimensions.begin();
+        inDimString += to_string( *it );
+        it = next(it);
+        while( it != inputDimensions.end() )
+        {
+            inDimString += ","+to_string(*it);
+            it = next(it);
+        }
+    }
+    string outDimString = "";
+    if( !outputDimensions.empty() )
+    {
+        auto it = outputDimensions.begin();
+        outDimString += to_string( *it );
+        it = next(it);
+        while( it != outputDimensions.end() )
+        {
+            outDimString += ","+to_string(*it);
+            it = next(it);
+        }
+    }
+    spdlog::info("# Inputs: "+to_string(noInputs)+
+                 "; # Outputs: "+to_string(noOutputs)+
+                 "; inputDimensions: "+inDimString+
+                 "; outputDimensions: "+outDimString+
+                 "; reduction: "+to_string(reduction)+
+                 "; reductionDimensions: "+to_string(reductionDimensions));
+#endif
     switch( noInputs )
     {
         case 0:
