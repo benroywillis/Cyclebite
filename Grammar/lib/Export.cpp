@@ -15,16 +15,17 @@
 using namespace std;
 using namespace Cyclebite::Grammar;
 
-string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vector<int> outputDimensions, bool reduction, int reductionDimensions )
+string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vector<int> outputDimensions, bool reduction, int reductionDimensions, bool inPlace )
 {
     // LUT
-    // Task     | # of inputs | # of outputs | # of input dimensions | # of output dimensions | reduction | reduction dimensions | special  |
-    // RandInit |      0      |      any     |          any          |           any          |     0     |           -          | "rand()" |
-    // ZIP      |      2      |       1      |        any,any        |           any          |     0     |           -          |          |
-    // Foreach  |      1      |       1      |          any          |       same as input    |     0     |           -          |          |
-    // GEMV     |      2      |       1      |          2,1          |            1           |     1     |           1          |          |
-    // GEMM     |      2      |       1      |          2,2          |            2           |     1     |           1          |          |
-    // Stencil  |      1      |       1      |           2           |       same as input    |     1     |           2          |          |
+    // Task     | # of inputs | # of outputs            | # of input dimensions | # of output dimensions | reduction | reduction dimensions | special  |
+    // RandInit |      0      |      any                |          any          |           any          |     0     |           -          | "rand()" |
+    // ZIP      |      2      |       1                 |        any,any        |           any          |     0     |           -          |          |
+    // Map      |      1      |  1 (works out of place) |          any          |       same as input    |     0     |           -          |          |
+    // Foreach  |      1      |  0 (worked in-place)    |          any          |       same as input    |     0     |           -          |          |
+    // GEMV     |      2      |       1                 |          2,1          |            1           |     1     |           1          |          |
+    // GEMM     |      2      |       1                 |          2,2          |            2           |     1     |           1          |          |
+    // Stencil  |      1      |       1                 |           2           |       same as input    |     1     |           2          |          |
 #if DEBUG
     string inDimString = "";
     if( !inputDimensions.empty() )
@@ -52,10 +53,11 @@ string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vecto
     }
     spdlog::info("# Inputs: "+to_string(noInputs)+
                  "; # Outputs: "+to_string(noOutputs)+
-                 "; inputDimensions: "+inDimString+
-                 "; outputDimensions: "+outDimString+
+                 "; inDims: "+inDimString+
+                 "; outDims: "+outDimString+
                  "; reduction: "+to_string(reduction)+
-                 "; reductionDimensions: "+to_string(reductionDimensions));
+                 "; redDims: "+to_string(reductionDimensions)+
+                 "; inPlace: "+to_string(inPlace));
 #endif
     switch( noInputs )
     {
@@ -65,7 +67,14 @@ string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vecto
         }
         case 1:
         {
-            return reduction ? "Stencil" : "Foreach";
+            if( inPlace )
+            {
+                return reduction ? "Stencil" : "Foreach";
+            }
+            else
+            {
+                return reduction ? "Stencil" : "Map";
+            }
         }
         case 2: 
         {
@@ -99,6 +108,14 @@ string MapTaskToName( const shared_ptr<Expression>& expr )
     // 5. reduction
     // 6. reduction dimensions
     
+    set<shared_ptr<BasePointer>> inputs;
+    for( const auto& in : expr->getInputs() )
+    {
+        if( const auto& coll = dynamic_pointer_cast<Collection>(in) )
+        {
+            inputs.insert(coll->getBP());
+        }
+    }
     // input dimensions are measured by the max number of dimensions in an input
     vector<int> inDims;
     int inMax = INT_MAX;
@@ -140,7 +157,20 @@ string MapTaskToName( const shared_ptr<Expression>& expr )
         }
         redDims = inputDims.size() - (int)*outDims.begin();
     }
-    return labelLUT( (int)expr->getInputs().size(), expr->getOutput() ? 1 : 0, inDims, outDims, (bool)redDims, redDims);    
+    bool inPlace = false;
+    for( const auto& in : expr->getInputs() )
+    {
+        if( in == expr->getOutput() )
+        {
+            inPlace = true;
+        }
+        else
+        {
+            inPlace = false;
+            break;
+        }
+    }
+    return labelLUT( (int)inputs.size(), expr->getOutput() ? 1 : 0, inDims, outDims, (bool)redDims, redDims, inPlace);    
 }
 
 set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
@@ -250,7 +280,7 @@ void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, shared_ptr<Expressi
     {
         spdlog::info("Cyclebite-Template Label: Task"+to_string(t.first->getID())+" -> "+MapTaskToName(t.second));
     }
-    cout << endl;
+    //cout << endl;
     // second, task optimization and export
     for( const auto& t : taskToExpr )
     {
