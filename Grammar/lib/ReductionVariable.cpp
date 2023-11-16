@@ -405,10 +405,14 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                 throw CyclebiteException("Cannot map this reduction variable to an induction variable!");
             }
 
+            for( const auto& can : reductionCandidates )
+            {
+                PrintVal(can->getVal());
+            }
             // now that we have the candidate, we need to figure out how many dimensions it has
             // we do this by walking the DFG starting from the RV store until we find the reduction itself, each time jotting down the phi's we see
             // this yields all the phis that touch the reduction variable (in the set phis)
-            set<const llvm::PHINode*> phis;
+            /*set<const llvm::PHINode*> phis;
             {
                 deque<const llvm::Value*> Q;
                 set<const llvm::Value*> covered;
@@ -418,7 +422,12 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                 {
                     if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(Q.front()) )
                     {
-                        phis.insert(phi);
+                        // we only want the phis that are carrying out a reduction (the phis that have a cycle with something)
+                        // if this phi is not part of a cycle, it is resolving predication
+                        if( Cyclebite::Graph::FindCycles( smallGraph ) )
+                        {
+                            phis.insert(phi);
+                        }
                     }
                     else if( llvm::isa<llvm::LoadInst>(Q.front()) )
                     {
@@ -456,6 +465,28 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     if( iv->getCycle()->find( Graph::DNIDMap.at(phi)) )
                     {
                         ivs.insert(iv);
+                    }
+                }
+            }*/
+            set<shared_ptr<Dimension>, DimensionSort>ivs;
+            vector<shared_ptr<Graph::DataValue>> addresses;
+            for( const auto& iv : vars )
+            {
+                if( iv->getCycle()->find(can) )
+                {
+                    ivs.insert(iv);
+                }
+            }
+            addresses.push_back(can);
+            // if the candidate is a pointer, we assign all the loads and stores to its addresses too
+            // this allows for the collections of the reduction variable to be assigned to the reduction
+            if( can->getVal()->getType()->isPointerTy() )
+            {
+                for( const auto& use : can->getVal()->users() )
+                {
+                    if( Cyclebite::Graph::DNIDMap.contains(use) )
+                    {
+                        addresses.push_back( Cyclebite::Graph::DNIDMap.at(use) );
                     }
                 }
             }
