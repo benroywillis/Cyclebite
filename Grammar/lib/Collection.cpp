@@ -183,7 +183,9 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
     // these collections are later referred to when we build the task's function expression(s)
     // the starting points need to be the pointers of the ld/st (to ensure we only search through instructions that deal with memory)
     // the elements are the loads and stores themselves (that are used to construct the collections with)
-    set<const llvm::Instruction*>  starts;
+    set<const llvm::Value*>  starts;
+    // stores the dereferenced collection values
+    // an "element" is a value that came from a collection
     set<const llvm::Instruction*>  elements;
     for( const auto& c : t->getCycles() )
     {
@@ -223,11 +225,8 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                         {
                             if( inst->isFunction() )
                             {
-                                if( const auto& ptrInst = llvm::dyn_cast<llvm::Instruction>( llvm::cast<llvm::StoreInst>(i->getInst())->getPointerOperand()) )
-                                {
-                                    starts.insert( ptrInst );
-                                    elements.insert( i->getInst() );
-                                }
+                                starts.insert( llvm::cast<llvm::StoreInst>(i->getInst())->getPointerOperand() );
+                                elements.insert( i->getInst() );
                             }
                         }
                     }
@@ -432,6 +431,25 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                     {
                         Q.push_back(op);
                         covered.insert(op);
+                    }
+                }
+            }
+            else if( const auto& glob = llvm::dyn_cast<llvm::GlobalValue>(Q.front()) )
+            {
+                // may be a base pointer, or may lead us to one
+                for( const auto& bp : bps )
+                {
+                    if( bp->getNode()->getVal() == glob )
+                    {
+                        collBPs.insert(bp);
+                    }
+                }
+                for( const auto& user : glob->users() )
+                {
+                    if( !covered.contains(user) )
+                    {
+                        Q.push_back(user);
+                        covered.insert(user);
                     }
                 }
             }
