@@ -302,18 +302,78 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     // quick check here to make sure the sign we extract from the comparator makes sense
     // llvm::cmpinst* compare op0 to op1, that is, if cmp->getPredicate is gte, it is asking if op0 >= op1
     // right now, we assume op0 is the IV and op1 is the condition boundary, thus if this is not true we throw an error
-    llvm::CmpInst* targetCmp = nullptr;
+    const llvm::CmpInst* targetCmp = nullptr;
     if( const auto& br = llvm::dyn_cast<llvm::BranchInst>(targetExit) )
     {
-        targetCmp = llvm::dyn_cast<llvm::CmpInst>(br->getCondition());
-        if( !targetCmp )
+        if( const auto& tc = llvm::dyn_cast<llvm::CmpInst>(br->getCondition()) )
+        {
+            targetCmp = tc;
+        }
+        else if( const auto& sel = llvm::dyn_cast<llvm::SelectInst>(br->getCondition()) )
+        {
+            // the select has two incoming values, selected as the output by the select condition
+            // the avenue that leads to the phi node is the one we want
+            // if both avenues lead us there, pick an arbitrary one
+            set<llvm::Instruction*> toTest;
+            for( const auto& op : sel->operands() )
+            {
+                if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+                {
+                    toTest.insert(opInst);
+                }
+            }
+            for( const auto& test : toTest )
+            {
+                deque<const llvm::Instruction*> Q;
+                set<const llvm::Instruction*> covered;
+                const llvm::CmpInst* btwCmp = nullptr;
+                bool found = false;
+                Q.push_front(test);
+                covered.insert(test);
+                while( !Q.empty() )
+                {
+                    if( node->getVal() == Q.front() )
+                    {
+                        // we have found the IV, the search is over
+                        found = true;
+                        break;
+                    }
+                    else if( const auto& cmp = llvm::dyn_cast<llvm::CmpInst>(Q.front()) )
+                    {
+                        btwCmp = cmp;
+                    }
+                    for( const auto& op : Q.front()->operands() )
+                    {
+                        if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+                        {
+                            if( !covered.contains(opInst) )
+                            {
+                                Q.push_back(opInst);
+                                covered.insert(opInst);
+                            }
+                        }
+                    }
+                    Q.pop_front();
+                }
+                if( found && btwCmp )
+                {
+                    targetCmp = btwCmp;
+                    break;
+                }
+            }
+            if( !targetCmp )
+            {
+                throw CyclebiteException("Cannot resolve comparator through select instruction paths!");
+            }
+        }
+        else
         {
 #ifdef DEBUG
             PrintVal(node->getVal());
             PrintVal(br->getCondition());
             PrintVal(br);
 #endif
-            throw CyclebiteException("Cycle iterator inst was not fed by a condition!");
+            throw CyclebiteException("Cycle iterator inst was not fed by a recognized instruction type!");
         }
     }
     else
@@ -680,6 +740,20 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
                                 if( BBCBMap.find(p_inst->getParent()) != BBCBMap.end() )
                                 {
                                     vars.insert( Cyclebite::Graph::DNIDMap.at((llvm::Instruction*)ld->getPointerOperand()) );
+                                }
+                            }
+                        }
+                        else if( const auto& sel = llvm::dyn_cast<llvm::SelectInst>(use.get()) )
+                        {
+                            for( const auto& op : sel->operands() )
+                            {
+                                if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+                                {
+                                    if( !covered.contains(opInst) )
+                                    {
+                                        Q.push_back(opInst);
+                                        covered.insert(opInst);
+                                    }
                                 }
                             }
                         }
