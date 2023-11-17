@@ -317,8 +317,6 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
         else if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(op) )
         {
             // phis imply a loop-loop dependence or predication
-            // if we have made it this far, this phi doesn't map to an RV.. 
-            // but its operands might... multi-dimensional reductions store their result inside yet other phis...
             // in order to know that we need a predication expression, more than one of the incoming values must be live
             set<const llvm::Value*> liveIncomingValues;
             for( unsigned i = 0; i < phi->getNumIncomingValues(); i++ )
@@ -608,6 +606,19 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
         for( const auto& addr : rv->getAddresses() )
         {
             nodeToExpr[ addr ] = rv;
+        }
+        if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(rv->getNode()) )
+        {
+            auto symbols = buildExpression(inst, t, rv->getNode()->getVal(), nodeToExpr, colls, vars);
+            if( symbols.size() != 1 )
+            {
+                throw CyclebiteException("Cannot yet handle the case where a reduction variable node generates more than one symbol!");
+            }
+            nodeToExpr[ rv->getNode() ] = *symbols.begin();
+        }
+        else
+        {
+            throw CyclebiteException("Cannot yet handle the case where a reduction variable node is not a Graph::Inst!");
         }
         //nodeToExpr[rv->getNode()] = rv;
     }
