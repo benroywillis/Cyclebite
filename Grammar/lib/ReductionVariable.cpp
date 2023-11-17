@@ -4,6 +4,7 @@
 //==------------------------------==//
 #include "ReductionVariable.h"
 #include "Graph/inc/IO.h"
+#include "Graph/inc/Dijkstra.h"
 #include "Task.h"
 #include "Util/Print.h"
 #include "Util/Exceptions.h"
@@ -363,88 +364,85 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
             }
             Q.pop_front();
         }
-        // now find the induction variable associated with each reduction variable candidate
+        // now find the induction variable(s) associated with each reduction variable candidate
         for( const auto& can : reductionCandidates )
         {
-            // it is possible to find the same reduction candidate twice when operations are partially unrolled
-            // to handle this case we do a check on the rvs that already exist and skip the ones that may be a repeat
-            bool skip = false;
-            for( const auto& rv : rvs )
-            {
-                if( reductionOp == rv->getNode() )
-                {
-                    skip = true;
-                    break;
-                }
-            }
-            if( skip ) 
-            {
-                continue;
-            }
-            shared_ptr<InductionVariable> iv = nullptr;
-            // the store value operand is within the cycle that contains the RV
-            if( const auto& v = llvm::dyn_cast<llvm::Instruction>(s->getValueOperand()) )
-            {
-                auto b = static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(v));
-                for( const auto& var : vars )
-                {
-                    if( var->getCycle()->find(b) )
-                    {
-                        iv = var;
-                    }
-                }
-            }
-            else
-            {
-                PrintVal(s);
-                throw CyclebiteException("Store instruction of an induction variable is not an instruction!");
-            }
-            if( iv == nullptr )
-            {
-                PrintVal(can->getVal());
-                throw CyclebiteException("Cannot map this reduction variable to an induction variable!");
-            }
-
-            for( const auto& can : reductionCandidates )
-            {
-                PrintVal(can->getVal());
-            }
             // now that we have the candidate, we need to figure out how many dimensions it has
-            // we do this by walking the DFG starting from the RV store until we find the reduction itself, each time jotting down the phi's we see
-            // this yields all the phis that touch the reduction variable (in the set phis)
-            /*set<const llvm::PHINode*> phis;
+            // we do this by finding the number of cycles that the function group spans
+            // we isolate the DFG subgraph that carries out the (possibly multi-dimensional) reduction by finding all nodes associated with a cycle
+            set<shared_ptr<Graph::DataValue>> cycleNodes;
             {
-                deque<const llvm::Value*> Q;
-                set<const llvm::Value*> covered;
-                Q.push_front(s->getValueOperand());
-                covered.insert(s->getValueOperand());
+                // we initiate the cycle finding territory to all function nodes
+                set<shared_ptr<Graph::GraphNode>, Graph::p_GNCompare> graphNodes;
+                set<shared_ptr<Graph::GraphEdge>, Graph::GECompare> graphEdges; 
+                deque<shared_ptr<Graph::GraphNode>> Q;
+                set<shared_ptr<Graph::GraphNode>> covered;
+                Q.push_front(can);
+                covered.insert(can);
                 while( !Q.empty() )
                 {
-                    if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(Q.front()) )
+                    if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(Q.front()) )
                     {
-                        // we only want the phis that are carrying out a reduction (the phis that have a cycle with something)
-                        // if this phi is not part of a cycle, it is resolving predication
-                        if( Cyclebite::Graph::FindCycles( smallGraph ) )
+                        if( inst->isFunction() )
                         {
-                            phis.insert(phi);
+                            graphNodes.insert(inst);
+                            for( const auto& pred : inst->getPredecessors() )
+                            {
+                                if( const auto& predInst = dynamic_pointer_cast<Graph::Inst>(pred->getSrc()) )
+                                {
+                                    if( predInst->isFunction() )
+                                    {
+                                        graphEdges.insert(pred);
+                                        if( !covered.contains(predInst) )
+                                        {
+                                            Q.push_back(predInst);
+                                            covered.insert(predInst);
+                                        }
+                                    }
+                                }
+                            }
+                            for( const auto& succ : inst->getSuccessors() )
+                            {
+                                if( const auto& succInst = dynamic_pointer_cast<Graph::Inst>(succ->getSnk()) )
+                                {
+                                    if( succInst->isFunction() )
+                                    {
+                                        graphEdges.insert(succ);
+                                        if( !covered.contains(succInst) )
+                                        {
+                                            Q.push_back(succInst);
+                                            covered.insert(succInst);
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                    else if( llvm::isa<llvm::LoadInst>(Q.front()) )
+                    Q.pop_front();
+                }
+                Graph::Graph cycleGraph(graphNodes, graphEdges);
+                // we start the cycle hunt at the reduction node, then branch it out to its neighbors, each time finding new nodes in the cycle until no new nodes are eligible for searching
+                Q.clear();
+                covered.clear();
+                Q.push_front(can);
+                covered.insert(can);
+                while( !Q.empty() )
+                {
+                    auto cycle = Graph::Dijkstras(cycleGraph, Q.front()->NID, Q.front()->NID);
+                    if( !cycle.empty() )
                     {
-                        // skip loads, we don't care about them (if this is loading the reduction variable, we already got the pointer from the store)
-                        Q.pop_front();
-                        continue;
-                    }
-                    if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(Q.front()) )
-                    {
-                        for( const auto& op : inst->operands() )
+                        if( const auto& dn = dynamic_pointer_cast<Graph::DataValue>(Q.front()) )
                         {
-                            if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
+                            cycleNodes.insert(dn);
+                        }
+                        for( const auto& succ : Q.front()->getSuccessors() )
+                        {
+                            if( cycleGraph.find(succ->getSnk()) )
                             {
-                                if( !covered.contains(opInst) )
+                                if( !covered.contains(succ->getSnk()) )
                                 {
-                                    Q.push_back(opInst);
-                                    covered.insert(opInst);
+                                    Q.push_back(succ->getSnk());
+                                    covered.insert(succ->getSnk());
                                 }
                             }
                         }
@@ -452,41 +450,26 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     Q.pop_front();
                 }
             }
-            // the ivs the dimensions of the reduction
-            // to find them we look through all phis that touch the RV and see what the dimension is that facilitates that phi's cycle
-            set<shared_ptr<Dimension>, DimensionSort> ivs;
+            // now that we have the cycle nodes, we put all the "addresses" into the RV (the phis)
             // the addresses are the phis that handle the reduction
             vector<shared_ptr<Graph::DataValue>> addresses;
-            for( const auto& phi : phis )
+            for( const auto& n : cycleNodes )
             {
-                addresses.push_back( Graph::DNIDMap.at(phi) );
-                for( const auto& iv : vars )
+                if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(n->getVal()) )
                 {
-                    if( iv->getCycle()->find( Graph::DNIDMap.at(phi)) )
-                    {
-                        ivs.insert(iv);
-                    }
-                }
-            }*/
-            set<shared_ptr<Dimension>, DimensionSort>ivs;
-            vector<shared_ptr<Graph::DataValue>> addresses;
-            for( const auto& iv : vars )
-            {
-                if( iv->getCycle()->find(can) )
-                {
-                    ivs.insert(iv);
+                    addresses.push_back(n);
                 }
             }
-            addresses.push_back(can);
-            // if the candidate is a pointer, we assign all the loads and stores to its addresses too
-            // this allows for the collections of the reduction variable to be assigned to the reduction
-            if( can->getVal()->getType()->isPointerTy() )
+            // next, we tak all the IVs involved in the reduction and assign those to the RV (this defines the dimensionality of the reduction)
+            set<shared_ptr<Dimension>, DimensionSort> ivs;
+            for( const auto& iv : vars )
             {
-                for( const auto& use : can->getVal()->users() )
+                for( const auto& n : cycleNodes )
                 {
-                    if( Cyclebite::Graph::DNIDMap.contains(use) )
+                    if( iv->getCycle()->find(n) )
                     {
-                        addresses.push_back( Cyclebite::Graph::DNIDMap.at(use) );
+                        ivs.insert(iv);
+                        break;
                     }
                 }
             }
