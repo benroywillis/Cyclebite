@@ -96,7 +96,7 @@ void Task::addSourceFiles( set<string>& sources )
 
 set<shared_ptr<Task>> Cyclebite::Grammar::getTasks(const nlohmann::json& instanceJson, 
                                                     const nlohmann::json& kernelJson, 
-                                                    const std::map<int64_t, llvm::BasicBlock*>& IDToBlock)
+                                                    const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock)
 {
     set<shared_ptr<Task>> tasks;
     // construct the cycles from the kernel file

@@ -10,7 +10,7 @@ namespace Cyclebite::Grammar
     class Cycle;
     std::set<std::shared_ptr<class Task>> getTasks(const nlohmann::json& instanceJson, 
                                                    const nlohmann::json& kernelJson, 
-                                                   const std::map<int64_t, llvm::BasicBlock*>& IDToBlock);
+                                                   const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock);
     class Task
     {
     public:

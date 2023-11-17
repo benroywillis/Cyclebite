@@ -2,6 +2,7 @@
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
+#include "Graph/inc/IO.h"
 #include "Util/Format.h"
 #include "Util/IO.h"
 #include "ControlGraph.h"
@@ -30,24 +31,20 @@ int main(int argc, char *argv[])
 {
     cl::ParseCommandLineOptions(argc, argv);
     // load dynamic source code information
-    auto blockCallers = ReadBlockInfo(BlockInfoFilename);
-    auto blockLabels = ReadBlockLabels(BlockInfoFilename);
-    auto threadStarts = ReadThreadStarts(BlockInfoFilename);
+    Cyclebite::Graph::ReadBlockInfo(BlockInfoFilename);
     // load bitcode
     LLVMContext context;
     SMDiagnostic smerror;
     auto SourceBitcode = parseIRFile(BitcodeFileName, smerror, context);
     Cyclebite::Util::Format(*SourceBitcode);
     // construct its callgraph
-    map<int64_t, BasicBlock *> IDToBlock;
-    map<int64_t, Value *> IDToValue;
-    Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    Cyclebite::Graph::InitializeIDMaps(SourceBitcode.get());
     // construct static call graph from the input bitcode
     llvm::CallGraph staticCG(*SourceBitcode);
     // construct program control graph and call graph
     ControlGraph cg;
     Cyclebite::Graph::CallGraph dynamicCG;
-    getDynamicInformation(cg, dynamicCG, ProfileFileName, SourceBitcode, staticCG, blockCallers, threadStarts, IDToBlock, false );
+    getDynamicInformation(cg, dynamicCG, ProfileFileName, SourceBitcode, staticCG, blockCallers, threadStarts, Cyclebite::Graph::IDToBlock, false );
 
     // construct block ID to node ID mapping
     map<int64_t, shared_ptr<ControlNode>> blockToNode;
@@ -77,7 +74,7 @@ int main(int argc, char *argv[])
     set<shared_ptr<ControlBlock>, p_GNCompare> programFlow;
     // data flow of the program
     DataGraph dGraph;
-    BuildDFG( programFlow, dGraph, SourceBitcode, dynamicCG, blockToNode, IDToBlock);
+    BuildDFG( programFlow, dGraph, SourceBitcode, dynamicCG, blockToNode, Cyclebite::Graph::IDToBlock);
 
     ofstream DFGDot("DFG.dot");
     auto dataGraph = GenerateDataDot(dGraph.getDataNodes());

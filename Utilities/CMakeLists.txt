@@ -1,5 +1,5 @@
 add_executable(kernelSourceMapper kernelSourceMapper.cpp)
-target_link_libraries(kernelSourceMapper ${llvm_libs} nlohmann_json nlohmann_json::nlohmann_json Util)
+target_link_libraries(kernelSourceMapper ${llvm_libs} Graph nlohmann_json nlohmann_json::nlohmann_json Util)
 target_include_directories(kernelSourceMapper SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(kernelSourceMapper PRIVATE ${LLVM_DEFINITIONS})
 set_target_properties(kernelSourceMapper
@@ -9,7 +9,7 @@ set_target_properties(kernelSourceMapper
 install(TARGETS kernelSourceMapper RUNTIME DESTINATION bin)
 
 add_executable(CallGraph CallGraph.cpp)
-target_link_libraries(CallGraph ${llvm_libs} nlohmann_json nlohmann_json::nlohmann_json Util)
+target_link_libraries(CallGraph ${llvm_libs} Graph nlohmann_json nlohmann_json::nlohmann_json Util)
 target_include_directories(CallGraph SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(CallGraph PRIVATE ${LLVM_DEFINITIONS})
 set_target_properties(CallGraph PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

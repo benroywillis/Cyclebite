@@ -34,6 +34,14 @@ using namespace Cyclebite::Graph;
 constexpr uint64_t MAX_EDGE_UNABRIDGED = 2000;
 
 uint32_t markovOrder;
+
+// maps the dynamic pass IDs to their LLVM objects
+map<int64_t, const BasicBlock *> Cyclebite::Graph::IDToBlock;
+map<int64_t, const Value *> Cyclebite::Graph::IDToValue;
+// dynamic info from the markov profile
+map<int64_t, vector<int64_t>> Cyclebite::Graph::blockCallers;
+map<int64_t, map<string, int64_t>> Cyclebite::Graph::blockLabels;
+set<int64_t> Cyclebite::Graph::threadStarts;
 /// Maps a vector of basic block IDs to a node ID
 map<vector<uint32_t>, uint64_t> Cyclebite::Graph::NIDMap;
 /// Maps each unique instruction to its datanode
@@ -47,6 +55,137 @@ std::string to_string_float(float f, int precision = 3)
     std::stringstream stream;
     stream << std::fixed << std::setprecision(precision) << f;
     return stream.str();
+}
+
+void Cyclebite::Graph::ReadBlockInfo(const std::string &BlockInfo)
+{
+    std::map<int64_t, std::vector<int64_t>> blockCallers;
+    std::ifstream inputJson;
+    nlohmann::json j;
+    try
+    {
+        inputJson.open(BlockInfo);
+        inputJson >> j;
+        inputJson.close();
+    }
+    catch (std::exception &e)
+    {
+        spdlog::error("Couldn't open BlockInfo json file: " + BlockInfo);
+        spdlog::error(e.what());
+    }
+    for (const auto &bbid : j.items())
+    {
+        if (j[bbid.key()].find("BlockCallers") != j[bbid.key()].end())
+        {
+            blockCallers[stol(bbid.key())] = j[bbid.key()]["BlockCallers"].get<std::vector<int64_t>>();
+        }
+    }
+
+    std::map<int64_t, std::map<std::string, int64_t>> blockLabels;
+    for (const auto &bbid : j.items())
+    {
+        if (j[bbid.key()].find("Labels") != j[bbid.key()].end())
+        {
+            auto labelCounts = j[bbid.key()]["Labels"].get<std::map<std::string, int64_t>>();
+            blockLabels[stol(bbid.key())] = labelCounts;
+        }
+    }
+
+    std::set<int64_t> threadStarts;
+    if( j.find("ThreadEntrances") != j.end() )
+    {
+        for( const auto& id : j["ThreadEntrances"].get<std::vector<int64_t>>() )
+        {
+            threadStarts.insert(id);
+        }
+    }
+}
+
+void RecurseThroughOperands(llvm::Value *val, std::map<int64_t, const llvm::Value *> &IDToValue)
+{
+    if( llvm::isa<llvm::DbgInfoIntrinsic>(val) )
+    {
+        return;
+    }
+    if (auto inst = llvm::dyn_cast<llvm::Instruction>(val))
+    {
+        if (Cyclebite::Util::GetValueID(inst) < 0)
+        {
+            throw CyclebiteException("Found an instruction that did not have a ValueID.");
+        }
+        if (IDToValue.find(Cyclebite::Util::GetValueID(val)) == IDToValue.end())
+        {
+            IDToValue[Cyclebite::Util::GetValueID(val)] = val;
+        }
+        else
+        {
+            return;
+        }
+        for (unsigned int i = 0; i < inst->getNumOperands(); i++)
+        {
+            if (auto subVal = llvm::dyn_cast<llvm::Value>(inst->getOperand(i)))
+            {
+                RecurseThroughOperands(subVal, IDToValue);
+            }
+        }
+    }
+    else if (auto go = llvm::dyn_cast<llvm::GlobalObject>(val))
+    {
+        if (Cyclebite::Util::GetValueID(go) < 0)
+        {
+            throw CyclebiteException("Found a global object that did not have a ValueID.");
+        }
+        if (IDToValue.find(Cyclebite::Util::GetValueID(val)) == IDToValue.end())
+        {
+            IDToValue[Cyclebite::Util::GetValueID(go)] = val;
+        }
+        else
+        {
+            return;
+        }
+        for (unsigned int i = 0; i < go->getNumOperands(); i++)
+        {
+            if (auto subVal = llvm::dyn_cast<llvm::Value>(go->getOperand(i)))
+            {
+                RecurseThroughOperands(subVal, IDToValue);
+            }
+        }
+    }
+    else if (auto arg = llvm::dyn_cast<llvm::Argument>(val))
+    {
+        if (Cyclebite::Util::GetValueID(arg) < 0)
+        {
+            throw CyclebiteException("Found a global object that did not have a ValueID.");
+        }
+        if (IDToValue.find(Cyclebite::Util::GetValueID(val)) == IDToValue.end())
+        {
+            IDToValue[Cyclebite::Util::GetValueID(arg)] = val;
+        }
+        else
+        {
+            return;
+        }
+    }
+}
+
+void Cyclebite::Graph::InitializeIDMaps(llvm::Module *M)
+{
+    for (auto &F : *M)
+    {
+        for (auto BB = F.begin(); BB != F.end(); BB++)
+        {
+            auto *block = llvm::cast<llvm::BasicBlock>(BB);
+            if (( Cyclebite::Util::GetBlockID(block) >= 0) && (IDToBlock[Cyclebite::Util::GetBlockID(block)] == nullptr))
+            {
+                IDToBlock[Cyclebite::Util::GetBlockID(block)] = block;
+            }
+            for (auto it = block->begin(); it != block->end(); it++)
+            {
+                auto inst = llvm::cast<llvm::Instruction>(it);
+                RecurseThroughOperands(inst, IDToValue);
+            }
+        }
+    }
 }
 
 /// @brief Reads an input profile
@@ -166,7 +305,7 @@ int Cyclebite::Graph::BuildCFG(Graph &graph, const std::string &filename, bool H
 /// @param graph        The control graph that contains the input profile
 /// @param blockCallers Maps a calling block ID to a vector of its observed destination blocks
 /// @param IDToBlock    Maps a block ID to a basic block pointer
-void resolveNullFunctionCall(const shared_ptr<ControlNode> &srcNode, set<shared_ptr<ControlNode>, p_GNCompare> &snkNodes, const CallBase *call, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void resolveNullFunctionCall(const shared_ptr<ControlNode> &srcNode, set<shared_ptr<ControlNode>, p_GNCompare> &snkNodes, const CallBase *call, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     // blockCallers should tell us which basic block this null function call goes to next
 
@@ -208,7 +347,7 @@ void resolveNullFunctionCall(const shared_ptr<ControlNode> &srcNode, set<shared_
 #ifdef DEBUG
         PrintVal(call->getParent());
         spdlog::warn("Blockcallers did not contain information for a null function call observed in the dynamic profile. This could be due to an empty function or profiler error.");
-        set<BasicBlock *> BBSuccs;
+        set<const BasicBlock *> BBSuccs;
         for (unsigned i = 0; i < call->getParent()->getTerminator()->getNumSuccessors(); i++)
         {
             BBSuccs.insert(call->getParent()->getTerminator()->getSuccessor(i));
@@ -226,7 +365,7 @@ void resolveNullFunctionCall(const shared_ptr<ControlNode> &srcNode, set<shared_
     }
 }
 
-void buildFunctionSubgraph(shared_ptr<CallEdge> &newCall, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const BasicBlock *functionBlock)
+void buildFunctionSubgraph(shared_ptr<CallEdge> &newCall, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock, const BasicBlock *functionBlock)
 {
     // this section builds out the function subgraph in dynamic nodes
     // the subgraph should include all functions below this one
@@ -435,7 +574,7 @@ shared_ptr<ControlNode> AddImaginaryEdges(llvm::Module* sourceBitcode, Graph& gr
 /// @param graph            A raw profile that has been turned into a graph. By the end of this method, graph will pass all checks in Cyclebite::Graph::Checks
 /// @param blockCallers     A map connecting caller basic blocks to their callees
 /// @param IDToBlock        A map connecting basic block IDs to an llvm::BasicBlock pointer
-void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     // for each function in the bitcode, parse its static structures (function calls, branch instructions) and inject that information into the dynamic graph
     // 0. Put imaginary nodes at start and end of main
@@ -705,7 +844,7 @@ void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::ma
                 // the snk node of the return edge is just the BB with the function call inst
                 // to find the src node of the return edge of this call edge, we have to look through all return instructions of the called function
                 auto firstFunctionBlock = NodeToBlock(newCall->getWeightedSnk(), IDToBlock);
-                set<llvm::Instruction *> exits;
+                set<const llvm::Instruction *> exits;
                 for (auto block = firstFunctionBlock->getParent()->begin(); block != firstFunctionBlock->getParent()->end(); block++)
                 {
                     if (auto ret = llvm::dyn_cast<ReturnInst>(block->getTerminator()))
@@ -1009,7 +1148,7 @@ void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::ma
 /// This method looks through all live functions in the bitcode and repairs their incoming edges to call edges, because these call edges will be invisible when evaluating the incoming LLVM bitcode
 /// @param dynamicCG    Dynamic callgraph generated from getDynamicCallGraph(). This argument will have all information discovered injected into itself, thus the argument is not const
 /// @param graph        Dynamic controlgraph imported from the input profile. This argument may have edges upgraded, thus the argument is not const
-void PatchFunctionEdges(const llvm::CallGraph &staticCG, Cyclebite::Graph::Graph &graph, const std::map<int64_t, vector<int64_t>> &blockCallers, const map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void PatchFunctionEdges(const llvm::CallGraph &staticCG, Cyclebite::Graph::Graph &graph, const std::map<int64_t, vector<int64_t>> &blockCallers, const map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     for (auto node = staticCG.begin(); node != staticCG.end(); node++)
     {
@@ -1155,7 +1294,7 @@ void PatchFunctionEdges(const llvm::CallGraph &staticCG, Cyclebite::Graph::Graph
 /// When said dead function calls said live function multiple times in a row without returning, it appears to the profiler as though the function is calling itself, tail-to-head
 /// These edges need to be removed because they will propogate through the analysis and screw something up later on
 /// In the future, these edges may be replaced by imaginary edges that try to model what actually happened in the code, but for now they are just getting deleted
-void RemoveTailHeadCalls( Cyclebite::Graph::ControlGraph& cg, const Cyclebite::Graph::CallGraph& dynamicCG, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock )
+void RemoveTailHeadCalls( Cyclebite::Graph::ControlGraph& cg, const Cyclebite::Graph::CallGraph& dynamicCG, const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock )
 {
     // set of edges that should be removed from the input control graph (because they are caused by blind spots in the dynamic profile)
     set<shared_ptr<CallEdge>, GECompare> toRemove;
@@ -1228,7 +1367,7 @@ void RemoveTailHeadCalls( Cyclebite::Graph::ControlGraph& cg, const Cyclebite::G
     }
 }
 
-void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg, Cyclebite::Graph::CallGraph& dynamicCG, const std::string& filePath, const unique_ptr<llvm::Module>& SourceBitcode, const llvm::CallGraph& staticCG, const map<int64_t, vector<int64_t>>& blockCallers, const set<int64_t>& threadStarts, const map<int64_t, BasicBlock*>& IDToBlock, bool HotCodeDetection)
+void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg, Cyclebite::Graph::CallGraph& dynamicCG, const std::string& filePath, const unique_ptr<llvm::Module>& SourceBitcode, const llvm::CallGraph& staticCG, const map<int64_t, vector<int64_t>>& blockCallers, const set<int64_t>& threadStarts, const map<int64_t, const BasicBlock*>& IDToBlock, bool HotCodeDetection)
 {
     Graph graph;
     // node that was observed to exit the program
@@ -1278,7 +1417,7 @@ void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg,
 #endif
 }
 
-const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Module *mod, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Module *mod, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     Cyclebite::Graph::CallGraph dynamicCG;
     for (auto f = mod->begin(); f != mod->end(); f++)
@@ -1483,7 +1622,7 @@ const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Mo
     return dynamicCG;
 }
 
-void Cyclebite::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebite::Graph::CallGraph &DCG, const Graph &dynamicGraph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void Cyclebite::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebite::Graph::CallGraph &DCG, const Graph &dynamicGraph, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     // do the dynamicGraph calledges and the DCG edges agree?
     for (const auto &edge : DCG.edges())
@@ -1574,7 +1713,7 @@ shared_ptr<Inst> ConstructCallNode( DataGraph& graph,
                                     const llvm::CallBase* call, 
                                     const Cyclebite::Graph::CallGraph& dynamicCG, 
                                     const map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, 
-                                    const std::map<int64_t, llvm::BasicBlock*>& IDToBlock )
+                                    const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock )
 {
     // upgrade to a CallNode
     // the llvm::CallBase instruction may contain missing information ie a function pointer
@@ -1738,7 +1877,7 @@ void Cyclebite::Graph::BuildDFG( set<std::shared_ptr<ControlBlock>, p_GNCompare>
                                  const unique_ptr<llvm::Module>& SourceBitcode, 
                                  const Cyclebite::Graph::CallGraph& dynamicCG, 
                                  const map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, 
-                                 const std::map<int64_t, llvm::BasicBlock*>& IDToBlock)
+                                 const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock)
 {
     // this section constructs the data flow of instructions (Cyclebite::Graph::Inst) and Cyclebite::Graph::ControlBlock
     for (auto f = SourceBitcode->begin(); f != SourceBitcode->end(); f++)
@@ -2623,7 +2762,7 @@ set<int64_t> findOriginalBlockIDs(const shared_ptr<ControlNode>& ent)
     return originalBlocks;
 }
 
-void Cyclebite::Graph::WriteKernelFile(const ControlGraph &graph, const set<std::shared_ptr<MLCycle>, KCompare> &kernels, const map<int64_t, llvm::BasicBlock *> &IDToBlock, const map<int64_t, std::vector<int64_t>> &blockCallers, const EntropyInfo &info, const string &OutputFileName, bool hotCode)
+void Cyclebite::Graph::WriteKernelFile(const ControlGraph &graph, const set<std::shared_ptr<MLCycle>, KCompare> &kernels, const map<int64_t, const llvm::BasicBlock *> &IDToBlock, const map<int64_t, std::vector<int64_t>> &blockCallers, const EntropyInfo &info, const string &OutputFileName, bool hotCode)
 {
     // write kernel file
     json outputJson;

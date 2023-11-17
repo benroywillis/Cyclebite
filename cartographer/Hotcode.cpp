@@ -201,7 +201,7 @@ set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotCode(c
     return kernels;
 }
 
-set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotLoops(const set<std::shared_ptr<MLCycle>, KCompare> &hotKernels, const Graph::Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const string &loopfilename)
+set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotLoops(const set<std::shared_ptr<MLCycle>, KCompare> &hotKernels, const Graph::Graph &graph, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock, const string &loopfilename)
 {
     set<std::shared_ptr<MLCycle>, KCompare> kernels;
     set<StaticLoop, StaticLoopCompare> staticLoops;

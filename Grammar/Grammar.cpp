@@ -36,18 +36,15 @@ int main(int argc, char *argv[])
 {
     cl::ParseCommandLineOptions(argc, argv);
     // load dynamic source code information
-    auto blockCallers = ReadBlockInfo(BlockInfoFilename);
-    auto blockLabels = ReadBlockLabels(BlockInfoFilename);
-    auto threadStarts = ReadThreadStarts(BlockInfoFilename);
+    ReadBlockInfo(BlockInfoFilename);
     // load bitcode
     LLVMContext context;
     SMDiagnostic smerror;
     auto SourceBitcode = parseIRFile(BitcodeFileName, smerror, context);
     Cyclebite::Util::Format(*SourceBitcode, false);
     // construct its callgraph
-    map<int64_t, BasicBlock *> IDToBlock;
-    map<int64_t, Value *> IDToValue;
-    Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+
+    InitializeIDMaps(SourceBitcode.get());
     // build IR to source maps (must be done after ID maps are initialized)
     InitSourceMaps(SourceBitcode);
 

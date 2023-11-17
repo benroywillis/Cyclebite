@@ -4,6 +4,7 @@
 //==------------------------------==//
 #pragma once
 #include "Util/Exceptions.h"
+#include "Util/Print.h"
 #include <filesystem>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DIBuilder.h>
@@ -263,93 +264,6 @@ namespace Cyclebite::Util
         return result;
     }
 
-    inline void RecurseThroughOperands(llvm::Value *val, std::map<int64_t, llvm::Value *> &IDToValue)
-    {
-        if( llvm::isa<llvm::DbgInfoIntrinsic>(val) )
-        {
-            return;
-        }
-        if (auto inst = llvm::dyn_cast<llvm::Instruction>(val))
-        {
-            if (GetValueID(inst) < 0)
-            {
-                throw CyclebiteException("Found an instruction that did not have a ValueID.");
-            }
-            if (IDToValue.find(GetValueID(val)) == IDToValue.end())
-            {
-                IDToValue[GetValueID(val)] = val;
-            }
-            else
-            {
-                return;
-            }
-            for (unsigned int i = 0; i < inst->getNumOperands(); i++)
-            {
-                if (auto subVal = llvm::dyn_cast<llvm::Value>(inst->getOperand(i)))
-                {
-                    RecurseThroughOperands(subVal, IDToValue);
-                }
-            }
-        }
-        else if (auto go = llvm::dyn_cast<llvm::GlobalObject>(val))
-        {
-            if (GetValueID(go) < 0)
-            {
-                throw CyclebiteException("Found a global object that did not have a ValueID.");
-            }
-            if (IDToValue.find(GetValueID(val)) == IDToValue.end())
-            {
-                IDToValue[GetValueID(go)] = val;
-            }
-            else
-            {
-                return;
-            }
-            for (unsigned int i = 0; i < go->getNumOperands(); i++)
-            {
-                if (auto subVal = llvm::dyn_cast<llvm::Value>(go->getOperand(i)))
-                {
-                    RecurseThroughOperands(subVal, IDToValue);
-                }
-            }
-        }
-        else if (auto arg = llvm::dyn_cast<llvm::Argument>(val))
-        {
-            if (GetValueID(arg) < 0)
-            {
-                throw CyclebiteException("Found a global object that did not have a ValueID.");
-            }
-            if (IDToValue.find(GetValueID(val)) == IDToValue.end())
-            {
-                IDToValue[GetValueID(arg)] = val;
-            }
-            else
-            {
-                return;
-            }
-        }
-    }
-
-    inline void InitializeIDMaps(llvm::Module *M, std::map<int64_t, llvm::BasicBlock *> &IDToBlock, std::map<int64_t, llvm::Value *> &IDToValue)
-    {
-        for (auto &F : *M)
-        {
-            for (auto BB = F.begin(); BB != F.end(); BB++)
-            {
-                auto *block = llvm::cast<llvm::BasicBlock>(BB);
-                if ((GetBlockID(block) >= 0) && (IDToBlock[GetBlockID(block)] == nullptr))
-                {
-                    IDToBlock[GetBlockID(block)] = block;
-                }
-                for (auto it = block->begin(); it != block->end(); it++)
-                {
-                    auto inst = llvm::cast<llvm::Instruction>(it);
-                    RecurseThroughOperands(inst, IDToValue);
-                }
-            }
-        }
-    }
-
     inline bool isAllocatingFunction(const llvm::CallBase* call)
     {
         if( call->getCalledFunction() )
@@ -557,5 +471,56 @@ namespace Cyclebite::Util
             auto err = rso.str();
             spdlog::critical("Tik Module Corrupted: \n" + err);
         }
+    }
+
+    inline const std::vector<const llvm::Function*> GetFunctionsFromCall( const llvm::CallBase* call, 
+                                                      const std::map<int64_t, std::vector<int64_t>>& blockCallers, 
+                                                      const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock )
+    {
+        std::vector<const llvm::Function*> funcs;
+        if( call->getCalledFunction() )
+        {
+            funcs.push_back(call->getCalledFunction());
+            return funcs;
+        }
+        else
+        {
+            auto instString = PrintVal(call, false);
+            // blockCallers should tell us which basic block this null function call goes to next
+            if (blockCallers.find(Cyclebite::Util::GetBlockID(call->getParent())) != blockCallers.end())
+            {
+                // this is a multi-dimensional problem, even with basic block splitting
+                // a function pointer is allowed to call any function that matches a signature
+                // when a function pointer goes to more than one function, we have to be able to enumerate that case here
+                for (auto callee : blockCallers.at(Cyclebite::Util::GetBlockID(call->getParent())))
+                {
+                    funcs.push_back(IDToBlock.at(callee)->getParent());
+                }
+            }
+            // there is a corner case here where libc functions can appear to be null when in fact they are statically determinable
+            // this can happen if somebody uses a libc function but doesn't include the corresponding header (this will show up as a warning about an undeclared function)
+            // the linker will make this all okay, but within the bitcode module for some reason the LLVM api will return null, even when a function pointer is not used
+            // example: Algorithms/UnitTests/SimpleRecursion (fibonacci), the atoi() function will appear to be a null function call unless #include <stdlib.h> is at the top
+            // the below checks will break because the function itself will appear "empty" in the llvm IR (it is from libc and we don't profile that)
+            // since the function call is not profiled, we will not get an entry in blockCallers for it
+            // to help prevent this, the user can pass -Werror
+            // at this point, the only way I can think of to detect this case is to see if there is actually a function name (with a preceding @ symbol)
+            // the above mechanism will fail if the null function call has a global variable in its arguments list (globals are preceded by @ too)
+            else if (instString.find('@') != std::string::npos)
+            {
+                // this is likely the corner case explained above, so we skip
+                // John: 4/20/22, we should keep track of this, throw a warning (to measure the nature of this phenomenon [is it just libc, how prevalent is it])
+                spdlog::warn("Found a statically determinable function call that appeared to be null. This is likely caused by a lack of declaration in the original source file.");
+            }
+            else
+            {
+                // this case could be due to either an empty function being called (a function that isn't in the input bitcode module) or profiler error... There really isn't any way of us knowing at this stage
+#ifdef DEBUG
+                PrintVal(call->getParent());
+                spdlog::warn("Blockcallers did not contain information for a null function call observed in the dynamic profile. This could be due to an empty function or profiler error.");
+#endif
+            }
+        }
+        return funcs;
     }
 } // namespace Cyclebyte::Util

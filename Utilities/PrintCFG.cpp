@@ -38,9 +38,7 @@ int main(int argc, char *argv[])
     auto SourceBitcode = parseIRFile(BitcodeFileName, smerror, context);
     Cyclebite::Util::Format(*SourceBitcode);
     // construct its callgraph
-    map<int64_t, BasicBlock *> IDToBlock;
-    map<int64_t, Value *> IDToValue;
-    Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    Cyclebite::Graph::InitializeIDMaps(SourceBitcode.get());
     // Construct bitcode CallGraph
     //map<BasicBlock *, Function *> BlockToFPtr;
     //auto CG = getCallGraph(SourceBitcode.get(), blockCallers, BlockToFPtr, IDToBlock);

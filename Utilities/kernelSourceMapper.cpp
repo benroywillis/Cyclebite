@@ -2,6 +2,7 @@
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
+#include "Graph/inc/IO.h"
 #include "Util/Format.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -39,10 +40,7 @@ int main(int argc, char **argv)
 
     // Don't clean the debug info, but format it like the rest of the tools
     Cyclebite::Util::Format(*SourceBitcode, false);
-
-    map<int64_t, BasicBlock *> IDToBlock;
-    map<int64_t, Value *> IDToValue;
-    Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    Cyclebite::Graph::InitializeIDMaps(SourceBitcode.get());
 
     ifstream inputJson;
     nlohmann::json j;
@@ -65,7 +63,7 @@ int main(int argc, char **argv)
         map<string, set<int>> sourceLines;
         for (const auto &BID : value["Blocks"])
         {
-            auto block = IDToBlock[BID];
+            auto block = Cyclebite::Graph::IDToBlock[BID];
             for (auto i = block->begin(); i != block->end(); i++ )
             {
                 if (i->hasMetadata())

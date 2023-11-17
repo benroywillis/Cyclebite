@@ -52,9 +52,7 @@ int main(int argc, char **argv)
     cl::ParseCommandLineOptions(argc, argv);
 
     // static and dynamic information about the program structure
-    auto blockCallers = ReadBlockInfo(BlockInfoFilename);
-    auto blockLabels = ReadBlockLabels(BlockInfoFilename);
-    auto threadStarts = ReadThreadStarts(BlockInfoFilename);
+    ReadBlockInfo(BlockInfoFilename);
     auto SourceBitcode = ReadBitcode(BitcodeFileName);
     if (SourceBitcode == nullptr)
     {
@@ -69,9 +67,7 @@ int main(int argc, char **argv)
     callGraphDot.close();
 #endif
     // map IDs to blocks and values
-    map<int64_t, BasicBlock *> IDToBlock;
-    map<int64_t, Value *> IDToValue;
-    Cyclebite::Util::InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    InitializeIDMaps(SourceBitcode.get());
     // construct program control graph and call graph
     ControlGraph cg;
     Cyclebite::Graph::CallGraph dynamicCG;

@@ -64,7 +64,7 @@ void Cyclebite::Grammar::InitSourceMaps(const std::unique_ptr<llvm::Module>& Sou
     }
 }
 
-void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::json& instanceJson, const map<int64_t, llvm::Value*>& IDToValue)
+void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::json& instanceJson, const map<int64_t, const llvm::Value*>& IDToValue)
 {
     if( instanceJson.find("Instruction Tuples") == instanceJson.end() )
     {
@@ -74,28 +74,19 @@ void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::jso
     //for( const auto& value : instanceJson["Instruction Tuples"].items() )
     for( const auto& value : instanceJson["Instruction Tuples"] )
     {
-        //auto val = IDToValue.at(stol(value.key()));
-        auto val = IDToValue.at(value);
-        if( val )
+        if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(IDToValue.at(value)) )
         {
-            if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(val) )
+            if( Cyclebite::Graph::DNIDMap.find(inst) == Cyclebite::Graph::DNIDMap.end() )
             {
-                if( Cyclebite::Graph::DNIDMap.find(inst) == Cyclebite::Graph::DNIDMap.end() )
-                {
-                    throw CyclebiteException("Found a significant memory op that's not live!");
-                }
-                // mark as significant
-                SignificantMemInst.insert( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(inst)) );
+                throw CyclebiteException("Found a significant memory op that's not live!");
             }
-            else
-            {
-                PrintVal(val);
-                throw CyclebiteException("Significant memory op is not an instruction!");
-            }
+            // mark as significant
+            SignificantMemInst.insert( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(inst)) );
         }
         else
         {
-            throw CyclebiteException("Cannot find significant memory op ID in the value ID map!");
+            PrintVal(IDToValue.at(value));
+            throw CyclebiteException("Significant memory op is not an instruction!");
         }
     }
 }

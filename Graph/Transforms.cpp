@@ -100,7 +100,7 @@ shared_ptr<GraphNode> Cyclebite::Graph::BlockToNode(const Graph &graph, const ll
 /// If markovOrder > 1, nodes map to [markovOrder] blocks
 /// In order to map a node with subgraphs to 1 basic block, we take the node that has an edge that exits the subgraph
 /// If multiple edges are found to exit the subgraph, and exception is thrown
-llvm::BasicBlock *Cyclebite::Graph::NodeToBlock(const std::shared_ptr<ControlNode> &node, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+const llvm::BasicBlock *Cyclebite::Graph::NodeToBlock(const std::shared_ptr<ControlNode> &node, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     shared_ptr<ControlNode> targetNode = nullptr;
     if (auto VN = dynamic_pointer_cast<VirtualNode>(node))
@@ -1573,7 +1573,7 @@ bool Cyclebite::Graph::hasDirectRecursion(const llvm::CallGraphNode *node)
     return false;
 }
 
-bool hasDirectRecursion(const std::shared_ptr<ControlNode> &node, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const llvm::CallGraph &CG)
+bool hasDirectRecursion(const std::shared_ptr<ControlNode> &node, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock, const llvm::CallGraph &CG)
 {
     auto block = NodeToBlock(node, IDToBlock);
     if (block->getParent())
@@ -1672,7 +1672,7 @@ bool Cyclebite::Graph::hasIndirectRecursion(const llvm::CallGraphNode *node)
     return false;
 }
 
-bool hasIndirectRecursion(const std::shared_ptr<ControlNode> &node, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const llvm::CallGraph &CG)
+bool hasIndirectRecursion(const std::shared_ptr<ControlNode> &node, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock, const llvm::CallGraph &CG)
 {
     auto block = NodeToBlock(node, IDToBlock);
     if (block->getParent())
@@ -3361,7 +3361,7 @@ set<shared_ptr<MLCycle>, KCompare> Cyclebite::Graph::FindMLCycles(ControlGraph &
     return kernels;
 }
 
-void Cyclebite::Graph::FindAllRecursiveFunctions(const llvm::CallGraph &CG, const Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void Cyclebite::Graph::FindAllRecursiveFunctions(const llvm::CallGraph &CG, const Graph &graph, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     uint32_t CGsize = 0;
     uint32_t totalFunctions = 0;
@@ -3425,7 +3425,7 @@ void Cyclebite::Graph::FindAllRecursiveFunctions(const llvm::CallGraph &CG, cons
     spdlog::info("DIRECT RECURSION FUNCTIONS: " + to_string(DR));
 }
 
-void Cyclebite::Graph::FindAllRecursiveFunctions(const Cyclebite::Graph::CallGraph &CG, const Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void Cyclebite::Graph::FindAllRecursiveFunctions(const Cyclebite::Graph::CallGraph &CG, const Graph &graph, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     uint32_t CGsize = 0;
     uint32_t totalFunctions = 0;

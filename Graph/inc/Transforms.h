@@ -26,7 +26,7 @@ namespace Cyclebite::Graph
 
     void Checks(const ControlGraph &transformed, std::string step, bool segmentation = false);
     std::shared_ptr<GraphNode> BlockToNode(const Graph &graph, const llvm::BasicBlock *block, const std::map<std::vector<uint32_t>, uint64_t> &NIDMap);
-    llvm::BasicBlock *NodeToBlock(const std::shared_ptr<ControlNode> &node, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock);
+    const llvm::BasicBlock *NodeToBlock(const std::shared_ptr<ControlNode> &node, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock);
     //std::set<std::shared_ptr<ControlNode> , p_GNCompare> ReduceMO(Graph& graph, int inputOrder, int desiredOrder);
     void reverseTransform(Graph &graph);
     ControlGraph reverseTransform_MLCycle(const ControlGraph& graph);
@@ -45,6 +45,6 @@ namespace Cyclebite::Graph
     //bool MergeForks(Graph &subgraph, const std::shared_ptr<ControlNode> &source, const std::shared_ptr<ControlNode> &sink);
     void ApplyCFGTransforms(ControlGraph &graph, const Cyclebite::Graph::CallGraph &dynamicCG, bool segmentation = false);
     std::set<std::shared_ptr<MLCycle>, KCompare> FindMLCycles(ControlGraph &graph, const Cyclebite::Graph::CallGraph &dynamicCG, bool applyTransforms = false);
-    void FindAllRecursiveFunctions(const llvm::CallGraph &CG, const Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock);
-    void FindAllRecursiveFunctions(const Cyclebite::Graph::CallGraph &CG, const Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock);
+    void FindAllRecursiveFunctions(const llvm::CallGraph &CG, const Graph &graph, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock);
+    void FindAllRecursiveFunctions(const Cyclebite::Graph::CallGraph &CG, const Graph &graph, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock);
 } // namespace Cyclebite::Graph

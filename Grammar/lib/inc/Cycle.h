@@ -14,7 +14,7 @@ namespace Cyclebite::Grammar
     class Task;
     std::set<std::shared_ptr<class Cycle>> ConstructCycles(const nlohmann::json& instanceJson, 
                                                            const nlohmann::json& kernelJson, 
-                                                           const std::map<int64_t, llvm::BasicBlock*>& IDToBlock,
+                                                           const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock,
                                                            std::set<std::shared_ptr<Cycle>>& taskCycles);
     class Cycle
     {

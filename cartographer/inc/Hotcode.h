@@ -26,5 +26,5 @@ namespace Cyclebite::Cartographer
     };
 
     std::set<std::shared_ptr<Cyclebite::Graph::MLCycle>, Cyclebite::Graph::KCompare> DetectHotCode(const std::set<std::shared_ptr<Cyclebite::Graph::ControlNode>, Cyclebite::Graph::p_GNCompare> &nodes, float hotTreshold);
-    std::set<std::shared_ptr<Cyclebite::Graph::MLCycle>, Cyclebite::Graph::KCompare> DetectHotLoops(const std::set<std::shared_ptr<Graph::MLCycle>, Graph::KCompare> &hotKernels, const Graph::Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const std::string &loopfilename);
+    std::set<std::shared_ptr<Cyclebite::Graph::MLCycle>, Cyclebite::Graph::KCompare> DetectHotLoops(const std::set<std::shared_ptr<Graph::MLCycle>, Graph::KCompare> &hotKernels, const Graph::Graph &graph, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock, const std::string &loopfilename);
 } // namespace Cyclebite::Cartographer
