@@ -484,11 +484,9 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             }
             else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(Q.front()) )
             {
-                PrintVal(arg);
                 // this may be a base pointer
                 for( const auto& bp : bps )
                 {
-                    PrintVal(bp->getNode()->getVal());
                     if( bp->getNode()->getVal() == arg )
                     {
                         collBPs.insert(bp);
