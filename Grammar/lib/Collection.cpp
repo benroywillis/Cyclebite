@@ -10,6 +10,7 @@
 #include "BasePointer.h"
 #include "Task.h"
 #include "Util/Print.h"
+#include "IO.h"
 #include <deque>
 
 using namespace Cyclebite::Grammar;
@@ -214,6 +215,15 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                             starts.insert( ptrInst );
                             elements.insert(i->getInst());
                         }
+                        else if( const auto& arg = llvm::dyn_cast<llvm::Argument>( llvm::cast<llvm::LoadInst>(i->getInst())->getPointerOperand() ) )
+                        {
+                            // confirm this is a significant mem inst and push it into the starts
+                            if( SignificantMemInst.contains(i) )
+                            {
+                                starts.insert(i->getInst());
+                                elements.insert(i->getInst());
+                            }
+                        }
                     }
                 }
                 else if( i->getOp() == Cyclebite::Graph::Operation::store )
@@ -229,6 +239,16 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                                 elements.insert( i->getInst() );
                             }
                         }
+                        else
+                        {
+                            spdlog::warn("The value of a task store was not an instruction!");
+                        }
+                    }
+                    else
+                    {
+                        PrintVal( llvm::cast<llvm::StoreInst>(i->getInst())->getValueOperand() );
+                        PrintVal(i->getInst());
+                        spdlog::warn("Could not find the value of a task store in the DNID map!");
                     }
                 }
             }
@@ -464,9 +484,11 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             }
             else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(Q.front()) )
             {
+                PrintVal(arg);
                 // this may be a base pointer
                 for( const auto& bp : bps )
                 {
+                    PrintVal(bp->getNode()->getVal());
                     if( bp->getNode()->getVal() == arg )
                     {
                         collBPs.insert(bp);
@@ -491,6 +513,11 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(e) )
             {
                 if( st == ld->getPointerOperand() )
+                {
+                    eps.insert(ld);
+                }
+                // accomodates the case when a load uses a function arg directly
+                else if( st == ld )
                 {
                     eps.insert(ld);
                 }
