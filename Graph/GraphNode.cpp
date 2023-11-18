@@ -26,7 +26,7 @@ std::shared_ptr<GraphEdge> GraphNode::isPredecessor(std::shared_ptr<GraphNode> s
 {
     for (const auto &s : successors)
     {
-        if (s->getSnk() == succ)
+        if (s->getSnk()->NID == succ->NID)
         {
             return s;
         }
@@ -38,7 +38,7 @@ std::shared_ptr<GraphEdge> GraphNode::isSuccessor(std::shared_ptr<GraphNode> pre
 {
     for (const auto &p : predecessors)
     {
-        if (p->getSrc() == pred)
+        if (p->getSrc()->NID == pred->NID)
         {
             return p;
         }
