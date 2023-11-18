@@ -2,6 +2,7 @@
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
+#include "IO.h"
 #include "Categorize.h"
 #include "Task.h"
 #include <deque>
@@ -445,6 +446,17 @@ set<shared_ptr<Cyclebite::Graph::DataValue>> findMemory(const set<shared_ptr<Tas
         set<const llvm::Value *> covered;
         for( const auto& ld : lds )
         {
+            if( Cyclebite::Graph::DNIDMap.contains(ld) )
+            {
+                if( SignificantMemInst.contains( static_pointer_cast<Cyclebite::Graph::Inst>( Cyclebite::Graph::DNIDMap.at(ld)) ) )
+                {
+                    auto r = colors.insert(make_shared<NodeColor>(ld, OpColor::Blue));
+                    if (!r.second)
+                    {
+                        (*r.first)->colors.insert(OpColor::Blue);
+                    }
+                }
+            }
             if( const auto& ptr = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()) )
             {
                 Q.push_back(ptr);
