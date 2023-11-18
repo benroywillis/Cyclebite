@@ -325,8 +325,14 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 auto incomingBlock = phi->getIncomingBlock(i);
                 if( Cyclebite::Graph::BBCBMap.contains(incomingBlock) )
                 {
-                    // it is live, put the value in the live set
-                    liveIncomingValues.insert(phi->getIncomingValue(i));
+                    // if the predecessor block is live, see if the edge between that block and this one is live
+                    auto predBlock = Cyclebite::Graph::BBCBMap.at(incomingBlock);
+                    auto succBlock = Cyclebite::Graph::BBCBMap.at(phi->getParent());
+                    if( (predBlock->isPredecessor(succBlock) != nullptr) && (succBlock->isSuccessor(predBlock) != nullptr) )
+                    {
+                        // it is live, put the value in the live set
+                        liveIncomingValues.insert(phi->getIncomingValue(i));
+                    }
                 }
             }
             if( liveIncomingValues.size() > 1 )
@@ -454,6 +460,28 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             // example: StencilChain/Naive/DFG_Kernel15.svg (shufflevector transforms i8 to i32, then i32 is converted to float before the MAC takes place)
             PrintVal(node->getInst());
             throw CyclebiteException("Cannot support shufflevector instructions yet!");
+        }
+        else if( const auto& unary = llvm::dyn_cast<llvm::UnaryInstruction>(op) )
+        {
+            // fneg is the most common example of this
+            if( const auto& nodeInst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(opNode) )
+            {
+                vector<shared_ptr<Symbol>> args;
+                for( const auto& unaryOp : unary->operands() )
+                {
+                    for( const auto& news : buildExpression(nodeInst, t, unaryOp, nodeToExpr, colls, vars) )
+                    {
+                        args.push_back( news );
+                    }
+                }
+                auto unaryExpr = make_shared<OperatorExpression>(t, Cyclebite::Graph::GetOp(unary->getOpcode()), args);
+                nodeToExpr[ opNode ] = unaryExpr;
+                newSymbols.push_back(unaryExpr);
+            }
+            else
+            {
+                throw CyclebiteException("Unary instruction is not a Graph::Inst!");
+            }
         }
     }
     else if( auto con = llvm::dyn_cast<llvm::Constant>(op) )
