@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
 #pragma once
-#include <memory>
 #include "GraphEdge.h"
 
 namespace Cyclebite::Graph

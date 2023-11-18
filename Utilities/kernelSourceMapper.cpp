@@ -4,39 +4,23 @@
 //==------------------------------==//
 #include "Graph/inc/IO.h"
 #include "Util/Format.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Module.h"
 #include "llvm/IRReader/IRReader.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/SourceMgr.h"
-#include <fstream>
 #include <iomanip>
-#include <map>
-#include <nlohmann/json.hpp>
-#include <set>
-#include <spdlog/spdlog.h>
 
 using namespace llvm;
 using namespace std;
 
-cl::opt<std::string> InputFilename("i", cl::desc("Input bitcode. Must be compiled with maximum debug symbols to optimize the result of this tool."), cl::value_desc("input.bc"), cl::Required);
-cl::opt<std::string> KernelFilename("k", cl::desc("Input kernel .json file"), cl::value_desc("kernel.json"), cl::Required);
-cl::opt<std::string> MapFileName("o", cl::desc("Output map file"), cl::value_desc("kernel filename"), cl::init("kernelMap.json"));
-
-static int valueId = 0;
-
-string getName()
-{
-    string name = "v_" + to_string(valueId++);
-    return name;
-}
+cl::opt<string> BitcodeFileName("i", cl::desc("Input bitcode. Must be compiled with maximum debug symbols to optimize the result of this tool."), cl::value_desc("input.bc"), cl::Required);
+cl::opt<string> KernelFileName("k", cl::desc("Input kernel .json file"), cl::value_desc("kernel.json"), cl::Required);
+cl::opt<string> SourceFileName("o", cl::desc("Output map file"), cl::value_desc("kernel filename"), cl::init("kernelMap.json"));
 
 int main(int argc, char **argv)
 {
     cl::ParseCommandLineOptions(argc, argv);
     LLVMContext context;
     SMDiagnostic smerror;
-    std::unique_ptr<Module> SourceBitcode = parseIRFile(InputFilename, smerror, context);
+    std::unique_ptr<Module> SourceBitcode = parseIRFile(BitcodeFileName, smerror, context);
 
     // Don't clean the debug info, but format it like the rest of the tools
     Cyclebite::Util::Format(*SourceBitcode, false);
@@ -46,13 +30,13 @@ int main(int argc, char **argv)
     nlohmann::json j;
     try
     {
-        inputJson.open(KernelFilename);
+        inputJson.open(KernelFileName);
         inputJson >> j;
         inputJson.close();
     }
     catch (exception &e)
     {
-        spdlog::error("Couldn't open input json file: " + KernelFilename);
+        spdlog::error("Couldn't open input json file: " + KernelFileName);
         spdlog::error(e.what());
         return EXIT_FAILURE;
     }
@@ -108,7 +92,7 @@ int main(int argc, char **argv)
     }
 
     std::ofstream file;
-    file.open(MapFileName);
+    file.open(SourceFileName);
     file << setw(4) << kernelMap;
     file.close();
     return 0;

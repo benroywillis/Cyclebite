@@ -3316,10 +3316,6 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
             }
             for (const auto &n : node->getSuccessors())
             {
-                if( const auto& call = dynamic_pointer_cast<CallNode>(node) )
-                {
-                    bool doNothing = true;
-                }
                 dotString += "\t" + to_string(n->getSrc()->NID) + " -> " + to_string(n->getSnk()->NID) + ";\n";
             }
             // build edges from the terminator of this basic block to the successors in the control flow graph

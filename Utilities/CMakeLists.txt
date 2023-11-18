@@ -1,7 +1,5 @@
 add_executable(kernelSourceMapper kernelSourceMapper.cpp)
-target_link_libraries(kernelSourceMapper ${llvm_libs} Graph nlohmann_json nlohmann_json::nlohmann_json Util)
-target_include_directories(kernelSourceMapper SYSTEM PRIVATE ${LLVM_INCLUDE_DIRS})
-target_compile_definitions(kernelSourceMapper PRIVATE ${LLVM_DEFINITIONS})
+target_link_libraries(kernelSourceMapper Graph)
 set_target_properties(kernelSourceMapper
 	PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin" 
