@@ -272,36 +272,42 @@ set<shared_ptr<Cycle>> VectorizeExpression( const shared_ptr<Expression>& expr )
     return reductionCycles;
 }
 
-void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, shared_ptr<Expression>>& taskToExpr )
+void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& taskToExpr )
 {
     // first, task name
     cout << endl;
     for( const auto& t : taskToExpr )
     {
-        spdlog::info("Cyclebite-Template Label: Task"+to_string(t.first->getID())+" -> "+MapTaskToName(t.second));
+        for( const auto& expr : t.second )
+        {
+            spdlog::info("Cyclebite-Template Label: Task"+to_string(t.first->getID())+" -> "+MapTaskToName(expr));
+        }
     }
     //cout << endl;
     // second, task optimization and export
     for( const auto& t : taskToExpr )
     {
+        for( const auto& expr : t.second )
+        {
 #ifdef DEBUG
-        for( const auto& coll : t.second->getCollections() )
-        {
-            auto dotString = VisualizeCollection(coll);
-            ofstream tStream("Task"+to_string(t.second->getTask()->getID())+"_Collection"+to_string(coll->getID())+".dot");
-            tStream << dotString;
-            tStream.close();
-        }
+            for( const auto& coll : expr->getCollections() )
+            {
+                auto dotString = VisualizeCollection(coll);
+                ofstream tStream("Task"+to_string(expr->getTask()->getID())+"_Collection"+to_string(coll->getID())+".dot");
+                tStream << dotString;
+                tStream.close();
+            }
 #endif
-        try
-        {
-            auto parallelSpots = ParallelizeCycles( t.second );
-            auto vectorSpots   = VectorizeExpression( t.second );
-            OMPAnnotateSource(parallelSpots, vectorSpots);
-        }
-        catch( CyclebiteException& e )
-        {
-            spdlog::critical(e.what());
+            try
+            {
+                auto parallelSpots = ParallelizeCycles( expr );
+                auto vectorSpots   = VectorizeExpression( expr );
+                OMPAnnotateSource(parallelSpots, vectorSpots);
+            }
+            catch( CyclebiteException& e )
+            {
+                spdlog::critical(e.what());
+            }
         }
     }
 }

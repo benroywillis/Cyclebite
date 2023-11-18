@@ -572,15 +572,21 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
     return newSymbols;
 }
 
-const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shared_ptr<Task>& t, 
-                                                                      const vector<shared_ptr<Graph::Inst>>& insts, 
-                                                                      const shared_ptr<ReductionVariable>& rv, 
-                                                                      const set<shared_ptr<Collection>>& colls, 
-                                                                      const set<shared_ptr<InductionVariable>>& vars )
+/// @brief Expression builder for a function expression
+/// @param t The task in which this function group belongs
+/// @param insts A vector of all instructions in the function group, in reverse-order that they operate (inst that gets stored is first, inst(s) with only memory inputs is last)
+/// @param rv A reduction variable, if necessary. If this argument is non-null, the returned expression is a Reduction. Otherwise it is an Expression.
+/// @param colls The collections in the task
+/// @return An expression that describes the entire function group. Member symbols may contain symbols within them.
+const shared_ptr<Expression> constructExpression( const shared_ptr<Task>& t, 
+                                                  const vector<shared_ptr<Cyclebite::Graph::Inst>>& insts, 
+                                                  const shared_ptr<ReductionVariable>& rv, 
+                                                  const set<shared_ptr<Collection>>& colls, 
+                                                  const set<shared_ptr<InductionVariable>>& vars )
 {
     shared_ptr<Expression> expr;
 
-    map<shared_ptr<Graph::DataValue>, shared_ptr<Symbol>> nodeToExpr;
+    map<shared_ptr<Cyclebite::Graph::DataValue>, shared_ptr<Symbol>> nodeToExpr;
     // there are a few DataValues that need to be mapped to their symbols before we start generating this expression
     // first, induction variables in case their integers are used in the expression for some weird reason
     for( const auto& var : vars )
@@ -592,11 +598,11 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
     {
         if( coll->getLoad() )
         {
-            nodeToExpr[ Graph::DNIDMap.at(coll->getLoad()) ] = coll;
+            nodeToExpr[ Cyclebite::Graph::DNIDMap.at(coll->getLoad()) ] = coll;
         }
         for( const auto& st : coll->getStores() )
         {
-            nodeToExpr[ Graph::DNIDMap.at(st) ] = coll;
+            nodeToExpr[ Cyclebite::Graph::DNIDMap.at(st) ] = coll;
         }
     }
     // if there is a reduction variable, it's phi should be put into nodeToExpr
@@ -607,7 +613,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
         {
             nodeToExpr[ addr ] = rv;
         }
-        if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(rv->getNode()) )
+        if( const auto& inst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(rv->getNode()) )
         {
             auto symbols = buildExpression(inst, t, rv->getNode()->getVal(), nodeToExpr, colls, vars);
             if( symbols.size() != 1 )
@@ -624,7 +630,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
     }
     // now we iterate (from start to finish) over the instructions in the expression, each time building a Symbol for each one, until all instructions in the expression have a symbol built for them
     vector<Cyclebite::Graph::Operation> ops;
-    auto builtExpr = buildExpression( *insts.rbegin(), t, (*insts.rbegin())->getInst(), nodeToExpr, colls, vars );
+    auto builtExpr = buildExpression( *insts.begin(), t, (*insts.begin())->getInst(), nodeToExpr, colls, vars );
     if( rv )
     {
         if( builtExpr.empty() )
@@ -632,7 +638,7 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
             vector<shared_ptr<Symbol>> vec;
             // we have a "counter" expression, where we just load something, add to it, then store it back
             // thus, there should be a constant in the add. Find it, put it into the vec list, and construct a reduction on it
-            if( const auto& inst = dynamic_pointer_cast<Graph::Inst>(rv->getNode()) )
+            if( const auto& inst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(rv->getNode()) )
             {
                 for( const auto& op : inst->getInst()->operands() )
                 {
@@ -685,205 +691,73 @@ const shared_ptr<Expression> Cyclebite::Grammar::constructExpression( const shar
     return expr;
 }
 
-shared_ptr<Expression> Cyclebite::Grammar::getExpression( const shared_ptr<Task>& t, 
-                                                          const set<shared_ptr<Collection>>& colls, 
-                                                          const set<shared_ptr<ReductionVariable>>& rvs, 
-                                                          const set<shared_ptr<InductionVariable>>& vars )
+vector<shared_ptr<Expression>> Cyclebite::Grammar::getExpressions( const shared_ptr<Task>& t, 
+                                                                   const set<shared_ptr<Collection>>& colls, 
+                                                                   const set<shared_ptr<ReductionVariable>>& rvs, 
+                                                                   const set<shared_ptr<InductionVariable>>& vars )
 {
-    // the following DFG walk does both 1 and 2
-    // 1. Group all function nodes together
-    deque<shared_ptr<Cyclebite::Graph::Inst>> Q;
-    set<shared_ptr<Cyclebite::Graph::DataValue>, Cyclebite::Graph::p_GNCompare> covered;
-    set<shared_ptr<Cyclebite::Graph::Inst>, Cyclebite::Graph::p_GNCompare> functionGroup;
+    vector<shared_ptr<Expression>> FGTs;
+    // step 1: gather all store operations that get their value from the function group
+    // these stores are the number of fine-grained tasks in the CGT
+    set<shared_ptr<Cyclebite::Graph::Inst>, Cyclebite::Graph::p_GNCompare> functionStores;
     for( const auto& c : t->getCycles() )
     {
         for( const auto& block : c->getBody() )
         {
             for( const auto& node : block->getInstructions() )
             {
-                if( covered.find(node) == covered.end() )
+                if( node->getOp() == Graph::Operation::store )
                 {
-                    covered.insert(node);
-                    if( node->isFunction() )
+                    // get the value operand - if it is in the function group we remember this store
+                    if( Graph::DNIDMap.contains( llvm::cast<llvm::StoreInst>(node->getInst())->getValueOperand() ) )
                     {
-                        Q.clear();
-                        Q.push_front(node);
-                        functionGroup.insert(node);
-                        while( !Q.empty() )
+                        if( const auto valueInst = dynamic_pointer_cast<Graph::Inst>( Graph::DNIDMap.at(llvm::cast<llvm::StoreInst>(node->getInst())->getValueOperand()) ) )
                         {
-                            for( const auto& user : Q.front()->getInst()->users() )
+                            if( valueInst->isFunction() )
                             {
-                                if( !Cyclebite::Graph::DNIDMap.contains(user) )
-                                {
-                                    continue;
-                                }
-                                else if( !t->find(Cyclebite::Graph::DNIDMap.at(user)) )
-                                {
-                                    continue;
-                                }
-                                // we expect eating stores to happen only after functional groups
-                                if( const auto st = llvm::dyn_cast<llvm::StoreInst>(user) )
-                                {
-                                    covered.insert(Cyclebite::Graph::DNIDMap.at(st));
-                                }
-                                else if( const auto userInst = llvm::dyn_cast<llvm::Instruction>(user) )
-                                {
-                                    if( !covered.contains(Cyclebite::Graph::DNIDMap.at(userInst)) )
-                                    {
-                                        if( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(userInst))->isFunction() )
-                                        {
-                                            functionGroup.insert(static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(userInst)));
-                                        }
-                                        covered.insert(Cyclebite::Graph::DNIDMap.at(userInst));
-                                        Q.push_back(static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(userInst)));
-                                    }
-                                }
+                                functionStores.insert(node);
                             }
-                            for( const auto& use : Q.front()->getInst()->operands() )
-                            {
-                                if( Cyclebite::Graph::DNIDMap.find(use) == Cyclebite::Graph::DNIDMap.end() )
-                                {
-                                    continue;
-                                }
-                                else if( !t->find(Cyclebite::Graph::DNIDMap.at(use)) )
-                                {
-                                    continue;
-                                }
-                                // we expect feeding loads to happen only prior to functional groups
-                                if( const auto ld = llvm::dyn_cast<llvm::LoadInst>(use) )
-                                {
-                                    covered.insert(Cyclebite::Graph::DNIDMap.at(ld));
-                                }
-                                else if( const auto useInst = llvm::dyn_cast<llvm::Instruction>(use) )
-                                {
-                                    if( !covered.contains(Cyclebite::Graph::DNIDMap.at(useInst)) )
-                                    {
-                                        if( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(useInst))->isFunction() )
-                                        {
-                                            functionGroup.insert(static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(useInst)));
-                                        }
-                                        covered.insert(Cyclebite::Graph::DNIDMap.at(useInst));
-                                        Q.push_back(static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(useInst)));
-                                    }
-                                }
-                            }
-                            Q.pop_front();
                         }
-                        break;
                     }
                 }
             }
         }
     }
-    if( functionGroup.empty() )
+    if( functionStores.empty() )
     {
         throw CyclebiteException("Function group is empty!");
     }
-    // 2. order the instructions from first (the instruction that doesn't have any function group inputs) to last (the instruction that feeds the store)
-    // 2a. find the first instruction
-    shared_ptr<Cyclebite::Graph::Inst> first = nullptr;
-    // look for an instruction that has only inputs from the memory group
-    // if there isn't an instruction with only memory inputs (like a reduction expression), we pick the one with the most memory inputs
-    map<shared_ptr<Graph::Inst>, uint32_t> memoryInputs;
-    for( const auto& inst : functionGroup )
+    // step2: for each store, walk backward through the function group until the function group runs out
+    // function groups are sorted in reverse-order (the last instruction in the sequence is stored first)
+    set<vector<shared_ptr<Graph::Inst>>> functionGroups;
+    for( const auto& storeNode : functionStores )
     {
-        bool allMemory = true;
-        for( const auto& pred : inst->getPredecessors() )
+        deque<shared_ptr<Cyclebite::Graph::Inst>> Q;
+        set<shared_ptr<Cyclebite::Graph::DataValue>, Cyclebite::Graph::p_GNCompare> covered;
+        vector<shared_ptr<Graph::Inst>> group;
+        Q.push_front( static_pointer_cast<Graph::Inst>( Graph::DNIDMap.at(llvm::cast<llvm::StoreInst>(storeNode->getInst())->getValueOperand()) ) );
+        covered.insert(Graph::DNIDMap.at(llvm::cast<llvm::StoreInst>(storeNode->getInst())->getValueOperand()));
+        group.push_back(static_pointer_cast<Graph::Inst>( Graph::DNIDMap.at(llvm::cast<llvm::StoreInst>(storeNode->getInst())->getValueOperand()) ));
+        while( !Q.empty() )
         {
-            if( const auto& predInst = dynamic_pointer_cast<Graph::Inst>(pred->getSrc()) )
+            for( const auto& pred : Q.front()->getPredecessors() )
             {
-                if( !predInst->isMemory() )
+                if( const auto& predInst = dynamic_pointer_cast<Graph::Inst>(pred->getSrc()) )
                 {
-                    allMemory = false;
-                }
-                else
-                {
-                    memoryInputs[inst]++;
-                }
-            }
-        }
-        if( allMemory )
-        {
-            first = inst;
-        }
-    }
-    if( !first )
-    {
-        // pick the inst with the most memory inputs
-        // if there is a tie, we throw exception
-        map<uint32_t, set<shared_ptr<Graph::Inst>>> sortedWinners;
-        for( const auto& inst : memoryInputs )
-        {
-            sortedWinners[inst.second].insert(inst.first);
-        }
-        if( sortedWinners.begin()->second.size() > 1 )
-        {
-            throw CyclebiteException("Could not find first instruction in the instruction group!");
-        }
-        else
-        {
-            first = *sortedWinners.begin()->second.begin();
-        }
-    }
-
-    // 2b. order the function group starting from the first instruction
-    vector<shared_ptr<Cyclebite::Graph::Inst>> order;
-    order.push_back(first);
-    deque<const llvm::Instruction*> instQ;
-    set<const llvm::Instruction*> instCovered;
-    instQ.push_front(first->getInst());
-    instCovered.insert(first->getInst());
-    while(!instQ.empty() )
-    {
-        bool depthFirst = false;
-        for( const auto& op : instQ.front()->operands() )
-        {
-            if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(instQ.front()) )
-            {
-                // we don't look through phi operands because that will lead to the back of the cycle
-                // and we prefer phis to be the first instruction in the ordering (because that is literally how the instructions will have executed)
-                break;
-            }
-            else if( const auto& opInst = llvm::dyn_cast<llvm::Instruction>(op) )
-            {
-                if( instCovered.find(opInst) == instCovered.end() )
-                {
-                    if( functionGroup.find(Cyclebite::Graph::DNIDMap.at(opInst)) != functionGroup.end() )
+                    if( predInst->isFunction() )
                     {
-                        // this instruction comes before the current, thus two things need to happen
-                        // 1. it needs to be pushed before the current instruction in the "order" list
-                        // 2. its operands need to be investigated before anything else
-                        auto pos = std::find(order.begin(), order.end(), Cyclebite::Graph::DNIDMap.at(instQ.front()));
-                        if( pos == order.end() )
+                        if( !covered.contains(predInst) )
                         {
-                            throw CyclebiteException("Cannot resolve where to insert function inst operand in the ordered list!");
+                            group.push_back(predInst);
+                            Q.push_back(predInst);
+                            covered.insert(predInst);
                         }
-                        order.insert(pos, static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(opInst)));
-                        instCovered.insert(opInst);
-                        instQ.push_front(opInst);
-                        depthFirst = true;
-                        break;
                     }
                 }
             }
+            Q.pop_front();
         }
-        if( depthFirst ) { continue; }
-        for( const auto& user : instQ.front()->users() )
-        {
-            if( const auto& userInst = llvm::dyn_cast<llvm::Instruction>(user) )
-            {
-                if( instCovered.find(userInst) == instCovered.end() )
-                {
-                    if( functionGroup.find(Cyclebite::Graph::DNIDMap.at(userInst)) != functionGroup.end() )
-                    {
-                        order.push_back(static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(userInst)));
-                        instQ.push_back(userInst);
-                        instCovered.insert(userInst);
-                    }
-                }
-            }
-        }
-        instQ.pop_front();
+        FGTs.push_back( constructExpression(t, group, *rvs.begin(), colls, vars) );
     }
-    return constructExpression(t, order, *rvs.begin(), colls, vars);
+    return FGTs;
 }
