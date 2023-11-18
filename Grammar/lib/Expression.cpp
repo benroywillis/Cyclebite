@@ -187,6 +187,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 {
                     if( !nodeToExpr.contains(succInst) )
                     {
+                        PrintVal(succInst->getInst());
                         throw CyclebiteException("Could not map an expression's store to a Symbol!");
                     }
                     symbolOutput = nodeToExpr.at(succInst);
