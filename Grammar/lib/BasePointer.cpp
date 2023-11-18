@@ -383,7 +383,15 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                     auto allocSize = allocParam->getFixedValue()/8;
                                     if( allocSize >= ALLOC_THRESHOLD )
                                     {
-                                        bpCandidates.insert(alloc);
+                                        if( DNIDMap.contains(alloc) )
+                                        {
+                                            bpCandidates.insert(alloc);
+                                        }
+                                        else
+                                        {
+                                            PrintVal(alloc);
+                                            spdlog::warn("Base-pointer-eligible alloc is not in the dynamic profile");
+                                        }
                                         covered.insert(alloc);
                                     }
                                     else
@@ -419,8 +427,17 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                             {
                                 if( isAllocatingFunction(call) >= ALLOC_THRESHOLD )
                                 {
-                                    // an allocating function is a base pointer
-                                    bpCandidates.insert(call);
+                                    if( DNIDMap.contains(call) )
+                                    {
+                                        // an allocating function is a base pointer
+                                        bpCandidates.insert(call);
+                                    }
+                                    else
+                                    {
+                                        PrintVal(call);
+                                        spdlog::warn("Base-pointer-eligible call is not in the dynamic profile");
+                                    }
+                                    covered.insert(call);
                                 }
                             }
                             else if( auto arg = llvm::dyn_cast<llvm::Argument>(Q.front()) )
@@ -428,7 +445,17 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                 // we only care about arguments that are at least a pointer type (one or more indirection)
                                 if( arg->getType()->isPointerTy() )
                                 {
-                                    bpCandidates.insert(arg);
+                                    if( DNIDMap.contains(arg) )
+                                    {
+                                        // an allocating function is a base pointer
+                                        bpCandidates.insert(arg);
+                                    }
+                                    else
+                                    {
+                                        PrintVal(arg);
+                                        spdlog::warn("Base-pointer-eligible arg is not in the dynamic profile");
+                                    }
+                                    covered.insert(arg);
                                 }
                             }
                             // when constant global structures are allocated, we need to identify their pointers
@@ -442,7 +469,17 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                     bool canBeFreed = false;
                                     if( glob->getPointerDereferenceableBytes(n->getInst()->getParent()->getParent()->getParent()->getDataLayout(), canBeNull, canBeFreed) > ALLOC_THRESHOLD )
                                     {
-                                        bpCandidates.insert(glob);
+                                        if( DNIDMap.contains(glob) )
+                                        {
+                                            // an allocating function is a base pointer
+                                            bpCandidates.insert(glob);
+                                        }
+                                        else
+                                        {
+                                            PrintVal(glob);
+                                            spdlog::warn("Base-pointer-eligible global is not in the dynamic profile");
+                                        }
+                                        covered.insert(glob);
                                     }
                                     else
                                     {
