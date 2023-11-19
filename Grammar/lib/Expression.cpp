@@ -331,7 +331,11 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     if( (predBlock->isPredecessor(succBlock) != nullptr) && (succBlock->isSuccessor(predBlock) != nullptr) )
                     {
                         // it is live, put the value in the live set
-                        liveIncomingValues.insert(phi->getIncomingValue(i));
+                        // FIX: to get temporal mitigation gemm and PERFECT/2DConv to work, we don't consider constants
+                        if( !llvm::isa<llvm::Constant>(phi->getIncomingValue(i)) )
+                        {
+                            liveIncomingValues.insert(phi->getIncomingValue(i));
+                        }
                     }
                 }
             }
@@ -609,7 +613,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
 /// @return An expression that describes the entire function group. Member symbols may contain symbols within them.
 const shared_ptr<Expression> constructExpression( const shared_ptr<Task>& t, 
                                                   const vector<shared_ptr<Cyclebite::Graph::Inst>>& insts, 
-                                                  const shared_ptr<ReductionVariable>& rv, 
+                                                  const set<shared_ptr<ReductionVariable>>& rvs, 
                                                   const set<shared_ptr<Collection>>& colls, 
                                                   const set<shared_ptr<InductionVariable>>& vars )
 {
@@ -636,31 +640,34 @@ const shared_ptr<Expression> constructExpression( const shared_ptr<Task>& t,
     }
     // if there is a reduction variable, it's phi should be put into nodeToExpr
     // but not the rv's node - the node is a binary operator that carries out the reduction (it is accounted for in the reduction expression)
-    if( rv )
+    if( !rvs.empty() )
     {
-        for( const auto& addr : rv->getAddresses() )
+        for( const auto& rv : rvs )
         {
-            nodeToExpr[ addr ] = rv;
-        }
-        if( const auto& inst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(rv->getNode()) )
-        {
-            auto symbols = buildExpression(inst, t, rv->getNode()->getVal(), nodeToExpr, colls, vars);
-            if( symbols.size() != 1 )
+            for( const auto& addr : rv->getAddresses() )
             {
-                throw CyclebiteException("Cannot yet handle the case where a reduction variable node generates more than one symbol!");
+                nodeToExpr[ addr ] = rv;
             }
-            nodeToExpr[ rv->getNode() ] = *symbols.begin();
+            if( const auto& inst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(rv->getNode()) )
+            {
+                auto symbols = buildExpression(inst, t, rv->getNode()->getVal(), nodeToExpr, colls, vars);
+                if( symbols.size() != 1 )
+                {
+                    throw CyclebiteException("Cannot yet handle the case where a reduction variable node generates more than one symbol!");
+                }
+                nodeToExpr[ rv->getNode() ] = *symbols.begin();
+            }
+            else
+            {
+                throw CyclebiteException("Cannot yet handle the case where a reduction variable node is not a Graph::Inst!");
+            }
+            //nodeToExpr[rv->getNode()] = rv;
         }
-        else
-        {
-            throw CyclebiteException("Cannot yet handle the case where a reduction variable node is not a Graph::Inst!");
-        }
-        //nodeToExpr[rv->getNode()] = rv;
     }
     // now we iterate (from start to finish) over the instructions in the expression, each time building a Symbol for each one, until all instructions in the expression have a symbol built for them
     vector<Cyclebite::Graph::Operation> ops;
     auto builtExpr = buildExpression( *insts.begin(), t, (*insts.begin())->getInst(), nodeToExpr, colls, vars );
-    if( rv )
+    /*if( rv )
     {
         if( builtExpr.empty() )
         {
@@ -716,7 +723,8 @@ const shared_ptr<Expression> constructExpression( const shared_ptr<Task>& t,
     else
     {
         expr = static_pointer_cast<Expression>(*builtExpr.rbegin());
-    }
+    }*/
+    expr = static_pointer_cast<Expression>(*builtExpr.begin());
     return expr;
 }
 
@@ -786,7 +794,7 @@ vector<shared_ptr<Expression>> Cyclebite::Grammar::getExpressions( const shared_
             }
             Q.pop_front();
         }
-        FGTs.push_back( constructExpression(t, group, *rvs.begin(), colls, vars) );
+        FGTs.push_back( constructExpression(t, group, rvs, colls, vars) );
     }
     return FGTs;
 }
