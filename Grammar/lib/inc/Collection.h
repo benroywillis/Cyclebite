@@ -4,7 +4,6 @@
 //==------------------------------==//
 #pragma once
 #include "IndexVariable.h"
-#include "Symbol.h"
 #include "llvm/IR/Instructions.h"
 
 namespace Cyclebite::Grammar

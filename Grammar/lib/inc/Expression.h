@@ -9,6 +9,7 @@
 namespace Cyclebite::Grammar
 {
     class Cycle;
+    class ReductionVariable;
     /// @brief Represents the rhs of a computation statement
     ///
     /// In the Halide example
@@ -26,6 +27,9 @@ namespace Cyclebite::Grammar
         /// @brief Returns the input values that this expression requires to do its computation
         /// @return All input values to the expression including Collections, TaskParameters, TaskRegisters, and other Expressions 
         const std::vector<std::shared_ptr<Symbol>>& getSymbols() const;
+        /// @brief Returns all reduction variables involved in this expression
+        /// @return A set of each reduction variable object found in the expression
+        const std::set<std::shared_ptr<ReductionVariable>> getRVs() const;
         const std::vector<Cyclebite::Graph::Operation>& getOps() const;
         /// Returns the collections that input into the expression
         const std::set<std::shared_ptr<Collection>> getCollections() const;

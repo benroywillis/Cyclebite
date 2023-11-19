@@ -141,21 +141,12 @@ string MapTaskToName( const shared_ptr<Expression>& expr )
         outDims.push_back(0);
     }
     int redDims = 0;
-    if( const auto& red = dynamic_pointer_cast<Reduction>(expr) )
+    for( const auto& rv : expr->getRVs() )
     {
-        // reduction dimension is number of input dimensions - output dimension
-        set<shared_ptr<Dimension>> inputDims;
-        for( const auto& in : expr->getInputs() )
+        if( redDims < (int)rv->getDimensions().size() )
         {
-            if( const auto& coll = dynamic_pointer_cast<Collection>(in) )
-            {
-                for( const auto& dim : coll->getDimensions() )
-                {
-                    inputDims.insert(dim);
-                }
-            }
+            redDims = (int)rv->getDimensions().size();
         }
-        redDims = inputDims.size() - (int)*outDims.begin();
     }
     bool inPlace = false;
     for( const auto& in : expr->getInputs() )

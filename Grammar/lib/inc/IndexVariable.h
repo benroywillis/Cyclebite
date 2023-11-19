@@ -3,11 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
 #pragma once
-#include "Symbol.h"
-#include "Polyhedral.h"
 #include "InductionVariable.h"
 #include "Graph/inc/Inst.h"
-#include <deque>
 
 namespace Cyclebite::Grammar
 {

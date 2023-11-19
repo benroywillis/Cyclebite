@@ -78,6 +78,7 @@ void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::jso
         {
             if( Cyclebite::Graph::DNIDMap.find(inst) == Cyclebite::Graph::DNIDMap.end() )
             {
+                PrintVal(inst);
                 throw CyclebiteException("Found a significant memory op that's not live!");
             }
             // mark as significant

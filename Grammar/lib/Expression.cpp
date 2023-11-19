@@ -128,6 +128,77 @@ const vector<shared_ptr<Symbol>>& Expression::getSymbols() const
     return symbols;
 }
 
+const set<shared_ptr<ReductionVariable>> Expression::getRVs() const
+{
+    set<shared_ptr<ReductionVariable>> RVs;
+    deque<shared_ptr<Symbol>> Q;
+    set<shared_ptr<Symbol>> covered;
+    if( const auto& op = dynamic_cast<const OperatorExpression*>(this) )
+    {
+        for( const auto& arg : op->getArgs() )
+        {
+            Q.push_front(arg);
+            covered.insert(arg);
+        }
+    }
+    else if( const auto& expr = dynamic_cast<const Expression*>(this) )
+    {
+        for( const auto& arg : symbols )
+        {
+            Q.push_front(arg);
+            covered.insert(arg);
+        }
+    }
+    else
+    {
+        return RVs;
+    }
+    while( !Q.empty() )
+    {
+        if( const auto& rv = dynamic_pointer_cast<ReductionVariable>(Q.front()) )
+        {
+            RVs.insert(rv);
+            covered.insert(rv);
+        }
+        else if( const auto& opExpr = dynamic_pointer_cast<OperatorExpression>(Q.front()) )
+        {
+            for( const auto& arg : opExpr->getArgs() )
+            {
+                if( !covered.contains(arg) )
+                {
+                    Q.push_back(arg);
+                    covered.insert(arg);
+                }
+            }
+        }
+        else if( const auto& red = dynamic_pointer_cast<Reduction>(Q.front()) )
+        {
+            RVs.insert(red->getRVs().begin(), red->getRVs().end());
+            for( const auto& sym : red->getSymbols() )
+            {
+                if( !covered.contains(sym) )
+                {
+                    Q.push_back(sym);
+                    covered.insert(sym);
+                }
+            }
+        }
+        else if( const auto& expr = dynamic_pointer_cast<Expression>(Q.front()) )
+        {
+            for( const auto& sym : expr->getSymbols() )
+            {
+                if( !covered.contains(sym) )
+                {
+                    Q.push_back(sym);
+                    covered.insert(sym);
+                }
+            }
+        }
+        Q.pop_front();
+    }
+    return RVs;
+}
+
 const vector<Cyclebite::Graph::Operation>& Expression::getOps() const
 {
     return ops;
