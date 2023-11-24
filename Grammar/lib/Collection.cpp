@@ -457,11 +457,20 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             else if( const auto& glob = llvm::dyn_cast<llvm::GlobalValue>(Q.front()) )
             {
                 // may be a base pointer, or may lead us to one
+                bool foundBP = false;
                 for( const auto& bp : bps )
                 {
                     if( bp->getNode()->getVal() == glob )
                     {
                         collBPs.insert(bp);
+                        foundBP = true;
+                    }
+                }
+                if( !foundBP )
+                {
+                    if( glob->getType()->isPointerTy() || glob->getType()->isArrayTy() )
+                    {
+                        hasConstantPointer = true;
                     }
                 }
                 for( const auto& user : glob->users() )
