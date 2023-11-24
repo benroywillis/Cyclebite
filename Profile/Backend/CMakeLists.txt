@@ -1,8 +1,8 @@
 add_library(AtlasBackend SHARED HashTable/DashHashTable.c)
 
-if(NOT WIN32)
-    target_sources(AtlasBackend PRIVATE Utilities/Papi.c)
-endif()
+#if(NOT WIN32)
+    #target_sources(AtlasBackend PRIVATE Utilities/Papi.c)
+#endif()
 
 set(HASH_INC "${CMAKE_SOURCE_DIR}/Profile/Backend/HashTable/inc")
 set(MARKOV_INC "${CMAKE_SOURCE_DIR}/Profile/Backend/Markov/inc")
