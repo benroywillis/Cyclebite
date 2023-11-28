@@ -199,6 +199,35 @@ const set<shared_ptr<ReductionVariable>> Expression::getRVs() const
     return RVs;
 }
 
+bool Expression::hasParallelReduction() const
+{
+    for( const auto& rv : getRVs() )
+    {
+        for( const auto& addr : rv->getAddresses() )
+        {
+            // none of the addresses are allowed to be collections whose index variables have the reduction cycle as its dimension
+            // an induction variable whose dimension is the reduction cycle indicates that each iteration of that reduction cycle stores a unique value from the reduction
+            // - this unique value depends on all previous values in order to be correct
+                if( const auto& coll = dynamic_pointer_cast<Collection>(output) )
+                {
+                    for( const auto& var : coll->getIndices() )
+                    {
+                        for( const auto& varDim : var->getDimensions() )
+                        {
+                            if( rv->getDimensions().contains(varDim) )
+                            {
+                                // this store touches the same reduction as the reduction variable, indicating that unique values within the reduction are stored
+                                // this is not a parallel reduction
+                                return false;
+                            }
+                        }
+                    }
+                }
+        }
+    }
+    return true;
+}
+
 const vector<Cyclebite::Graph::Operation>& Expression::getOps() const
 {
     return ops;
@@ -228,7 +257,7 @@ const shared_ptr<Symbol>& Expression::getOutput() const
 }
 
 /// @brief Recursively builds an expression out of an LLVM instruction
-/// @param node The node of the highest-level instruction of this expression. This argument is simply used to get access to the original LLVM::Module of the instruction
+/// @param node The node of the highest-level instruction of this expression. This argument is simply used to get access to the original llvm::Module of the instruction
 /// @param t The task in which this expression should belong
 /// @param op The llvm::Value to build an expression for. This op may or may not belong to "node" (it may belong to a predecessor of "node")
 /// @param nodeToExpr A map from DataValue to Symbol. Updated every time this method creates a new symbol

@@ -30,6 +30,13 @@ namespace Cyclebite::Grammar
         /// @brief Returns all reduction variables involved in this expression
         /// @return A set of each reduction variable object found in the expression
         const std::set<std::shared_ptr<ReductionVariable>> getRVs() const;
+        /// @brief Indicates whether this reduction can be done in parallel
+        ///
+        /// This method analyses where the reduction variable is stored to its output to determine parallel operation
+        /// For example, when a single address stores the reduction variable during its cycle instance, that reduction is considered parallel
+        /// (This operation does not type-check - it assumes full associativity of operations no matter the underlying op)
+        /// However, if the reduction is stored to a different address in each iteration, that reduction is not parallel
+        bool hasParallelReduction() const;
         const std::vector<Cyclebite::Graph::Operation>& getOps() const;
         /// Returns the collections that input into the expression
         const std::set<std::shared_ptr<Collection>> getCollections() const;
