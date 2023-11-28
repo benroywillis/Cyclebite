@@ -15,7 +15,7 @@
 using namespace std;
 using namespace Cyclebite::Grammar;
 
-string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vector<int> outputDimensions, bool reduction, int reductionDimensions, bool inPlace )
+string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vector<int> outputDimensions, bool reduction, int reductionDimensions, bool inPlace, bool parallel )
 {
     // LUT
     // Task     | # of inputs | # of outputs            | # of input dimensions | # of output dimensions | reduction | reduction dimensions | special  |
@@ -59,46 +59,77 @@ string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vecto
                  "; redDims: "+to_string(reductionDimensions)+
                  "; inPlace: "+to_string(inPlace));
 #endif
-    switch( noInputs )
+    if( parallel )
     {
-        case 0:
+        switch( noInputs )
         {
-            return "Init";
-        }
-        case 1:
-        {
-            if( inPlace )
+            case 0:
             {
-                return reduction ? "Stencil" : "Foreach";
+                return "Init";
             }
-            else
+            case 1:
             {
-                return reduction ? "Stencil" : "Map";
-            }
-        }
-        case 2: 
-        {
-            if( reduction )
-            {
-                if( std::find(inputDimensions.begin(), inputDimensions.end(), 1) != inputDimensions.end() )
+                if( inPlace )
                 {
-                    return "GEMV";
+                    return reduction ? "Stencil" : "Foreach";
                 }
                 else
                 {
-                    return "GEMM";
+                    return reduction ? "Stencil" : "Map";
                 }
             }
-            else
+            case 2: 
             {
-                return "ZIP";
+                if( reduction )
+                {
+                    if( std::find(inputDimensions.begin(), inputDimensions.end(), 1) != inputDimensions.end() )
+                    {
+                        return "GEMV";
+                    }
+                    else
+                    {
+                        return "GEMM";
+                    }
+                }
+                else
+                {
+                    return "ZIP";
+                }
+            }
+            case 4:
+            {
+                if( reduction && !inPlace && (noOutputs == 1) )
+                {
+                    return "CGEMM";
+                }
+                else if( !inPlace && (noOutputs == 1) )
+                {
+                    return "Map";
+                }
+                else
+                {
+                    return "Unknown";
+                }
+            }
+            default: 
+            {
+                // Map tasks are allowed to have as many inputs as is required
+                // since we know this task is parallel, if it doesn't work in-place and produces a single output, it is a map
+                if( !inPlace && (noOutputs == 1) )
+                {
+                    return "Map";
+                }
+                return "Unknown";
             }
         }
-        default: return "Unknown";
+    }
+    else
+    {
+        return "NotParallel";
     }
 }
 
-string MapTaskToName( const shared_ptr<Expression>& expr )
+string MapTaskToName( const shared_ptr<Expression>& expr, const set<shared_ptr<Cycle>>& parallelCycles )
 {
     // measures
     // 1. number of inputs
@@ -161,12 +192,16 @@ string MapTaskToName( const shared_ptr<Expression>& expr )
             break;
         }
     }
-    return labelLUT( (int)inputs.size(), expr->getOutput() ? 1 : 0, inDims, outDims, (bool)redDims, redDims, inPlace);    
+    return labelLUT( (int)inputs.size(), expr->getOutput() ? 1 : 0, inDims, outDims, (bool)redDims, redDims, inPlace, !parallelCycles.empty() );    
 }
 
 set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
 {
+    // holds cycles whose execution can be done in parallel
     set<shared_ptr<Cycle>> parallelSpots;
+    // holds cycles that cannot be executed fully parallel
+    set<shared_ptr<Cycle>> noParallel;
+    // holds index variables that are common among the input and output
     set<shared_ptr<IndexVariable>> overlaps;
     shared_ptr<Collection> output = nullptr;
     if( auto array = dynamic_pointer_cast<Collection>(expr->getOutput()) )
@@ -197,15 +232,6 @@ set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
             }
         }
     }
-    // second, look for a reduction in the expression
-    // this will unlock special optimizations for the algorithm
-    shared_ptr<ReductionVariable> rv = nullptr;
-    if( const auto& red = dynamic_pointer_cast<Reduction>(expr) )
-    {
-        rv = red->getRV();
-    }
-    // third, the parallel spots in the task are all the dimensions that don't overlap and don't reduce
-    set<shared_ptr<Cycle>> noParallel;
     for( const auto& o : overlaps )
     {
         for( const auto& iv : o->getExclusiveDimensions() )
@@ -213,22 +239,32 @@ set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
             noParallel.insert(iv->getCycle());
         }
     }
-    for( const auto& c : expr->getTask()->getCycles() )
+    // second, look for a reduction in the expression
+    // this will unlock special optimizations for the algorithm
+    shared_ptr<ReductionVariable> rv = nullptr;
+    if( expr->hasParallelReduction() )
     {
-        if( rv )
+        for( const auto& rv : expr->getRVs() )
         {
-            for( const auto& addr : rv->getAddresses() )
+            for( const auto& dim : rv->getDimensions() )
             {
-                if( c->find( addr ) )
-                {
-                    noParallel.insert(c);
-                    for( const auto& c : c->getChildren() )
-                    {
-                        noParallel.insert(c);
-                    }
-                }
+                parallelSpots.insert(dim->getCycle());
             }
         }
+    }
+    else if( !expr->getRVs().empty() )
+    {
+        for( const auto& rv : expr->getRVs() )
+        {
+            for( const auto& dim : rv->getDimensions() )
+            {
+                noParallel.insert(dim->getCycle());
+            }
+        }
+    }
+    // finally, print and return parallel cycles
+    for( const auto& c : expr->getTask()->getCycles() )
+    {
         if( !noParallel.contains(c) )
         {
             string print = "Cycle "+to_string(c->getID())+" ( blocks: ";
@@ -253,11 +289,14 @@ set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
 set<shared_ptr<Cycle>> VectorizeExpression( const shared_ptr<Expression>& expr )
 {
     set<shared_ptr<Cycle>> reductionCycles;
-    if( const auto& red = dynamic_pointer_cast<Reduction>(expr) )
+    if( expr->hasParallelReduction() )
     {
-        if( red->isParallelReduction() )
+        for( const auto& rv : expr->getRVs() )
         {
-            reductionCycles.insert(red->getReductionCycle());
+            for( const auto& dim : rv->getDimensions() )
+            {
+                reductionCycles.insert(dim->getCycle());
+            }
         }
     }
     return reductionCycles;
@@ -267,14 +306,6 @@ void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<E
 {
     // first, task name
     cout << endl;
-    for( const auto& t : taskToExpr )
-    {
-        for( const auto& expr : t.second )
-        {
-            spdlog::info("Cyclebite-Template Label: Task"+to_string(t.first->getID())+" -> "+MapTaskToName(expr));
-        }
-    }
-    //cout << endl;
     // second, task optimization and export
     for( const auto& t : taskToExpr )
     {
@@ -293,7 +324,9 @@ void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<E
             {
                 auto parallelSpots = ParallelizeCycles( expr );
                 auto vectorSpots   = VectorizeExpression( expr );
+                spdlog::info("Cyclebite-Template Label: Task"+to_string(t.first->getID())+" -> "+MapTaskToName(expr, parallelSpots));
                 OMPAnnotateSource(parallelSpots, vectorSpots);
+                cout << endl;
             }
             catch( CyclebiteException& e )
             {
