@@ -456,6 +456,34 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 newSymbols.push_back(binExpr);
             }
         }
+        else if( const auto& sel = llvm::dyn_cast<llvm::SelectInst>(op) )
+        {
+            // if one side of the expression is a constant, we can just build the other side and ignore the condition
+            const llvm::Constant* con = nullptr;
+            const llvm::Value* other = nullptr;
+            if( const auto& c = llvm::dyn_cast<llvm::Constant>(sel->getTrueValue()) )
+            {
+                con = c;
+                other = sel->getFalseValue();
+            }
+            else if( const auto& c = llvm::dyn_cast<llvm::Constant>(sel->getFalseValue()) )
+            {
+                con = c;
+                other = sel->getTrueValue();
+            }
+            if( con )
+            {
+                vector<shared_ptr<Symbol>> args;
+                for( const auto& news : buildExpression(opInst, t, other, nodeToExpr, colls, vars) )
+                {
+                    args.push_back(news);
+                }
+                vector<Cyclebite::Graph::Operation> ops;
+                auto newExpr = make_shared<Expression>( t, args, ops, symbolOutput );
+                nodeToExpr[ opInst ] = newExpr;
+                newSymbols.push_back(newExpr);
+            }
+        }
         else if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(op) )
         {
             vector<shared_ptr<Symbol>> args;
