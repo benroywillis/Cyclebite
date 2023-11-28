@@ -65,7 +65,7 @@ string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vecto
         {
             case 0:
             {
-                return "Init";
+                return reduction ? "Stencil" : "Init";
             }
             case 1:
             {
