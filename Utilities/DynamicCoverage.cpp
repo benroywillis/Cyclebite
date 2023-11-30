@@ -1,5 +1,8 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
+#include "Graph/inc/IO.h"
 #include "Util/Format.h"
 #include "Util/IO.h"
 #include "CallGraph.h"
@@ -29,20 +32,16 @@ extern uint32_t markovOrder;
 int main(int argc, char *argv[])
 {
     cl::ParseCommandLineOptions(argc, argv);
-    auto blockCallers = ReadBlockInfo(BlockInfoFilename);
-    auto blockLabels = ReadBlockLabels(BlockInfoFilename);
+    Cyclebite::Graph::ReadBlockInfo(BlockInfoFilename);
     auto SourceBitcode = ReadBitcode(BitcodeFileName);
     if (SourceBitcode == nullptr)
     {
         return EXIT_FAILURE;
     }
     // Annotate its bitcodes and values
-    //CleanModule(SourceBitcode.get());
-    Format(SourceBitcode.get());
+    Cyclebite::Util::Format(*SourceBitcode);
     // construct its callgraph
-    map<int64_t, BasicBlock *> IDToBlock;
-    map<int64_t, Value *> IDToValue;
-    InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    Cyclebite::Graph::InitializeIDMaps(SourceBitcode.get());
 
     // Set of nodes that constitute the entire graph
     ControlGraph graph;
@@ -54,11 +53,11 @@ int main(int argc, char *argv[])
         auto err = BuildCFG(graph, InputFilename, false);
         if (err)
         {
-            throw AtlasException("Failed to read input profile file!");
+            throw CyclebiteException("Failed to read input profile file!");
         }
         if (graph.empty())
         {
-            throw AtlasException("No nodes could be read from the input profile!");
+            throw CyclebiteException("No nodes could be read from the input profile!");
         }
         // accumulate block frequencies
         for (const auto &block : graph.nodes())
@@ -74,14 +73,13 @@ int main(int argc, char *argv[])
             }
         }
     }
-    catch (AtlasException &e)
+    catch (CyclebiteException &e)
     {
         spdlog::critical(e.what());
         return EXIT_FAILURE;
     }
 
     // Construct bitcode CallGraph
-    map<BasicBlock *, Function *> BlockToFPtr;
     auto CG = getDynamicCallGraph(SourceBitcode.get(), graph, blockCallers, IDToBlock);
 
     /*auto transformedGraph = Cyclebite::Graph::ReduceMO(graph.nodes, (int)markovOrder, 1);
@@ -89,7 +87,7 @@ int main(int argc, char *argv[])
     {
         TrivialTransforms(transformedGraph);
     }
-    catch (AtlasException &e)
+    catch (CyclebiteException &e)
     {
         spdlog::error("Exception while conducting trivial transforms on reduced markov graph:");
         spdlog::error(e.what());

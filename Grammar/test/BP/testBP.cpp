@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "Util/Format.h"
 #include "Util/Print.h"
 #include "Util/IO.h"
@@ -148,7 +150,7 @@ int main(int argc, char *argv[])
         specialInstructions["IV"] = findState(kernelSets);
         specialInstructions["BP"] = findMemory(kernelSets);
     }
-    catch (AtlasException& e)
+    catch (CyclebiteException& e)
     {
         spdlog::critical(e.what());
         return EXIT_FAILURE;
@@ -166,7 +168,7 @@ int main(int argc, char *argv[])
 
     if (BuildDFG(SourceBitcode.get(), dynamicCG, blockToNode, programFlow, dGraph, specialInstructions, IDToBlock))
     {
-        throw AtlasException("Failed to build DFG!");
+        throw CyclebiteException("Failed to build DFG!");
     }
     auto taskCycles = getTasks(instanceJson, kernelJson, IDToBlock);
 
@@ -184,7 +186,7 @@ int main(int argc, char *argv[])
                 spdlog::info(bp->dump()+" -> "+PrintVal(bp->getNode()->getInst(), false));
             }
 		}
-		catch( AtlasException& e )
+		catch( CyclebiteException& e )
 		{
 			spdlog::critical(e.what());
 		}

@@ -1,3 +1,7 @@
+//==------------------------------==//
+// Copyright 2023 Benjamin Willis
+// SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #pragma once
 #include <llvm/Analysis/CallGraph.h>
 #include <llvm/IR/BasicBlock.h>
@@ -23,6 +27,13 @@ namespace Cyclebite::Graph
     struct p_GNCompare;
     struct KCompare;
     struct GECompare;
+    // maps the dynamic pass IDs to their LLVM objects
+    extern std::map<int64_t, const llvm::BasicBlock *> IDToBlock;
+    extern std::map<int64_t, const llvm::Value *> IDToValue;
+    // dynamic info from the markov profile
+    extern std::map<int64_t, std::vector<int64_t>> blockCallers;
+    extern std::map<int64_t, std::map<std::string, int64_t>> blockLabels;
+    extern std::set<int64_t> threadStarts;
     // maps a block ID list (that represents the markov chain state, which could have arbitrary order number) to an llvm::BasicBlock ID which the node represents
     // instantiated in cartographer/new/IO.cpp
     extern std::map<std::vector<uint32_t>, uint64_t> NIDMap;
@@ -41,16 +52,23 @@ namespace Cyclebite::Graph
         uint32_t end_node_count;
         uint32_t end_edge_count;
     };
+    void InitializeIDMaps(llvm::Module *M);
+    void ReadBlockInfo(const std::string &BlockInfo);
     double TotalEntropy(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes);
     double EntropyCalculation(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes);
-    void getDynamicInformation(Cyclebite::Graph::ControlGraph& cg, Cyclebite::Graph::CallGraph& dynamicCG, const std::string& filePath, const std::unique_ptr<llvm::Module>& SourceBitcode, const llvm::CallGraph& staticCG, const std::map<int64_t, std::vector<int64_t>>& blockCallers, const std::set<int64_t>& threadStarts, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock, bool HotCodeDetection);
+    void getDynamicInformation(Cyclebite::Graph::ControlGraph& cg, Cyclebite::Graph::CallGraph& dynamicCG, const std::string& filePath, const std::unique_ptr<llvm::Module>& SourceBitcode, const llvm::CallGraph& staticCG, const std::map<int64_t, std::vector<int64_t>>& blockCallers, const std::set<int64_t>& threadStarts, const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock, bool HotCodeDetection);
     int BuildCFG(Graph &graph, const std::string &filename, bool HotCodeDetection);
-    const Cyclebite::Graph::CallGraph getDynamicCallGraph(llvm::Module *mod, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock);
-    void CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebite::Graph::CallGraph &DCG, const Graph &dynamicGraph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock);
-    int BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Graph::CallGraph& dynamicCG, std::map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, std::set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, DataGraph &graph, std::map<std::string, std::set<int64_t>> &specialInstructions, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock);
+    const Cyclebite::Graph::CallGraph getDynamicCallGraph(llvm::Module *mod, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock);
+    void CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebite::Graph::CallGraph &DCG, const Graph &dynamicGraph, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock);
+    void BuildDFG( std::set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, 
+                   DataGraph &graph, 
+                   const std::unique_ptr<llvm::Module>& SourceBitcode, 
+                   const Cyclebite::Graph::CallGraph& dynamicCG, 
+                   const std::map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, 
+                   const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock);
     std::map<std::string, std::map<std::string, std::map<std::string, int>>> ProfileKernels(const std::map<std::string, std::set<int64_t>> &kernels, llvm::Module *M, const std::map<int64_t, uint64_t> &blockCounts);
     std::set<std::pair<int64_t, int64_t>> findOriginalBlockIDs(const std::shared_ptr<UnconditionalEdge>& edge);
-    void WriteKernelFile(const ControlGraph &graph, const std::set<std::shared_ptr<MLCycle>, KCompare> &kernels, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const EntropyInfo &info, const std::string &OutputFileName, bool hotCode = false);
+    void WriteKernelFile(const ControlGraph &graph, const std::set<std::shared_ptr<MLCycle>, KCompare> &kernels, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const EntropyInfo &info, const std::string &OutputFileName, bool hotCode = false);
     std::string GenerateDot(const Graph &graph, bool original = false);
     std::string GenerateCoverageDot(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &coveredNodes, const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &uncoveredNodes);
     std::string GenerateTransformedSegmentedDot(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &nodes, const std::set<std::shared_ptr<MLCycle>, KCompare> &kernels, int markovOrder);

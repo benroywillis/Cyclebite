@@ -1,5 +1,5 @@
 add_executable(1DCondition 1DCondition.c)
-InjectTracer(1DCondition)
+InjectMarkov(1DCondition)
 InjectMemory(1DCondition)
 
 add_test(NAME 1DCondition_Markov_Profile COMMAND 1DCondition.markov.native)

@@ -1,5 +1,5 @@
 add_executable(Recurse Recurse.c)
-InjectTracer(Recurse)
+InjectMarkov(Recurse)
 InjectMemory(Recurse)
 
 add_test(NAME Recurse_Markov_Profile COMMAND Recurse.markov.native)

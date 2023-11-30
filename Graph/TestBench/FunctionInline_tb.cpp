@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "Util/Exceptions.h"
 #include "Util/Format.h"
 #include "Util/IO.h"
@@ -466,7 +468,7 @@ void Checks(Graph &original, Graph &transformed, string step)
     // 1. the graphs should not be empty
     if (transformed.nodes.empty() && !original.nodes.empty())
     {
-        throw AtlasException(step + ": Transformed graph is empty!");
+        throw CyclebiteException(step + ": Transformed graph is empty!");
     }
     // 2. all preds and succs should be present
     for (const auto node : transformed.nodes)
@@ -475,30 +477,30 @@ void Checks(Graph &original, Graph &transformed, string step)
         {
             if (transformed.edges.find(pred) == transformed.edges.end())
             {
-                throw AtlasException(step + ": Predecessor edge missing!");
+                throw CyclebiteException(step + ": Predecessor edge missing!");
             }
             if (transformed.nodes.find(pred->src) == transformed.nodes.end())
             {
-                throw AtlasException(step + ": Predecessor source missing!");
+                throw CyclebiteException(step + ": Predecessor source missing!");
             }
             if (transformed.nodes.find(pred->snk) == transformed.nodes.end())
             {
-                throw AtlasException(step + ": Predecessor sink missing!");
+                throw CyclebiteException(step + ": Predecessor sink missing!");
             }
         }
         for (auto succ : node->getSuccessors())
         {
             if (transformed.edges.find(succ) == transformed.edges.end())
             {
-                throw AtlasException(step + ": Successor missing!");
+                throw CyclebiteException(step + ": Successor missing!");
             }
             if (transformed.nodes.find(succ->src) == transformed.nodes.end())
             {
-                throw AtlasException(step + ": Successor source missing!");
+                throw CyclebiteException(step + ": Successor source missing!");
             }
             if (transformed.nodes.find(succ->snk) == transformed.nodes.end())
             {
-                throw AtlasException(step + ": Successor sink missing!");
+                throw CyclebiteException(step + ": Successor sink missing!");
             }
         }
     }
@@ -512,7 +514,7 @@ void Checks(Graph &original, Graph &transformed, string step)
         {
             if (foundStart)
             {
-                throw AtlasException(step + ": Graph is not one whole piece!");
+                throw CyclebiteException(step + ": Graph is not one whole piece!");
             }
             else
             {
@@ -523,7 +525,7 @@ void Checks(Graph &original, Graph &transformed, string step)
         {
             if (foundEnd)
             {
-                throw AtlasException(step + ": Graph is not one whole piece!");
+                throw CyclebiteException(step + ": Graph is not one whole piece!");
             }
             else
             {
@@ -549,7 +551,7 @@ void Checks(Graph &original, Graph &transformed, string step)
         }
         if (sum < 0.9999 || sum > 1.0001)
         {
-            throw AtlasException(step + ": Outgoing edges do not sum to 1!");
+            throw CyclebiteException(step + ": Outgoing edges do not sum to 1!");
         }
     }
 }
@@ -561,21 +563,21 @@ void ReverseTransformCheck(Graph original, Graph transformed, string step)
     {
         if (original.nodes.find(node->NID) == original.nodes.end())
         {
-            throw AtlasException(step + ": Node in transformed graph not found in original!");
+            throw CyclebiteException(step + ": Node in transformed graph not found in original!");
         }
         auto origNode = *original.nodes.find(node->NID);
         for (auto pred : node->getPredecessors())
         {
             if (origNode->getPredecessors().find(pred) == origNode->getPredecessors().end())
             {
-                throw AtlasException(step + ": Predecessor in transformed graph not found in equivalent original node predecessors!");
+                throw CyclebiteException(step + ": Predecessor in transformed graph not found in equivalent original node predecessors!");
             }
         }
         for (auto succ : node->getSuccessors())
         {
             if (origNode->getSuccessors().find(succ) == origNode->getSuccessors().end())
             {
-                throw AtlasException(step + ": Successor in transformed graph not found in equivalent original node successors!");
+                throw CyclebiteException(step + ": Successor in transformed graph not found in equivalent original node successors!");
             }
         }
     }
@@ -583,21 +585,21 @@ void ReverseTransformCheck(Graph original, Graph transformed, string step)
     {
         if (original.nodes.find(node->NID) == original.nodes.end())
         {
-            throw AtlasException(step + ": Node in original graph not found in transformed!");
+            throw CyclebiteException(step + ": Node in original graph not found in transformed!");
         }
         auto transformedNode = *original.nodes.find(node->NID);
         for (auto pred : node->getPredecessors())
         {
             if (transformedNode->getPredecessors().find(pred) == transformedNode->getPredecessors().end())
             {
-                throw AtlasException(step + ": Predecessor in original graph not found in equivalent transformed node predecessors!");
+                throw CyclebiteException(step + ": Predecessor in original graph not found in equivalent transformed node predecessors!");
             }
         }
         for (auto succ : node->getSuccessors())
         {
             if (transformedNode->getSuccessors().find(succ) == transformedNode->getSuccessors().end())
             {
-                throw AtlasException(step + ": Successor in original graph not found in equivalent transformed node successors!");
+                throw CyclebiteException(step + ": Successor in original graph not found in equivalent transformed node successors!");
             }
         }
     }
@@ -738,7 +740,7 @@ uint8_t RunTest(Graph original, llvm::Module *sourceBitcode, map<int64_t, llvm::
         } // while( true )
         return EXIT_SUCCESS;
     }
-    catch (AtlasException &e)
+    catch (CyclebiteException &e)
     {
         spdlog::critical(e.what());
         return EXIT_FAILURE;
@@ -776,15 +778,15 @@ int main()
         auto err = BuildCFG(original, IP, false);
         if (err)
         {
-            throw AtlasException("Failed to read input profile file!");
+            throw CyclebiteException("Failed to read input profile file!");
         }
         if (original.nodes.empty())
         {
-            throw AtlasException("No nodes could be read from the input profile!");
+            throw CyclebiteException("No nodes could be read from the input profile!");
         }
         UpgradeEdges(SourceBitcode.get(), original, blockCallers, IDToBlock);
     }
-    catch (AtlasException &e)
+    catch (CyclebiteException &e)
     {
         spdlog::critical(e.what());
         return EXIT_FAILURE;

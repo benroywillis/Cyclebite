@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "Hotcode.h"
 #include "IO.h"
 #include "Transforms.h"
@@ -102,7 +104,7 @@ set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotCode(c
         }
         // check if this block is a neighbor to an existing kernel
         bool found = false;
-        for (const auto k : kernels)
+        for (const auto& k : kernels)
         {
             for (const auto &block : k->getSubgraph())
             {
@@ -199,7 +201,7 @@ set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotCode(c
     return kernels;
 }
 
-set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotLoops(const set<std::shared_ptr<MLCycle>, KCompare> &hotKernels, const Graph::Graph &graph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const string &loopfilename)
+set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotLoops(const set<std::shared_ptr<MLCycle>, KCompare> &hotKernels, const Graph::Graph &graph, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock, const string &loopfilename)
 {
     set<std::shared_ptr<MLCycle>, KCompare> kernels;
     set<StaticLoop, StaticLoopCompare> staticLoops;
@@ -214,7 +216,7 @@ set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotLoops(
     }
     catch (std::exception &e)
     {
-        spdlog::critical("Couldn't open loop file " + string(loopfilename) + ": " + string(e.what()));
+        spdlog::warn("Couldn't open loop file " + string(loopfilename) + ": " + string(e.what())+". Hotloop analysis is not possible without this file.");
         return kernels;
     }
 

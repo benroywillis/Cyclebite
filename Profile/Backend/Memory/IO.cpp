@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "IO.h"
 #include "Memory.h"
 #include <cstdlib>
@@ -35,7 +37,7 @@ namespace Cyclebite::Profile::Backend::Memory
         }
         catch (std::exception &e)
         {
-            throw AtlasException("Couldn't open kernel file: " + string(kfName) + ": " + string(e.what()));
+            throw CyclebiteException("Couldn't open kernel file: " + string(kfName) + ": " + string(e.what()));
         }
         if (j.find("Kernels") != j.end())
         {
@@ -500,7 +502,7 @@ namespace Cyclebite::Profile::Backend::Memory
         }
         catch (std::exception &e)
         {
-            throw AtlasException("Couldn't open kernel file: " + string(kfName) + ": " + string(e.what()));
+            throw CyclebiteException("Couldn't open kernel file: " + string(kfName) + ": " + string(e.what()));
         }
         json output;
         for( const auto& k : hotKernels )

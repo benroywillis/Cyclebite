@@ -1,13 +1,13 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "Precision.h"
 #include "Backend/Precision/inc/Precision.h"
 #include "Annotate.h"
 #include "Util/Annotate.h"
 #include "Util/Print.h"
-#include "CommandArgs.h"
 #include "Functions.h"
-#include "MarkovIO.h"
 #include "llvm/IR/DataLayout.h"
 #include <fstream>
 #include <llvm/IR/Function.h>
@@ -27,8 +27,8 @@
 
 using namespace llvm;
 using namespace std;
-
-namespace DashTracer::Passes
+/*
+namespace Cyclebite::Profile::Passes
 {
     void PassToBackend(llvm::IRBuilder<>& builder, llvm::Value* val, llvm::Function* fi, uint64_t blockId, uint32_t idx)
     {
@@ -74,7 +74,7 @@ namespace DashTracer::Passes
         {
             PrintVal(val);
             spdlog::critical("Cannot handle this type for dynamic range analysis!");
-            throw AtlasException("Cannot handle this type for dynamic range analysis!");
+            throw CyclebiteException("Cannot handle this type for dynamic range analysis!");
         }
         //bb id
         Value *blockID = ConstantInt::get(Type::getInt64Ty(fi->getContext()), (uint64_t)blockId);
@@ -93,7 +93,7 @@ namespace DashTracer::Passes
         for (auto fi = F.begin(); fi != F.end(); fi++)
         {
             auto BB = cast<BasicBlock>(fi);
-            int64_t blockId = GetBlockID(BB);
+            int64_t blockId = Cyclebite::Util::GetBlockID(BB);
             auto firstInsertion = BB->getFirstInsertionPt();
             auto *firstInst = cast<Instruction>(firstInsertion);
             IRBuilder<> firstBuilder(firstInst);
@@ -187,9 +187,9 @@ namespace DashTracer::Passes
                 {
                     IRBuilder<> builder(load->getNextNode());
                     auto intercept = load;
-                    if( intercept->getType()->isVectorTy() )
+                    if( auto vt = llvm::dyn_cast<llvm::VectorType>(intercept->getType()) )
                     {
-                        for( unsigned i = 0; i < intercept->getType()->getVectorNumElements(); i++ )
+                        for( unsigned i = 0; i < vt->getElementCount().getFixedValue(); i++ )
                         {
                             auto extracted = builder.CreateExtractElement(intercept, i);
                             PassToBackend(builder, extracted, llvm::cast<llvm::Function>(fi), (uint64_t)blockId, ldInstructionIndex);
@@ -205,9 +205,9 @@ namespace DashTracer::Passes
                 {
                     IRBuilder<> builder(store);
                     Value *stVal = store->getValueOperand();
-                    if( stVal->getType()->isVectorTy() )
+                    if( auto vt = llvm::dyn_cast<llvm::VectorType>(stVal->getType()) )
                     {
-                        for( unsigned i = 0; i < stVal->getType()->getVectorNumElements(); i++ )
+                        for( unsigned i = 0; i < vt->getElementCount().getFixedValue(); i++ )
                         {
                             auto extracted = builder.CreateExtractElement(stVal, i);
                             PassToBackend(builder, extracted, llvm::cast<llvm::Function>(fi), (uint64_t)blockId, stInstructionIndex);
@@ -238,10 +238,35 @@ namespace DashTracer::Passes
 
     void Precision::getAnalysisUsage(AnalysisUsage &AU) const
     {
-        AU.addRequired<DashTracer::Passes::EncodedAnnotate>();
-        AU.addRequired<DashTracer::Passes::MarkovIO>();
+        AU.addRequired<Cyclebite::Profile::Passes::Annotate>();
     }
 
     char Precision::ID = 0;
     static RegisterPass<Precision> Y("Precision", "Injects Precision profiling to the binary", true, false);
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes
+*/
+// new pass manager registration
+llvm::PassPluginLibraryInfo getPrecisionPluginInfo() 
+{
+    return {LLVM_PLUGIN_API_VERSION, "Precisioin", LLVM_VERSION_STRING, 
+        [](PassBuilder &PB) 
+        {
+            PB.registerPipelineParsingCallback( 
+                [](StringRef Name, FunctionPassManager& FPM, ArrayRef<PassBuilder::PipelineElement>) 
+                {
+                    if (Name == "Precisioin") {
+                        FPM.addPass(Cyclebite::Profile::Passes::Precision());
+                        return true;
+                    }
+                    return false;
+                }
+            );
+        }
+    };
+}
+
+// guarantees this pass will be visible to opt when called
+extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() 
+{
+    return getPrecisionPluginInfo();
+}

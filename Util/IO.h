@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #pragma once
 #include "Util/Format.h"
 #include "Util/Print.h"
@@ -27,7 +29,7 @@ inline std::unique_ptr<llvm::Module> ReadBitcode(const std::string &InputFilenam
     {
         spdlog::critical("Failed to open bitcode file: " + InputFilename);
     }
-    Format(SourceBitcode.get());
+    Cyclebite::Util::Format(*SourceBitcode);
     return SourceBitcode;
 }
 
@@ -41,89 +43,7 @@ inline std::vector<std::unique_ptr<llvm::Module>> LoadBitcodes(const std::vector
     return result;
 }
 
-inline std::map<int64_t, std::vector<int64_t>> ReadBlockInfo(std::string &BlockInfo)
-{
-    std::map<int64_t, std::vector<int64_t>> blockCallers;
-    std::ifstream inputJson;
-    nlohmann::json j;
-    try
-    {
-        inputJson.open(BlockInfo);
-        inputJson >> j;
-        inputJson.close();
-    }
-    catch (std::exception &e)
-    {
-        spdlog::error("Couldn't open BlockInfo json file: " + BlockInfo);
-        spdlog::error(e.what());
-        return blockCallers;
-    }
-    for (const auto &bbid : j.items())
-    {
-        if (j[bbid.key()].find("BlockCallers") != j[bbid.key()].end())
-        {
-            blockCallers[stol(bbid.key())] = j[bbid.key()]["BlockCallers"].get<std::vector<int64_t>>();
-        }
-    }
-    return blockCallers;
-}
-
-inline std::map<int64_t, std::map<std::string, int64_t>> ReadBlockLabels(std::string &BlockInfo)
-{
-    std::map<int64_t, std::map<std::string, int64_t>> blockLabels;
-    std::ifstream inputJson;
-    nlohmann::json j;
-    try
-    {
-        inputJson.open(BlockInfo);
-        inputJson >> j;
-        inputJson.close();
-    }
-    catch (std::exception &e)
-    {
-        spdlog::error("Couldn't open BlockInfo json file: " + BlockInfo);
-        spdlog::error(e.what());
-        return blockLabels;
-    }
-    for (const auto &bbid : j.items())
-    {
-        if (j[bbid.key()].find("Labels") != j[bbid.key()].end())
-        {
-            auto labelCounts = j[bbid.key()]["Labels"].get<std::map<std::string, int64_t>>();
-            blockLabels[stol(bbid.key())] = labelCounts;
-        }
-    }
-    return blockLabels;
-}
-
-inline std::set<int64_t> ReadThreadStarts(std::string &BlockInfo)
-{
-    std::set<int64_t> threadStarts;
-    std::ifstream inputJson;
-    nlohmann::json j;
-    try
-    {
-        inputJson.open(BlockInfo);
-        inputJson >> j;
-        inputJson.close();
-    }
-    catch (std::exception &e)
-    {
-        spdlog::error("Couldn't open BlockInfo json file: " + BlockInfo);
-        spdlog::error(e.what());
-        return threadStarts;
-    }
-    if( j.find("ThreadEntrances") != j.end() )
-    {
-        for( const auto& id : j["ThreadEntrances"].get<std::vector<int64_t>>() )
-        {
-            threadStarts.insert(id);
-        }
-    }
-    return threadStarts;
-}
-
-inline llvm::CallGraph getCallGraph(llvm::Module *mod, std::map<int64_t, std::vector<int64_t>> &blockCallers, std::map<llvm::BasicBlock *, llvm::Function *> &BlockToFPtr, std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+inline llvm::CallGraph getCallGraph(llvm::Module *mod, std::map<int64_t, std::vector<int64_t>> &blockCallers, std::map<llvm::BasicBlock *, const llvm::Function *> &BlockToFPtr, std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     // this constructor does suboptimal things
     // when a function is declared and not intrinsic to the module, the constructor will put a nullptr in for the entry
@@ -139,7 +59,7 @@ inline llvm::CallGraph getCallGraph(llvm::Module *mod, std::map<int64_t, std::ve
                 // indexer to track which function call we are on in a given basic block
                 // blockCallers contains in each value the sequence of blocks that are jumped to in the context switch
                 // thus, callCount indexes the vector this block maps to in the blockCaller map, if any
-                uint32_t callCount = 0;
+                //uint32_t callCount = 0;
                 if (auto CI = llvm::dyn_cast<llvm::CallBase>(it))
                 {
                     // this is supposed to detect null function calls
@@ -149,7 +69,7 @@ inline llvm::CallGraph getCallGraph(llvm::Module *mod, std::map<int64_t, std::ve
                     if (callee == nullptr)
                     {
                         // try to find a block caller entry for this function, if it's not there we have to move on
-                        auto BBID = GetBlockID(llvm::cast<llvm::BasicBlock>(bb));
+                        auto BBID = Cyclebite::Util::GetBlockID(llvm::cast<llvm::BasicBlock>(bb));
                         if (blockCallers.find(BBID) != blockCallers.end())
                         {
                             for (auto entry : blockCallers.at(BBID))
@@ -164,7 +84,7 @@ inline llvm::CallGraph getCallGraph(llvm::Module *mod, std::map<int64_t, std::ve
                                 }
                                 else
                                 {
-                                    throw AtlasException("Could not map a callee ID in blockCallers to a basic block!");
+                                    throw CyclebiteException("Could not map a callee ID in blockCallers to a basic block!");
                                 }
                             }
                         }
@@ -173,7 +93,7 @@ inline llvm::CallGraph getCallGraph(llvm::Module *mod, std::map<int64_t, std::ve
                             spdlog::warn("BlockCallers did not contain an entry for the indirect call in BBID " + std::to_string(BBID));
                         }
                     }
-                    callCount++;
+                    //callCount++;
                 }
             }
         }

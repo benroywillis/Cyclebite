@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.13)
 project(Cyclebite VERSION 1.1.0)
 
-SET(CMAKE_CXX_STANDARD 17)
+SET(CMAKE_CXX_STANDARD 20)
 SET(CMAKE_C_STANDARD 11)
 
-find_package(LLVM 9 REQUIRED CONFIG)
+find_package(LLVM 17 REQUIRED CONFIG)
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 llvm_map_components_to_libnames(llvm_libs support core irreader bitreader bitwriter transformutils lto)
@@ -26,11 +26,10 @@ set(CMAKE_STRIP ${LLVM_INSTALL_PREFIX}/bin/llvm-strip)
 find_package(ZLIB REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
-find_package(indicators CONFIG REQUIRED)
 
 option(ENABLE_LINTER "Run linter" OFF)
 if(${ENABLE_LINTER})
-    find_program(TIDY NAMES clang-tidy-9 clang-tidy)
+    find_program(TIDY NAMES clang-tidy-9 clang-tidy ENV "TIDY")
     if(${TIDY} STREQUAL "TIDY-NOTFOUND")
         message(FATAL_ERROR "clang-tidy not found! Necessary for linting!")
     else()
@@ -79,11 +78,12 @@ add_subdirectory("Utilities")
 add_subdirectory("Grammar")
 
 # responsible for injecting the tracer. Fairly fragile so be careful
-function(InjectTracer tar)
+function(InjectMarkov tar)
     target_compile_options(${tar} PRIVATE "-flto" "-g" "-mavx")
-    set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=lld -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
+    set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=${CMAKE_LINKER} -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
     add_custom_command(OUTPUT ${tar}.markov.bc
-        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -load $<TARGET_FILE:AtlasPasses> -Markov $<TARGET_FILE:${tar}> -o ${tar}.markov.bc
+        #COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -enable-new-pm=0 -load $<TARGET_FILE:AtlasPasses> --Markov $<TARGET_FILE:${tar}> -o ${tar}.markov.bc
+        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt --load-pass-plugin=$<TARGET_FILE:MarkovPass> --passes=Markov $<TARGET_FILE:${tar}> -o ${tar}.markov.bc
         DEPENDS $<TARGET_FILE:${tar}>
     )
     set_source_files_properties(
@@ -94,15 +94,17 @@ function(InjectTracer tar)
     )
     add_executable(${tar}.markov.native ${tar}.markov.bc)
     set_target_properties(${tar}.markov.native PROPERTIES LINKER_LANGUAGE CXX)
-    set_target_properties(${tar}.markov.native PROPERTIES LINK_FLAGS "-lpapi -lgomp -fopenmp -mavx")
+    #set_target_properties(${tar}.markov.native PROPERTIES LINK_FLAGS "-lpapi -lgomp -fopenmp -mavx")
+    set_target_properties(${tar}.markov.native PROPERTIES LINK_FLAGS "-lgomp -fopenmp -mavx")
     target_link_libraries(${tar}.markov.native PRIVATE AtlasBackend)
 endfunction()
 
 function(InjectMemory tar)
     target_compile_options(${tar} PRIVATE "-flto" "-g" "-mavx")
-    set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=lld -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
+    set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=${CMAKE_LINKER} -Wl,--plugin-opt=emit-llvm -fopenmp -mavx")
     add_custom_command(OUTPUT ${tar}.memory.bc
-        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -load $<TARGET_FILE:AtlasPasses> -Memory $<TARGET_FILE:${tar}> -o ${tar}.memory.bc
+        #COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -enable-new-pm=0 -load $<TARGET_FILE:AtlasPasses> --Memory $<TARGET_FILE:${tar}> -o ${tar}.memory.bc
+        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt --load-pass-plugin=$<TARGET_FILE:MemoryPass> --passes=Memory $<TARGET_FILE:${tar}> -o ${tar}.memory.bc
         DEPENDS $<TARGET_FILE:${tar}>
     )
     set_source_files_properties(
@@ -113,27 +115,9 @@ function(InjectMemory tar)
     )
     add_executable(${tar}.memory.native ${tar}.memory.bc)
     set_target_properties(${tar}.memory.native PROPERTIES LINKER_LANGUAGE CXX)
-    set_target_properties(${tar}.memory.native PROPERTIES LINK_FLAGS "-lpapi -lgomp -fopenmp -mavx")
+    #set_target_properties(${tar}.markov.native PROPERTIES LINK_FLAGS "-lpapi -lgomp -fopenmp -mavx")
+    set_target_properties(${tar}.markov.native PROPERTIES LINK_FLAGS "-lgomp -fopenmp -mavx")
     target_link_libraries(${tar}.memory.native PRIVATE AtlasBackend)
-endfunction()
-
-function(LoopDetection tar)
-    target_compile_options(${tar} PRIVATE "-flto" "-g")
-    set_target_properties(${tar} PROPERTIES LINK_FLAGS "-fuse-ld=lld -Wl,--plugin-opt=emit-llvm")
-    add_custom_command(OUTPUT loopDetect.bc
-        COMMAND ${LLVM_INSTALL_PREFIX}/bin/opt -load $<TARGET_FILE:AtlasPasses> -CFG  $<TARGET_FILE:${tar}> -o loopDetect.bc > out 2> loopPrint.txt
-        DEPENDS $<TARGET_FILE:${tar}>
-    )
-    set_source_files_properties(
-        loopDetect.bc
-        PROPERTIES
-        EXTERNAL_OBJECT true
-        GENERATED true
-    )
-    add_executable(${tar}-CFG loopDetect.bc)
-    set_target_properties(${tar}-CFG PROPERTIES LINKER_LANGUAGE CXX)
-    set_target_properties(${tar}-CFG PROPERTIES LINK_FLAGS "-lpapi")
-    target_link_libraries(${tar}-CFG PRIVATE AtlasBackend)
 endfunction()
 
 # our unit tests
@@ -152,7 +136,7 @@ endif()
 
 # stolen from https://github.com/ttroy50/cmake-examples/blob/master/04-static-analysis/clang-format/cmake/modules/clang-format.cmake
 # runs clang-format on the entire source tree
-find_program(FORMAT NAMES clang-format-9 clang-format)
+find_program(FORMAT NAMES clang-format ENV "FORMAT")
 if(${FORMAT} STREQUAL "FORMAT-NOTFOUND")
     message(WARNING "clang-format not found. Disabling formatting target")
 else()

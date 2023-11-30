@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "Util/Exceptions.h"
 #include "Util/IO.h"
 #include "Kernel.h"
@@ -127,7 +129,7 @@ namespace Cyclebite::Profile::Backend
         }
         catch (std::exception &e)
         {
-            throw AtlasException("Couldn't open kernel file: " + string(kfName) + ": " + string(e.what()));
+            throw CyclebiteException("Couldn't open kernel file: " + string(kfName) + ": " + string(e.what()));
         }
         set<shared_ptr<Kernel>, UIDCompare> kernels;
         if (j.find("Kernels") != j.end())
@@ -362,7 +364,7 @@ namespace Cyclebite::Profile::Backend
                     }
                     else
                     {
-                        throw AtlasException("Kernel entrance sink node intersected both kernel and non-kernel code!");
+                        throw CyclebiteException("Kernel entrance sink node intersected both kernel and non-kernel code!");
                     }
                 }
             }
@@ -379,7 +381,7 @@ namespace Cyclebite::Profile::Backend
                 {
                     // exit sink nodes can be shared (unlike entrances) because they go out into the wild of the program.. and thus may be shared among many things
                     // this exception ( if active ) will be thrown in git@github.com:benroywillis/Algorithms/BilateralGrid/AndrewAdams/ project
-                    throw AtlasException("Kernel exit source node intersected both kernel and non-kernel code!");
+                    throw CyclebiteException("Kernel exit source node intersected both kernel and non-kernel code!");
                 }
             }
         }
@@ -1424,7 +1426,7 @@ namespace Cyclebite::Profile::Backend
             {
                 FindEpochBoundaries();
             }
-            catch (AtlasException &e)
+            catch (CyclebiteException &e)
             {
                 spdlog::critical(e.what());
                 exit(EXIT_FAILURE);

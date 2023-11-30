@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "UnconditionalEdge.h"
 #include "Util/Exceptions.h"
 #include "ControlNode.h"
@@ -40,7 +42,7 @@ const std::shared_ptr<ControlNode> &UnconditionalEdge::getWeightedSrc() const
 {
     if (weightedSrc == nullptr)
     {
-        throw AtlasException("Edge does not have a weighted source node!");
+        throw CyclebiteException("Edge does not have a weighted source node!");
     }
     return weightedSrc;
 }
@@ -49,7 +51,7 @@ const std::shared_ptr<ControlNode> &UnconditionalEdge::getWeightedSnk() const
 {
     if (weightedSnk == nullptr)
     {
-        throw AtlasException("Edge does not have a weighted sink node!");
+        throw CyclebiteException("Edge does not have a weighted sink node!");
     }
     return weightedSnk;
 }

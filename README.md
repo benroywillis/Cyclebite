@@ -16,12 +16,12 @@ Cyclebite requires cmake version 3.13 or higher. You can run the test suite with
 
 The current development version of Cyclebite uses LLVM9.0.1 to both link against and build its source code. It is recommended that you use the same version for your own development. YOU MUST USE THE SAME INSTALL OF LLVM TO BOTH COMPILE THE REPOSITORY AND LINK THE REPOSITORY AGAINST. This is to ensure that the legacy LLVM passes will have all their symbols defined when running opt passes.
 
-We recommend you build llvm from source - this is the only way to ensure all submodules will be present and the correct version (mlir, lld, clang, openmp, polly, flang).  
+We recommend you build llvm from source - this is the only way to ensure all submodules will be present and the correct version (clang, lld, openmp).  
 `wget <link-to-llvm9.0.1>`  
 `tar -xvf llvm-project-llvmorg-9.0.1.tar.gz`  
 `cd llvm-project-llvmorg-9.0.1`  
 `mkdir build ; cd build`  
-`cmake ../llvm/ -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/path/to/Installs/LLVM9.0.1/release/ -DLLVM_ENABLE_PROJECTS="clang;polly;flang;mlir;lld;openmp" -DLLVM_ENABLE_RTTI=ON ; ninja -j<threads> ; ninja test ; ninja install`  
+`cmake ../llvm/ -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/path/to/install/place/ -DLLVM_ENABLE_PROJECTS="clang;lld;openmp" -DLLVM_ENABLE_RTTI=ON ; ninja -j<threads> ; ninja test ; ninja install`  
 (we find that memory usage is ~0.5GB/thread throughout the compilation process, so adjust your thread count according to available memory)  
 (we recommend you build both -DCMAKE_BUILD_TYPE=Debug and -DCMAKE_BUILD_TYPE=Release)  
 

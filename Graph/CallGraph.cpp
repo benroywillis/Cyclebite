@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "CallGraph.h"
 #include "Util/Exceptions.h"
 
@@ -33,7 +35,7 @@ const std::shared_ptr<CallGraphNode> &CallGraph::operator[](const llvm::Function
     auto it = CGN.find(f);
     if (it == CGN.end())
     {
-        throw AtlasException("Function " + string(f->getName()) + " not found in callgraph!");
+        throw CyclebiteException("Function " + string(f->getName()) + " not found in callgraph!");
     }
     return *it;
 }
@@ -58,14 +60,14 @@ const shared_ptr<CallGraphNode> CallGraph::getMainNode() const
         {
             if( main != nullptr ) 
             {
-                throw AtlasException("Found more than one main node!");
+                throw CyclebiteException("Found more than one main node!");
             }
             main = static_pointer_cast<CallGraphNode>(node);
         }
     }
     if( main == nullptr )
     {
-        throw AtlasException("Callgraph does not have a main node!");
+        throw CyclebiteException("Callgraph does not have a main node!");
     }
     return static_pointer_cast<CallGraphNode>(*nodeSet.find(main));
 }

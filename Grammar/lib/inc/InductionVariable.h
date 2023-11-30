@@ -1,41 +1,23 @@
+//==------------------------------==//
+// Copyright 2023 Benjamin Willis
+// SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #pragma once
+#include "Counter.h"
 #include "Symbol.h"
-#include "ControlBlock.h"
-#include "Cycle.h"
 
 namespace Cyclebite::Grammar
 {
-    /// @brief Defines stride patterns
-    enum class StridePattern
-    {
-        Sequential,
-        Random
-    };
-
-    struct PolySpace
-    {
-        uint32_t min;
-        uint32_t max;
-        uint32_t stride;
-    };
-    
-    class InductionVariable : public Symbol
+    /// @brief InductionVariable is a Counter that must determine control
+    class InductionVariable : public Counter, public Symbol
     {
     public:
-        InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n, const std::shared_ptr<Cycle>& c );
-        const std::shared_ptr<Cyclebite::Graph::DataValue>& getNode() const;
-        const std::shared_ptr<Cycle>& getCycle() const;
-        StridePattern getPattern() const;
-        const PolySpace getSpace() const;
-        const std::set<std::shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare>& getBody() const;
-        bool isOffset(const llvm::Value* v) const;
-        std::string dump() const override;
-    private:
-        std::shared_ptr<Cycle> cycle;
-        std::shared_ptr<Cyclebite::Graph::DataValue> node;
-        StridePattern pat;
-        PolySpace space;
-        /// Represents the blocks that this IV "controls", which basically means the loop body
-        std::set<std::shared_ptr<Cyclebite::Graph::ControlBlock>, Cyclebite::Graph::p_GNCompare> body; 
+        /// @brief 
+        /// @param n The "address" of the IV (the pointer that points to its value, or the phi that holds its value)
+        /// @param c The cycle in which this IV governs the recurrence or exit condition
+        /// @param targetExit The terminator instruction that recurs and exits the cycle
+        InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n, const std::shared_ptr<Cycle>& c, const llvm::Instruction* targetExit );
+        std::string dump() const override; 
     };
+    std::set<std::shared_ptr<InductionVariable>> getInductionVariables(const std::shared_ptr<Task>& t);
 } // namespace Cyclebite::Grammar

@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "IO.h"
 #include "Util/Annotate.h"
 #include "Util/Print.h"
@@ -32,6 +34,14 @@ using namespace Cyclebite::Graph;
 constexpr uint64_t MAX_EDGE_UNABRIDGED = 2000;
 
 uint32_t markovOrder;
+
+// maps the dynamic pass IDs to their LLVM objects
+map<int64_t, const BasicBlock *> Cyclebite::Graph::IDToBlock;
+map<int64_t, const Value *> Cyclebite::Graph::IDToValue;
+// dynamic info from the markov profile
+map<int64_t, vector<int64_t>> Cyclebite::Graph::blockCallers;
+map<int64_t, map<string, int64_t>> Cyclebite::Graph::blockLabels;
+set<int64_t> Cyclebite::Graph::threadStarts;
 /// Maps a vector of basic block IDs to a node ID
 map<vector<uint32_t>, uint64_t> Cyclebite::Graph::NIDMap;
 /// Maps each unique instruction to its datanode
@@ -45,6 +55,137 @@ std::string to_string_float(float f, int precision = 3)
     std::stringstream stream;
     stream << std::fixed << std::setprecision(precision) << f;
     return stream.str();
+}
+
+void Cyclebite::Graph::ReadBlockInfo(const std::string &BlockInfo)
+{
+    std::map<int64_t, std::vector<int64_t>> blockCallers;
+    std::ifstream inputJson;
+    nlohmann::json j;
+    try
+    {
+        inputJson.open(BlockInfo);
+        inputJson >> j;
+        inputJson.close();
+    }
+    catch (std::exception &e)
+    {
+        spdlog::error("Couldn't open BlockInfo json file: " + BlockInfo);
+        spdlog::error(e.what());
+    }
+    for (const auto &bbid : j.items())
+    {
+        if (j[bbid.key()].find("BlockCallers") != j[bbid.key()].end())
+        {
+            blockCallers[stol(bbid.key())] = j[bbid.key()]["BlockCallers"].get<std::vector<int64_t>>();
+        }
+    }
+
+    std::map<int64_t, std::map<std::string, int64_t>> blockLabels;
+    for (const auto &bbid : j.items())
+    {
+        if (j[bbid.key()].find("Labels") != j[bbid.key()].end())
+        {
+            auto labelCounts = j[bbid.key()]["Labels"].get<std::map<std::string, int64_t>>();
+            blockLabels[stol(bbid.key())] = labelCounts;
+        }
+    }
+
+    std::set<int64_t> threadStarts;
+    if( j.find("ThreadEntrances") != j.end() )
+    {
+        for( const auto& id : j["ThreadEntrances"].get<std::vector<int64_t>>() )
+        {
+            threadStarts.insert(id);
+        }
+    }
+}
+
+void RecurseThroughOperands(llvm::Value *val, std::map<int64_t, const llvm::Value *> &IDToValue)
+{
+    if( llvm::isa<llvm::DbgInfoIntrinsic>(val) )
+    {
+        return;
+    }
+    if (auto inst = llvm::dyn_cast<llvm::Instruction>(val))
+    {
+        if (Cyclebite::Util::GetValueID(inst) < 0)
+        {
+            throw CyclebiteException("Found an instruction that did not have a ValueID.");
+        }
+        if (IDToValue.find(Cyclebite::Util::GetValueID(val)) == IDToValue.end())
+        {
+            IDToValue[Cyclebite::Util::GetValueID(val)] = val;
+        }
+        else
+        {
+            return;
+        }
+        for (unsigned int i = 0; i < inst->getNumOperands(); i++)
+        {
+            if (auto subVal = llvm::dyn_cast<llvm::Value>(inst->getOperand(i)))
+            {
+                RecurseThroughOperands(subVal, IDToValue);
+            }
+        }
+    }
+    else if (auto go = llvm::dyn_cast<llvm::GlobalObject>(val))
+    {
+        if (Cyclebite::Util::GetValueID(go) < 0)
+        {
+            throw CyclebiteException("Found a global object that did not have a ValueID.");
+        }
+        if (IDToValue.find(Cyclebite::Util::GetValueID(val)) == IDToValue.end())
+        {
+            IDToValue[Cyclebite::Util::GetValueID(go)] = val;
+        }
+        else
+        {
+            return;
+        }
+        for (unsigned int i = 0; i < go->getNumOperands(); i++)
+        {
+            if (auto subVal = llvm::dyn_cast<llvm::Value>(go->getOperand(i)))
+            {
+                RecurseThroughOperands(subVal, IDToValue);
+            }
+        }
+    }
+    else if (auto arg = llvm::dyn_cast<llvm::Argument>(val))
+    {
+        if (Cyclebite::Util::GetValueID(arg) < 0)
+        {
+            throw CyclebiteException("Found a global object that did not have a ValueID.");
+        }
+        if (IDToValue.find(Cyclebite::Util::GetValueID(val)) == IDToValue.end())
+        {
+            IDToValue[Cyclebite::Util::GetValueID(arg)] = val;
+        }
+        else
+        {
+            return;
+        }
+    }
+}
+
+void Cyclebite::Graph::InitializeIDMaps(llvm::Module *M)
+{
+    for (auto &F : *M)
+    {
+        for (auto BB = F.begin(); BB != F.end(); BB++)
+        {
+            auto *block = llvm::cast<llvm::BasicBlock>(BB);
+            if (( Cyclebite::Util::GetBlockID(block) >= 0) && (IDToBlock[Cyclebite::Util::GetBlockID(block)] == nullptr))
+            {
+                IDToBlock[Cyclebite::Util::GetBlockID(block)] = block;
+            }
+            for (auto it = block->begin(); it != block->end(); it++)
+            {
+                auto inst = llvm::cast<llvm::Instruction>(it);
+                RecurseThroughOperands(inst, IDToValue);
+            }
+        }
+    }
 }
 
 /// @brief Reads an input profile
@@ -117,7 +258,7 @@ int Cyclebite::Graph::BuildCFG(Graph &graph, const std::string &filename, bool H
         }
         if (sourceNode == nullptr)
         {
-            throw AtlasException("Found a node described in an edge that does not exist in the BBID space!");
+            throw CyclebiteException("Found a node described in an edge that does not exist in the BBID space!");
         }
 
         // now synthesize the sink neighbor of this node, if a node for it doesn't yet exist
@@ -140,11 +281,11 @@ int Cyclebite::Graph::BuildCFG(Graph &graph, const std::string &filename, bool H
         }
         if (sinkNode == nullptr)
         {
-            throw AtlasException("Could not find a node in the graph that matches the NID found to map to this neighbor!");
+            throw CyclebiteException("Could not find a node in the graph that matches the NID found to map to this neighbor!");
         }
         if (sourceNode->isPredecessor(sinkNode))
         {
-            throw AtlasException("This sink node ID is already a neighbor of this source node!");
+            throw CyclebiteException("This sink node ID is already a neighbor of this source node!");
         }
         // each edge is a basic edge with a frequency count and two nodes, upgrading to more specific edge types like ConditionalEdge and CallEdge are done in UpgradeEdges()
         auto newEdge = make_shared<UnconditionalEdge>(frequency, sourceNode, sinkNode);
@@ -164,7 +305,7 @@ int Cyclebite::Graph::BuildCFG(Graph &graph, const std::string &filename, bool H
 /// @param graph        The control graph that contains the input profile
 /// @param blockCallers Maps a calling block ID to a vector of its observed destination blocks
 /// @param IDToBlock    Maps a block ID to a basic block pointer
-void resolveNullFunctionCall(const shared_ptr<ControlNode> &srcNode, set<shared_ptr<ControlNode>, p_GNCompare> &snkNodes, const CallBase *call, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void resolveNullFunctionCall(const shared_ptr<ControlNode> &srcNode, set<shared_ptr<ControlNode>, p_GNCompare> &snkNodes, const CallBase *call, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     // blockCallers should tell us which basic block this null function call goes to next
 
@@ -178,12 +319,12 @@ void resolveNullFunctionCall(const shared_ptr<ControlNode> &srcNode, set<shared_
     // at this point, the only way I can think of to detect this case is to see if there is actually a function name (with a preceding @ symbol)
     // the above mechanism will fail if the null function call has a global variable in its arguments list (globals are preceded by @ too)
     auto instString = PrintVal(call, false);
-    if (blockCallers.find(GetBlockID(call->getParent())) != blockCallers.end())
+    if (blockCallers.find(Cyclebite::Util::GetBlockID(call->getParent())) != blockCallers.end())
     {
         // this is a multi-dimensional problem, even with basic block splitting
         // a function pointer is allowed to call any function that matches a signature
         // when a function pointer goes to more than one function, we have to be able to enumerate that case here
-        for (auto callee : blockCallers.at(GetBlockID(call->getParent())))
+        for (auto callee : blockCallers.at(Cyclebite::Util::GetBlockID(call->getParent())))
         {
             auto n = BlockToNode(graph, IDToBlock.at(callee), NIDMap);
             if( n )
@@ -206,7 +347,7 @@ void resolveNullFunctionCall(const shared_ptr<ControlNode> &srcNode, set<shared_
 #ifdef DEBUG
         PrintVal(call->getParent());
         spdlog::warn("Blockcallers did not contain information for a null function call observed in the dynamic profile. This could be due to an empty function or profiler error.");
-        set<BasicBlock *> BBSuccs;
+        set<const BasicBlock *> BBSuccs;
         for (unsigned i = 0; i < call->getParent()->getTerminator()->getNumSuccessors(); i++)
         {
             BBSuccs.insert(call->getParent()->getTerminator()->getSuccessor(i));
@@ -224,7 +365,7 @@ void resolveNullFunctionCall(const shared_ptr<ControlNode> &srcNode, set<shared_
     }
 }
 
-void buildFunctionSubgraph(shared_ptr<CallEdge> &newCall, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock, const BasicBlock *functionBlock)
+void buildFunctionSubgraph(shared_ptr<CallEdge> &newCall, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock, const BasicBlock *functionBlock)
 {
     // this section builds out the function subgraph in dynamic nodes
     // the subgraph should include all functions below this one
@@ -256,9 +397,9 @@ void buildFunctionSubgraph(shared_ptr<CallEdge> &newCall, const Graph &graph, co
                                 }
                             }
                         }
-                        else if (blockCallers.find(GetBlockID(llvm::cast<llvm::BasicBlock>(fb))) != blockCallers.end())
+                        else if (blockCallers.find(Cyclebite::Util::GetBlockID(llvm::cast<llvm::BasicBlock>(fb))) != blockCallers.end())
                         {
-                            for (auto callee : blockCallers.at(GetBlockID(llvm::cast<llvm::BasicBlock>(fb))))
+                            for (auto callee : blockCallers.at(Cyclebite::Util::GetBlockID(llvm::cast<llvm::BasicBlock>(fb))))
                             {
                                 auto calleeParent = IDToBlock.at(callee)->getParent();
                                 if (!calleeParent->empty())
@@ -385,7 +526,7 @@ shared_ptr<ControlNode> AddImaginaryEdges(llvm::Module* sourceBitcode, Graph& gr
             // second, if the termination did not occur in main, we have to search for libc::exit()
             if( !terminator )
             {
-                throw AtlasException("Cannot yet handle the case where the program terminates outside main!");
+                throw CyclebiteException("Cannot yet handle the case where the program terminates outside main!");
             }
             auto lastLastEdge = make_shared<ImaginaryEdge>(terminator, lastLastNode);
             lastLastNode->addPredecessor(lastLastEdge);
@@ -400,7 +541,7 @@ shared_ptr<ControlNode> AddImaginaryEdges(llvm::Module* sourceBitcode, Graph& gr
         {
             // threads must start at functions, so the function entrance block should be in threadStarts if this function was the start of a new thread
             auto BB = llvm::cast<BasicBlock>(fi->begin());
-            auto ID = GetBlockID(BB);
+            auto ID = Cyclebite::Util::GetBlockID(BB);
             if( threadStarts.find(ID) != threadStarts.end() )
             {
                 // get the last block in the function
@@ -433,7 +574,7 @@ shared_ptr<ControlNode> AddImaginaryEdges(llvm::Module* sourceBitcode, Graph& gr
 /// @param graph            A raw profile that has been turned into a graph. By the end of this method, graph will pass all checks in Cyclebite::Graph::Checks
 /// @param blockCallers     A map connecting caller basic blocks to their callees
 /// @param IDToBlock        A map connecting basic block IDs to an llvm::BasicBlock pointer
-void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     // for each function in the bitcode, parse its static structures (function calls, branch instructions) and inject that information into the dynamic graph
     // 0. Put imaginary nodes at start and end of main
@@ -587,12 +728,12 @@ void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::ma
                 {
                     if (auto cb = dyn_cast<CallBrInst>(ii))
                     {
-                        throw AtlasException("Cannot handle goto call instructions!");
+                        throw CyclebiteException("Cannot handle goto call instructions!");
                     }
                     /*else if( auto gc = dyn_cast<GCStatepointInst>(ii) )
                     {
                         // this doesn't seem to be supported in LLVM9
-                        throw AtlasException("Cannot handle GCStatepoint instructions!");
+                        throw CyclebiteException("Cannot handle GCStatepoint instructions!");
                     }*/
                     calls.insert(call);
                 }
@@ -662,9 +803,9 @@ void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::ma
         {
             if (!call->getCalledFunction()->empty())
             {
-                if( blockCallers.find(GetBlockID(BB)) != blockCallers.end() )
+                if( blockCallers.find(Cyclebite::Util::GetBlockID(BB)) != blockCallers.end() )
                 {
-                    for (auto callee : blockCallers.at(GetBlockID(BB)))
+                    for (auto callee : blockCallers.at(Cyclebite::Util::GetBlockID(BB)))
                     {
                         snkNodes.insert(static_pointer_cast<ControlNode>(BlockToNode(graph, IDToBlock.at(callee), NIDMap)));
                     }
@@ -703,7 +844,7 @@ void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::ma
                 // the snk node of the return edge is just the BB with the function call inst
                 // to find the src node of the return edge of this call edge, we have to look through all return instructions of the called function
                 auto firstFunctionBlock = NodeToBlock(newCall->getWeightedSnk(), IDToBlock);
-                set<llvm::Instruction *> exits;
+                set<const llvm::Instruction *> exits;
                 for (auto block = firstFunctionBlock->getParent()->begin(); block != firstFunctionBlock->getParent()->end(); block++)
                 {
                     if (auto ret = llvm::dyn_cast<ReturnInst>(block->getTerminator()))
@@ -716,7 +857,7 @@ void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::ma
                     }
                     else if( auto callb = llvm::dyn_cast<CallBrInst>(block->getTerminator()) )
                     {
-                        throw AtlasException("Cannot handle callbr instruction terminators!");
+                        throw CyclebiteException("Cannot handle callbr instruction terminators!");
                     }
                     else if( auto res = llvm::dyn_cast<ResumeInst>(block->getTerminator()) )
                     {
@@ -913,7 +1054,7 @@ void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::ma
                 if( fpArgs.size() > 1 )
                 {
                     // 
-                    throw AtlasException("Cannot yet handle multiple function pointers to an empty function!");
+                    throw CyclebiteException("Cannot yet handle multiple function pointers to an empty function!");
                 }
                 for( const auto& f : fpArgs )
                 {
@@ -1007,7 +1148,7 @@ void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::ma
 /// This method looks through all live functions in the bitcode and repairs their incoming edges to call edges, because these call edges will be invisible when evaluating the incoming LLVM bitcode
 /// @param dynamicCG    Dynamic callgraph generated from getDynamicCallGraph(). This argument will have all information discovered injected into itself, thus the argument is not const
 /// @param graph        Dynamic controlgraph imported from the input profile. This argument may have edges upgraded, thus the argument is not const
-void PatchFunctionEdges(const llvm::CallGraph &staticCG, Cyclebite::Graph::Graph &graph, const std::map<int64_t, vector<int64_t>> &blockCallers, const map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void PatchFunctionEdges(const llvm::CallGraph &staticCG, Cyclebite::Graph::Graph &graph, const std::map<int64_t, vector<int64_t>> &blockCallers, const map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     for (auto node = staticCG.begin(); node != staticCG.end(); node++)
     {
@@ -1033,7 +1174,7 @@ void PatchFunctionEdges(const llvm::CallGraph &staticCG, Cyclebite::Graph::Graph
                             // the calledge is already there. Make sure the ret structure has the callerBlock in its information
                             if( ce->rets.callerNode != pred->getWeightedSrc() )
                             {
-                                throw AtlasException("Call edge did not have the correct callerNode!");
+                                throw CyclebiteException("Call edge did not have the correct callerNode!");
                             }
                         }
                         else
@@ -1056,7 +1197,7 @@ void PatchFunctionEdges(const llvm::CallGraph &staticCG, Cyclebite::Graph::Graph
                                 }
                                 else if( auto callb = llvm::dyn_cast<CallBrInst>(block->getTerminator()) )
                                 {
-                                    throw AtlasException("Cannot handle callbr instruction terminators!");
+                                    throw CyclebiteException("Cannot handle callbr instruction terminators!");
                                 }
                                 else if( auto res = llvm::dyn_cast<ResumeInst>(block->getTerminator()) )
                                 {
@@ -1153,7 +1294,7 @@ void PatchFunctionEdges(const llvm::CallGraph &staticCG, Cyclebite::Graph::Graph
 /// When said dead function calls said live function multiple times in a row without returning, it appears to the profiler as though the function is calling itself, tail-to-head
 /// These edges need to be removed because they will propogate through the analysis and screw something up later on
 /// In the future, these edges may be replaced by imaginary edges that try to model what actually happened in the code, but for now they are just getting deleted
-void RemoveTailHeadCalls( Cyclebite::Graph::ControlGraph& cg, const Cyclebite::Graph::CallGraph& dynamicCG, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock )
+void RemoveTailHeadCalls( Cyclebite::Graph::ControlGraph& cg, const Cyclebite::Graph::CallGraph& dynamicCG, const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock )
 {
     // set of edges that should be removed from the input control graph (because they are caused by blind spots in the dynamic profile)
     set<shared_ptr<CallEdge>, GECompare> toRemove;
@@ -1226,7 +1367,7 @@ void RemoveTailHeadCalls( Cyclebite::Graph::ControlGraph& cg, const Cyclebite::G
     }
 }
 
-void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg, Cyclebite::Graph::CallGraph& dynamicCG, const std::string& filePath, const unique_ptr<llvm::Module>& SourceBitcode, const llvm::CallGraph& staticCG, const map<int64_t, vector<int64_t>>& blockCallers, const set<int64_t>& threadStarts, const map<int64_t, BasicBlock*>& IDToBlock, bool HotCodeDetection)
+void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg, Cyclebite::Graph::CallGraph& dynamicCG, const std::string& filePath, const unique_ptr<llvm::Module>& SourceBitcode, const llvm::CallGraph& staticCG, const map<int64_t, vector<int64_t>>& blockCallers, const set<int64_t>& threadStarts, const map<int64_t, const BasicBlock*>& IDToBlock, bool HotCodeDetection)
 {
     Graph graph;
     // node that was observed to exit the program
@@ -1236,11 +1377,11 @@ void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg,
         auto err = BuildCFG(graph, filePath, HotCodeDetection);
         if (err)
         {
-            throw AtlasException("Failed to read input profile file!");
+            throw CyclebiteException("Failed to read input profile file!");
         }
         if (graph.empty())
         {
-            throw AtlasException("No nodes could be read from the input profile!");
+            throw CyclebiteException("No nodes could be read from the input profile!");
         }
         UpgradeEdges(SourceBitcode.get(), graph, blockCallers, IDToBlock);
         PatchFunctionEdges(staticCG, graph, blockCallers, IDToBlock);
@@ -1249,12 +1390,16 @@ void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg,
         cg = ControlGraph(graph, terminator);
         RemoveTailHeadCalls(cg, dynamicCG, IDToBlock);
     }
-    catch (AtlasException &e)
+    catch (CyclebiteException &e)
     {
         spdlog::critical(e.what());
         exit(EXIT_FAILURE);
     }
 #ifdef DEBUG
+    ofstream LabeledMCG("LabeledMCG.dot");
+    auto LMCG = GenerateDot(graph, true);
+    LabeledMCG << LMCG << "\n";
+    LabeledMCG.close();
     ofstream DynamicCallallGraphDot("DynamicCallGraph.dot");
     auto dynamicCallGraph = GenerateCallGraph(dynamicCG);
     DynamicCallallGraphDot << dynamicCallGraph << "\n";
@@ -1264,7 +1409,7 @@ void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg,
         Checks(cg, "ProfileRead");
         CallGraphChecks(staticCG, dynamicCG, cg, IDToBlock);
     }
-    catch (AtlasException &e)
+    catch (CyclebiteException &e)
     {
         spdlog::critical(e.what());
         exit(EXIT_FAILURE);
@@ -1272,7 +1417,7 @@ void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg,
 #endif
 }
 
-const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Module *mod, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Module *mod, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     Cyclebite::Graph::CallGraph dynamicCG;
     for (auto f = mod->begin(); f != mod->end(); f++)
@@ -1323,7 +1468,7 @@ const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Mo
                     else
                     {
                         // try to find a block caller entry for this function, if it's not there we have to move on
-                        auto BBID = GetBlockID(llvm::cast<llvm::BasicBlock>(b));
+                        auto BBID = Cyclebite::Util::GetBlockID(llvm::cast<llvm::BasicBlock>(b));
                         if (blockCallers.find(BBID) != blockCallers.end())
                         {
                             for (auto entry : blockCallers.at(BBID))
@@ -1380,7 +1525,7 @@ const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Mo
                             }
                             else
                             {
-                                throw AtlasException("Edge between two functions was not a calledge!");
+                                throw CyclebiteException("Edge between two functions was not a calledge!");
                             }
                         }
                         else if (calleeNode == nullptr)
@@ -1439,12 +1584,12 @@ const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Mo
                     }
                     if (!parent)
                     {
-                        throw AtlasException("Could not map the parent node of a calledge to a node in the dynamic callgraph!");
+                        throw CyclebiteException("Could not map the parent node of a calledge to a node in the dynamic callgraph!");
                     }
                 }
                 else
                 {
-                    throw AtlasException("Found a dead function in the dynamic control graph!");
+                    throw CyclebiteException("Found a dead function in the dynamic control graph!");
                 }
 
                 set<shared_ptr<CallEdge>, GECompare> callEdges;
@@ -1477,7 +1622,7 @@ const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Mo
     return dynamicCG;
 }
 
-void Cyclebite::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebite::Graph::CallGraph &DCG, const Graph &dynamicGraph, const std::map<int64_t, llvm::BasicBlock *> &IDToBlock)
+void Cyclebite::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebite::Graph::CallGraph &DCG, const Graph &dynamicGraph, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     // do the dynamicGraph calledges and the DCG edges agree?
     for (const auto &edge : DCG.edges())
@@ -1489,11 +1634,11 @@ void Cyclebite::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebi
             auto snkNode = call->getSnk();
             if (!dynamicGraph.find(srcNode))
             {
-                throw AtlasException("Dynamic call graph contained a node whose calledge had an invalid src!");
+                throw CyclebiteException("Dynamic call graph contained a node whose calledge had an invalid src!");
             }
             else if (!dynamicGraph.find(snkNode))
             {
-                throw AtlasException("Dynamic call graph contained a node whose calledge had an invalid snk!");
+                throw CyclebiteException("Dynamic call graph contained a node whose calledge had an invalid snk!");
             }
             else if (dynamicGraph.find(call))
             {
@@ -1504,62 +1649,12 @@ void Cyclebite::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebi
                 }
                 else
                 {
-                    throw AtlasException("Dynamic call graph contained a calledge that was not a calledge in the dynamic graph!");
+                    throw CyclebiteException("Dynamic call graph contained a calledge that was not a calledge in the dynamic graph!");
                 }
             }
             else
             {
-                throw AtlasException("Dynamic call graph contained a calledge that was not in the dynamic graph!");
-            }
-        }
-    }
-    // do the dynamic callgraph edges agree with the static code?
-    // try to "explain" each context switch in the DCG
-    for (const auto &edge : dynamicGraph.edges())
-    {
-        if (auto callEdge = dynamic_pointer_cast<CallEdge>(edge))
-        {
-            bool explained = false;
-            auto srcBlock = NodeToBlock(callEdge->getWeightedSrc(), IDToBlock);
-            auto snkBlock = NodeToBlock(callEdge->getWeightedSnk(), IDToBlock);
-            if (srcBlock && snkBlock)
-            {
-                if (srcBlock->getParent() != snkBlock->getParent())
-                {
-                    // we must explain this context switch
-                    // first try the static graph
-                    auto srcParentNode = SCG[srcBlock->getParent()];
-                    auto snkParentNode = SCG[snkBlock->getParent()];
-                    for (auto child = srcParentNode->begin(); child != srcParentNode->end(); child++)
-                    {
-                        if (child->second == snkParentNode)
-                        {
-                            // this edge exists in the static graph
-                            explained = true;
-                            break;
-                        }
-                    }
-                }
-                else if (hasDirectRecursion(SCG[srcBlock->getParent()]))
-                {
-                    // recursion (as verified by the static callgraph) is allowed so this explains the edge
-                    explained = true;
-                }
-                else
-                {
-                    // there shouldn't be a context switch here
-                    // this case arises when there is a function pointer called within an empty function that is called multiple times, forming a chain of calls in which the src of the calledge is the return block of the function and the sink is the first block in that same function
-                    // see SHOC/qsort
-                    PrintVal(srcBlock->getParent());
-                    PrintVal(srcBlock);
-                    PrintVal(snkBlock->getParent());
-                    PrintVal(snkBlock);
-                    throw AtlasException("Dynamic graph call edge was not confirmed to be a context switch by the source bitcode!");
-                }
-            }
-            else
-            {
-                throw AtlasException("Dynamic call edge nodes could not be mapped to an underlying basic block!");
+                throw CyclebiteException("Dynamic call graph contained a calledge that was not in the dynamic graph!");
             }
         }
     }
@@ -1596,11 +1691,11 @@ void Cyclebite::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebi
                                 {
                                     auto predFunction = NodeToBlock(ue->getWeightedSrc(), IDToBlock);
                                     spdlog::critical("Live function " + string(node.second->getFunction()->getName()) + " has a predecessor from " + string(predFunction->getName()) + " that is not a call edge!");
-                                    throw AtlasException("Live function " + string(node.second->getFunction()->getName()) + " has a predecessor from " + string(predFunction->getName()) + " that is not a call edge!");
+                                    throw CyclebiteException("Live function " + string(node.second->getFunction()->getName()) + " has a predecessor from " + string(predFunction->getName()) + " that is not a call edge!");
                                 }
                                 else
                                 {
-                                    throw AtlasException("Live function " + string(node.second->getFunction()->getName()) + " has an unresolvable predecessor that is not a call edge!");
+                                    throw CyclebiteException("Live function " + string(node.second->getFunction()->getName()) + " has an unresolvable predecessor that is not a call edge!");
                                 }                            
                             }
                         }
@@ -1612,7 +1707,13 @@ void Cyclebite::Graph::CallGraphChecks(const llvm::CallGraph &SCG, const Cyclebi
     // who is empty in the static callgraph? Do they have edges to non-empty functions? Have we accounted for them all in the dynamic graph?
 }
 
-shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode, const llvm::CallBase* call, const Cyclebite::Graph::CallGraph& dynamicCG, const map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, const set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock )
+shared_ptr<Inst> ConstructCallNode( DataGraph& graph, 
+                                    set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, 
+                                    const shared_ptr<Inst>& newNode, 
+                                    const llvm::CallBase* call, 
+                                    const Cyclebite::Graph::CallGraph& dynamicCG, 
+                                    const map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, 
+                                    const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock )
 {
     // upgrade to a CallNode
     // the llvm::CallBase instruction may contain missing information ie a function pointer
@@ -1628,17 +1729,16 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode, const llvm:
             // if the function call is statically resolvable and the callee is non-empty, we don't need to map anything
             // just get the destination block of the call instruction and map it to a Cyclebite::Graph::ControlBlock (by finding an existing one or making one)
             auto firstBlock = cast<llvm::BasicBlock>(call->getCalledFunction()->begin());
-            shared_ptr<ControlBlock> dest = nullptr;
-            auto blockID = GetBlockID(firstBlock);
+            auto blockID = Cyclebite::Util::GetBlockID(firstBlock);
             bool skip = false;
-            if( blockID == IDState::Uninitialized )
+            if( blockID == Cyclebite::Util::IDState::Uninitialized )
             {
                 // this block doesn't have an ID, which is unusual and deserves a warning
                 // this can happen when an exception is never thrown, or is always thrown
                 spdlog::warn("Found a block that has no ID!");
                 skip = true;
             }
-            else if( blockID == IDState::Artificial )
+            else if( blockID == Cyclebite::Util::IDState::Artificial )
             {
                 // somehow we have come across an injected function, ignore as well
                 skip = true;
@@ -1650,10 +1750,10 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode, const llvm:
             }
             if( !skip )
             {
-                auto destIt = programFlow.find( blockID );
-                if( destIt != programFlow.end() )
+                shared_ptr<ControlBlock> dest = nullptr;
+                if( BBCBMap.contains(firstBlock) )
                 {
-                    dest = *destIt;
+                    dest = BBCBMap.at(firstBlock);
                 }
                 else
                 {
@@ -1661,6 +1761,8 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode, const llvm:
                     // later we will "upgrade" this block when its instructions are ready
                     set<shared_ptr<Inst>, p_GNCompare> insts;
                     dest = make_shared<ControlBlock>(blockToNode.at( blockID ), insts);
+                    programFlow.insert(dest);
+                    BBCBMap.insert(pair<const llvm::BasicBlock*, const shared_ptr<ControlBlock>>(firstBlock, dest));
                 }
                 dests.insert( dest );
             }
@@ -1697,7 +1799,7 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode, const llvm:
                 for( auto ce : child->getCallEdges() )
                 {
                     auto src = ce->getWeightedSrc();
-                    auto blockID = GetBlockID(call->getParent());
+                    auto blockID = Cyclebite::Util::GetBlockID(call->getParent());
                     auto blockNode = blockToNode.at(blockID);
                     if( src == blockNode )
                     {
@@ -1713,17 +1815,18 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode, const llvm:
                 {
                     auto firstBlock = llvm::cast<llvm::BasicBlock>(parent->begin());
                     shared_ptr<ControlBlock> dest = nullptr;
-                    auto destIt = programFlow.find( GetBlockID(firstBlock) );
-                    if( destIt != programFlow.end() )
+                    if( BBCBMap.contains(firstBlock) )
                     {
-                        dest = *destIt;
+                        dest = BBCBMap.at(firstBlock);
                     }
                     else
                     {
                         // for now we instantiate this control block with an empty set of instructions
                         // later we will "upgrade" this block when its instructions are ready
                         set<shared_ptr<Inst>, p_GNCompare> insts;
-                        dest = make_shared<ControlBlock>(blockToNode.at(GetBlockID(firstBlock)), insts);
+                        dest = make_shared<ControlBlock>(blockToNode.at(Cyclebite::Util::GetBlockID(firstBlock)), insts);
+                        programFlow.insert(dest);
+                        BBCBMap.insert(pair<const llvm::BasicBlock*, const shared_ptr<ControlBlock>>(firstBlock, dest));
                     }
                     dests.insert( dest );
                 }
@@ -1731,7 +1834,7 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode, const llvm:
                 {
                     // this empty function is unresolvable
                     // shouldn't happen though, because an entry in the IDToBlock map should belong to a non-empty function
-                    throw AtlasException("Found a block in IDToBlock whose parent is empty!");
+                    throw CyclebiteException("Found a block in IDToBlock whose parent is empty!");
                 }
 
             } // for r in representatives
@@ -1739,48 +1842,52 @@ shared_ptr<Inst> ConstructCallNode( const shared_ptr<Inst>& newNode, const llvm:
         else
         {
             // something is wrong, this live function should be in the dynamicCG
-            throw AtlasException("Could not find live function in the dynamicCG!");
+            throw CyclebiteException("Could not find live function in the dynamicCG!");
         }
     }
     // do the upgrading
-    return make_shared<Cyclebite::Graph::CallNode>(newNode.get(), dests);
+    auto callNode = make_shared<Cyclebite::Graph::CallNode>(newNode.get(), dests);
+    auto oldPreds = callNode->getPredecessors();
+    auto oldSuccs = callNode->getSuccessors();
+    for( auto pred : oldPreds )
+    {
+        auto newPred = make_shared<UnconditionalEdge>(pred->getSrc(), callNode);
+        pred->getSrc()->removeSuccessor(pred);
+        callNode->removePredecessor(pred);
+        pred->getSrc()->addSuccessor(newPred);
+        callNode->addPredecessor(newPred);
+        graph.removeEdge(pred);
+        graph.addEdge(newPred);
+    }
+    for( auto succ : oldSuccs )
+    {
+        auto newSucc = make_shared<UnconditionalEdge>(callNode, succ->getSnk());
+        succ->getSnk()->removePredecessor(succ);
+        callNode->removeSuccessor(succ);
+        succ->getSnk()->addPredecessor(succ);
+        callNode->addSuccessor(newSucc);
+        graph.removeEdge(succ);
+        graph.addEdge(newSucc);
+    }
+    return callNode;
 }
 
-int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Graph::CallGraph& dynamicCG, map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, DataGraph &graph, std::map<std::string, set<int64_t>> &specialInstructions, const std::map<int64_t, llvm::BasicBlock*>& IDToBlock)
+void Cyclebite::Graph::BuildDFG( set<std::shared_ptr<ControlBlock>, p_GNCompare> &programFlow, 
+                                 DataGraph &graph, 
+                                 const unique_ptr<llvm::Module>& SourceBitcode, 
+                                 const Cyclebite::Graph::CallGraph& dynamicCG, 
+                                 const map<int64_t, std::shared_ptr<ControlNode>> &blockToNode, 
+                                 const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock)
 {
-    set<int64_t> inductionVariables;
-    set<int64_t> basePointers;
-    set<int64_t> kernelFunctions;
-    if (specialInstructions.find("IV") != specialInstructions.end())
-    {
-        for (auto id : specialInstructions.at("IV"))
-        {
-            inductionVariables.insert(id);
-        }
-    }
-    if (specialInstructions.find("BP") != specialInstructions.end())
-    {
-        for (auto id : specialInstructions.at("BP"))
-        {
-            basePointers.insert(id);
-        }
-    }
-    if (specialInstructions.find("KF") != specialInstructions.end())
-    {
-        for (auto id : specialInstructions.at("KF"))
-        {
-            kernelFunctions.insert(id);
-        }
-    }
     // this section constructs the data flow of instructions (Cyclebite::Graph::Inst) and Cyclebite::Graph::ControlBlock
     for (auto f = SourceBitcode->begin(); f != SourceBitcode->end(); f++)
     {
         for (auto bit = f->begin(); bit != f->end(); bit++)
         {
-            auto blockID = GetBlockID(cast<BasicBlock>(bit));
-            if (blockToNode.find(blockID) == blockToNode.end())
+            auto blockID = Cyclebite::Util::GetBlockID(cast<BasicBlock>(bit));
+            if ( !blockToNode.contains(blockID) )
             {
-                //throw AtlasException("Cannot map a basic block to a ControlNode!");
+                //throw CyclebiteException("Cannot map a basic block to a ControlNode!");
                 spdlog::warn("Cannot map a basic block to a ControlNode!");
                 continue;
             }
@@ -1792,38 +1899,21 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                 std::shared_ptr<Inst> newNode = nullptr;
                 if (DNIDMap.find(inst) == DNIDMap.end())
                 {
-                    // checks to see if this is a base pointer or induction variablej
-                    auto ID = GetValueID(inst);
-                    if (inductionVariables.find(ID) != inductionVariables.end())
-                    {
-                        newNode = make_shared<Inst>(inst, DNC::State);
-                    }
-                    else if (basePointers.find(ID) != basePointers.end())
-                    {
-                        newNode = make_shared<Inst>(inst, DNC::Memory);
-                    }
-                    else if (kernelFunctions.find(ID) != kernelFunctions.end())
-                    {
-                        newNode = make_shared<Inst>(inst, DNC::Function);
-                    }
-                    else
-                    {
-                        newNode = make_shared<Inst>(inst);
-                    }
+                    newNode = make_shared<Inst>(inst);
                     if( auto call = dyn_cast<CallBase>(inst) )
                     {
-                        newNode = ConstructCallNode(newNode, call, dynamicCG, blockToNode, programFlow, IDToBlock);
+                        newNode = ConstructCallNode(graph, programFlow, newNode, call, dynamicCG, blockToNode, IDToBlock);
                     }
-                    newNode->op = GetOp(inst->getOpcode());
                     graph.addNode(newNode);
                 }
                 else
                 {
                     newNode = static_pointer_cast<Inst>(DNIDMap[inst]);
+                    DNIDMap.erase(inst);
                     if( auto call = llvm::dyn_cast<llvm::CallBase>(inst) )
                     {
                         graph.removeNode(newNode);
-                        newNode = ConstructCallNode(newNode, call, dynamicCG, blockToNode, programFlow, IDToBlock);
+                        newNode = ConstructCallNode(graph, programFlow, newNode, call, dynamicCG, blockToNode, IDToBlock);
                         graph.addNode(newNode);
                     }
                 }
@@ -1840,25 +1930,7 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                         }
                         else
                         {
-                            // checks to see if this is a base pointer or induction variablej
-                            auto ID = GetValueID(user);
-                            if (inductionVariables.find(ID) != inductionVariables.end())
-                            {
-                                neighborNode = make_shared<Inst>(user, DNC::State);
-                            }
-                            else if (basePointers.find(ID) != basePointers.end())
-                            {
-                                neighborNode = make_shared<Inst>(user, DNC::Memory);
-                            }
-                            else if (kernelFunctions.find(ID) != kernelFunctions.end())
-                            {
-                                neighborNode = make_shared<Inst>(user, DNC::Function);
-                            }
-                            else
-                            {
-                                neighborNode = make_shared<Inst>(user);
-                            }
-                            neighborNode->op = GetOp(user->getOpcode());
+                            neighborNode = make_shared<Inst>(user);
                             graph.addNode(neighborNode);
                         }
                         // we have a user and we need to find a direct mapping between this instruction and that user
@@ -1890,25 +1962,7 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
                         }
                         else
                         {
-                            // checks to see if this is a base pointer or induction variable
-                            auto ID = GetValueID(predInst);
-                            if (inductionVariables.find(ID) != inductionVariables.end())
-                            {
-                                nodePred = make_shared<Inst>(predInst, DNC::State);
-                            }
-                            else if (basePointers.find(ID) != basePointers.end())
-                            {
-                                nodePred = make_shared<Inst>(predInst, DNC::Memory);
-                            }
-                            else if (kernelFunctions.find(ID) != kernelFunctions.end())
-                            {
-                                nodePred = make_shared<Inst>(predInst, DNC::Function);
-                            }
-                            else
-                            {
-                                nodePred = make_shared<Inst>(predInst);
-                            }
-                            nodePred->op = GetOp(predInst->getOpcode());
+                            nodePred = make_shared<Inst>(predInst);
                             DNIDMap.insert(pair<const llvm::Instruction*, const shared_ptr<Inst>>(predInst, nodePred));
                             graph.addNode(nodePred);
                         }
@@ -1983,19 +2037,19 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
             }
             // there is a one-to-one mapping between llvm::BasicBlock and Cyclebite::Graph::ControlBlock
             shared_ptr<Cyclebite::Graph::ControlBlock> newBBsub = nullptr;
-            if( programFlow.find(blockToNode[blockID]) != programFlow.end() )
+            if( programFlow.contains(blockToNode.at(blockID)) )
             {
                 // this condition means a call instruction pointed to this block before this ControlBlock's instructions were ready
-                newBBsub = *programFlow.find(blockToNode[blockID]);
+                newBBsub = *programFlow.find(blockToNode.at(blockID));
                 for( const auto& inst : blockInstructions )
                 {
-                    newBBsub->instructions.insert(inst);
+                    newBBsub->addInstruction(inst);
                 }
             }
             else
             {
                 // this bb hasn't been constructed yet, so we construct it with its instructions
-                newBBsub = make_shared<ControlBlock>(blockToNode[blockID], blockInstructions);
+                newBBsub = make_shared<ControlBlock>(blockToNode.at(blockID), blockInstructions);
             }
             for (auto inst : blockInstructions)
             {
@@ -2006,12 +2060,11 @@ int Cyclebite::Graph::BuildDFG(llvm::Module *SourceBitcode, const Cyclebite::Gra
             blockInstructions.clear();
         }
     }
-    return EXIT_SUCCESS;
 }
 
 void ProfileBlock(BasicBlock *BB, map<int64_t, map<string, uint64_t>> &rMap, map<int64_t, map<string, uint64_t>> &cpMap)
 {
-    int64_t id = GetBlockID(BB);
+    int64_t id = Cyclebite::Util::GetBlockID(BB);
     for (auto bi = BB->begin(); bi != BB->end(); bi++)
     {
         auto *i = cast<Instruction>(bi);
@@ -2219,7 +2272,7 @@ string Cyclebite::Graph::GenerateDot(const Graph &graph, bool original)
         }
         else
         {
-            throw AtlasException("Could not determine edge type in graph print!");
+            throw CyclebiteException("Could not determine edge type in graph print!");
         }
     }
     for( const auto& node : graph.nodes() )
@@ -2401,7 +2454,7 @@ double Cyclebite::Graph::EntropyCalculation(const std::set<std::shared_ptr<Contr
         for (const auto &pred : (*it)->getPredecessors())
         {
             // retrieve the edge probability and accumulate it to this node
-            stationaryDistribution[i] += pred->getFreq();
+            stationaryDistribution[i] += (double)pred->getFreq();
         }
     }
     // normalize each stationaryDistribution entry by the total edge weights in the state transition matrix
@@ -2410,7 +2463,7 @@ double Cyclebite::Graph::EntropyCalculation(const std::set<std::shared_ptr<Contr
     {
         for (const auto &nei : node->getSuccessors())
         {
-            totalEdgeWeights += nei->getFreq();
+            totalEdgeWeights += (double)nei->getFreq();
         }
     }
     for (auto &entry : stationaryDistribution)
@@ -2447,7 +2500,7 @@ double Cyclebite::Graph::TotalEntropy(const std::set<std::shared_ptr<ControlNode
 using json = nlohmann::json;
 
 /// @brief Used to find the underlying edge that occurs before or after the 
-const shared_ptr<UnconditionalEdge>& FindUnderlyingEdge(const shared_ptr<GraphNode>& node, bool entrance)
+const shared_ptr<UnconditionalEdge> FindUnderlyingEdge(const shared_ptr<GraphNode>& node, bool entrance)
 {
     deque<shared_ptr<GraphNode>> Q;
     set<shared_ptr<ControlNode>, p_GNCompare> underlying;
@@ -2509,7 +2562,7 @@ const shared_ptr<UnconditionalEdge>& FindUnderlyingEdge(const shared_ptr<GraphNo
         {
             if( first->getSuccessors().size() != 1 )
             {
-                throw AtlasException("Cannot handle the case where an underlying entrance has more than one successor!");
+                throw CyclebiteException("Cannot handle the case where an underlying entrance has more than one successor!");
             }
             else
             {
@@ -2518,7 +2571,7 @@ const shared_ptr<UnconditionalEdge>& FindUnderlyingEdge(const shared_ptr<GraphNo
         }
         else
         {
-            throw AtlasException("No beginning node could be found for subgraph!");
+            throw CyclebiteException("No beginning node could be found for subgraph!");
         }
     }
     else
@@ -2546,7 +2599,7 @@ const shared_ptr<UnconditionalEdge>& FindUnderlyingEdge(const shared_ptr<GraphNo
         {
             if( last->getPredecessors().size() != 1 )
             {
-                throw AtlasException("Cannot handle the case where an underlying exit has more than one predecessor!");
+                throw CyclebiteException("Cannot handle the case where an underlying exit has more than one predecessor!");
             }
             else
             {
@@ -2555,7 +2608,7 @@ const shared_ptr<UnconditionalEdge>& FindUnderlyingEdge(const shared_ptr<GraphNo
         }
         else
         {
-            throw AtlasException("No ending node could be found for subgraph!");
+            throw CyclebiteException("No ending node could be found for subgraph!");
         }
     }
 }
@@ -2610,7 +2663,7 @@ set<pair<int64_t, int64_t>> Cyclebite::Graph::findOriginalBlockIDs(const shared_
                 }
                 else if( ve->getEdges().empty() )
                 {
-                    throw AtlasException("Virtual edge has no underlying edges!");
+                    throw CyclebiteException("Virtual edge has no underlying edges!");
                 }
                 else
                 {
@@ -2647,17 +2700,17 @@ set<pair<int64_t, int64_t>> Cyclebite::Graph::findOriginalBlockIDs(const shared_
                 }
                 else
                 {
-                    throw AtlasException("Rock bottom nodes did not contain  original blocks!");
+                    throw CyclebiteException("Rock bottom nodes did not contain  original blocks!");
                 }
             }
             Q.pop_front();
         }
         if (eEdges.empty())
         {
-            throw AtlasException("Could not map graph edge to src,snk pair!");
+            throw CyclebiteException("Could not map graph edge to src,snk pair!");
         }
     }
-    catch( AtlasException& e )
+    catch( CyclebiteException& e )
     {
         spdlog::critical(e.what());
         exit(EXIT_FAILURE);
@@ -2695,13 +2748,13 @@ set<int64_t> findOriginalBlockIDs(const shared_ptr<ControlNode>& ent)
                 }
                 else
                 {
-                    throw AtlasException("Rock bottom node did not contain original blocks!");
+                    throw CyclebiteException("Rock bottom node did not contain original blocks!");
                 }
             }
             Q.pop_front();
         }
     }
-    catch( AtlasException& e )
+    catch( CyclebiteException& e )
     {
         spdlog::critical(e.what());
         return originalBlocks;
@@ -2709,7 +2762,7 @@ set<int64_t> findOriginalBlockIDs(const shared_ptr<ControlNode>& ent)
     return originalBlocks;
 }
 
-void Cyclebite::Graph::WriteKernelFile(const ControlGraph &graph, const set<std::shared_ptr<MLCycle>, KCompare> &kernels, const map<int64_t, llvm::BasicBlock *> &IDToBlock, const map<int64_t, std::vector<int64_t>> &blockCallers, const EntropyInfo &info, const string &OutputFileName, bool hotCode)
+void Cyclebite::Graph::WriteKernelFile(const ControlGraph &graph, const set<std::shared_ptr<MLCycle>, KCompare> &kernels, const map<int64_t, const llvm::BasicBlock *> &IDToBlock, const map<int64_t, std::vector<int64_t>> &blockCallers, const EntropyInfo &info, const string &OutputFileName, bool hotCode)
 {
     // write kernel file
     json outputJson;
@@ -3067,9 +3120,9 @@ ControlGraph Cyclebite::Graph::GenerateStaticCFG(llvm::Module *M)
         for (auto b = f->begin(); b != f->end(); b++)
         {
             std::shared_ptr<ControlNode> newNode = nullptr;
-            if (staticGraph.find_node((uint64_t)GetBlockID(cast<BasicBlock>(b))))
+            if (staticGraph.find_node((uint64_t)Cyclebite::Util::GetBlockID(cast<BasicBlock>(b))))
             {
-                newNode = staticGraph.getNode((uint64_t)GetBlockID(cast<BasicBlock>(b)));
+                newNode = staticGraph.getNode((uint64_t)Cyclebite::Util::GetBlockID(cast<BasicBlock>(b)));
             }
             else
             {
@@ -3079,9 +3132,9 @@ ControlGraph Cyclebite::Graph::GenerateStaticCFG(llvm::Module *M)
             for (uint32_t i = 0; i < b->getTerminator()->getNumSuccessors(); i++)
             {
                 std::shared_ptr<ControlNode> succ = nullptr;
-                if (staticGraph.find_node((uint64_t)GetBlockID(b->getTerminator()->getSuccessor(i))))
+                if (staticGraph.find_node((uint64_t)Cyclebite::Util::GetBlockID(b->getTerminator()->getSuccessor(i))))
                 {
-                    succ = staticGraph.getNode((uint64_t)GetBlockID(b->getTerminator()->getSuccessor(i)));
+                    succ = staticGraph.getNode((uint64_t)Cyclebite::Util::GetBlockID(b->getTerminator()->getSuccessor(i)));
                 }
                 else
                 {
@@ -3107,9 +3160,9 @@ ControlGraph Cyclebite::Graph::GenerateStaticCFG(llvm::Module *M)
             for (auto i = pred_begin(cast<BasicBlock>(b)); i != pred_end(cast<BasicBlock>(b)); i++)
             {
                 std::shared_ptr<ControlNode> pred = nullptr;
-                if (staticGraph.find_node((uint64_t)GetBlockID(cast<BasicBlock>(*i))))
+                if (staticGraph.find_node((uint64_t)Cyclebite::Util::GetBlockID(cast<BasicBlock>(*i))))
                 {
-                    pred = staticGraph.getNode((uint64_t)GetBlockID(cast<BasicBlock>(*i)));
+                    pred = staticGraph.getNode((uint64_t)Cyclebite::Util::GetBlockID(cast<BasicBlock>(*i)));
                 }
                 else
                 {
@@ -3186,7 +3239,7 @@ string Cyclebite::Graph::GenerateDataDot(const set<shared_ptr<DataValue>, p_GNCo
     {
         if( const auto& n = dynamic_pointer_cast<Inst>(node) )
         {
-            dotString += "\t" + to_string(n->NID) + " [label=\"" + OperationToString[n->op] + "\"];\n";
+            dotString += "\t" + to_string(n->NID) + " [label=\"" + OperationToString[n->getOp()] + "\"];\n";
         }
         else
         {
@@ -3217,9 +3270,12 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
         BBToSubgraph[BB->NID] = j;
         dotString += "\tsubgraph cluster_" + to_string(j) + "{\n";
         dotString += "\t\tlabel=\"Basic Block " + to_string(*BB->originalBlocks.begin()) + "\";\n";
-        for (auto i : BB->instructions)
+        for (auto i : BB->getInstructions())
         {
-            dotString += "\t\t" + to_string(i->NID) + ";\n";
+            if( !llvm::isa<llvm::DbgInfoIntrinsic>(i->getInst()) )
+            {
+                dotString += "\t\t" + to_string(i->NID) + ";\n";
+            }
         }
         dotString += "\t}\n";
         j++;
@@ -3228,28 +3284,36 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
     for (const auto &BB : BBs)
     {
         // label nodes based on their operations
-        for (const auto &node : BB->instructions)
+        for (const auto &node : BB->getInstructions())
         {
+            if( llvm::isa<llvm::DbgInfoIntrinsic>(node->getInst()) )
+            {
+                continue;
+            }
             if (node->isState())
             {
-                dotString += "\t" + to_string(node->NID) + " [color=red,label=\"" + OperationToString[node->op] + "\"];\n";
+                dotString += "\t" + to_string(node->NID) + " [color=red,label=\"" + OperationToString[node->getOp()] + "\"];\n";
             }
             else if (node->isMemory())
             {
-                dotString += "\t" + to_string(node->NID) + " [color=blue,label=\"" + OperationToString[node->op] + "\"];\n";
+                dotString += "\t" + to_string(node->NID) + " [color=blue,label=\"" + OperationToString[node->getOp()] + "\"];\n";
             }
             else if (node->isFunction())
             {
-                dotString += "\t" + to_string(node->NID) + " [color=green,label=\"" + OperationToString[node->op] + "\"];\n";
+                dotString += "\t" + to_string(node->NID) + " [color=green,label=\"" + OperationToString[node->getOp()] + "\"];\n";
             }
             else
             {
-                dotString += "\t" + to_string(node->NID) + " [label=\"" + OperationToString[node->op] + "\"];\n";
+                dotString += "\t" + to_string(node->NID) + " [label=\"" + OperationToString[node->getOp()] + "\"];\n";
             }
         }
         // now build out the nodes in the graph
-        for (const auto &node : BB->instructions)
+        for (const auto &node : BB->getInstructions())
         {
+            if( llvm::isa<llvm::DbgInfoIntrinsic>(node->getInst()) )
+            {
+                continue;
+            }
             for (const auto &n : node->getSuccessors())
             {
                 dotString += "\t" + to_string(n->getSrc()->NID) + " -> " + to_string(n->getSnk()->NID) + ";\n";
@@ -3257,23 +3321,43 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
             // build edges from the terminator of this basic block to the successors in the control flow graph
             if (node->isTerminator())
             {
-                for (const auto &succ : node->parent->getSuccessors())
+                // make sure the branch doesn't contain a call edge, then build its edge
+                bool noCallEdge = true;
+                for( const auto& n : node->parent->getInstructions() )
                 {
-                    if (BBs.find(succ->getSnk()->NID) != BBs.end())
+                    if( auto call = dynamic_pointer_cast<CallNode>(n) )
                     {
-                        dotString += "\t" + to_string(node->NID) + " -> " + to_string((*((*BBs.find(succ->getSnk()->NID))->instructions.begin()))->NID) + " [style=dashed,lhead=cluster_" + to_string(BBToSubgraph[(*BBs.find(succ->getSnk()->NID))->NID]) + ",label=" + to_string_float(succ->getWeight()) + "];\n";
+                        if( !call->getDestinations().empty() )
+                        {
+                            noCallEdge = false;
+                            break;
+                        }
                     }
-                    // else this is a block outside the kernel... a kernel exit
+                }
+                if( noCallEdge )
+                {
+                    for (const auto &succ : node->parent->getSuccessors())
+                    {
+                        if (BBs.find(succ->getSnk()->NID) != BBs.end())
+                        {
+                            dotString += "\t" + to_string(node->NID) + " -> " + to_string((*((*BBs.find(succ->getSnk()->NID))->getNonDbgInsts().begin()))->NID) + " [style=dashed,lhead=cluster_" + to_string(BBToSubgraph[(*BBs.find(succ->getSnk()->NID))->NID]) + ",label=" + to_string_float(succ->getWeight()) + "];\n";
+                        }
+                        else
+                        {
+                            // else this is a block outside the kernel... a kernel exit
+                            dotString += "\t" + to_string(node->NID) + " -> " + to_string(succ->getSnk()->NID) + " [style=dashed,label=\"Task Exit," + to_string_float(succ->getWeight()) + "\"];\n";
+                        }
+                    }
                 }
             }
             // draw lines from call instructions to their function bodies (if possible) then from their return instructions back to the caller
-            else if( auto call = dynamic_pointer_cast<CallNode>(node) )
+            if( auto call = dynamic_pointer_cast<CallNode>(node) )
             {
-                for( const auto& dest : call->getDestinations() )
+                for( const auto& dest : call->getDestinationFirstInsts() )
                 {
-                    if( BBs.find(dest->NID) != BBs.end() )
+                    if( BBs.find(dest->parent->NID) != BBs.end() )
                     {
-                        dotString += "\t" + to_string(call->NID) + " -> " + to_string((*((*BBs.find(dest->NID))->instructions.begin()))->NID) + " [style=dotted,lhead=cluster_" + to_string(BBToSubgraph[(*BBs.find(dest->NID))->NID]) + "];\n";
+                        dotString += "\t" + to_string(call->NID) + " -> " + to_string(dest->NID) + " [style=dashed,lhead=cluster_" + to_string(BBToSubgraph[dest->parent->NID]) + ",label=\"CallEdge\"];\n";
                     }
                 }
             }
@@ -3313,7 +3397,7 @@ string Cyclebite::Graph::GenerateHighlightedSubgraph(const Graph &graph, const G
             }
             else
             {
-                throw AtlasException("Could not determine type of edge in graph print!");
+                throw CyclebiteException("Could not determine type of edge in graph print!");
             }
         }
         else if( abridged )
@@ -3334,7 +3418,7 @@ string Cyclebite::Graph::GenerateHighlightedSubgraph(const Graph &graph, const G
                 }
                 else
                 {
-                    throw AtlasException("Could not determine type of edge in graph print!");
+                    throw CyclebiteException("Could not determine type of edge in graph print!");
                 }
             }
         }
@@ -3354,7 +3438,7 @@ string Cyclebite::Graph::GenerateHighlightedSubgraph(const Graph &graph, const G
             }
             else
             {
-                throw AtlasException("Could not determine type of edge in graph print!");
+                throw CyclebiteException("Could not determine type of edge in graph print!");
             }
         }
     }

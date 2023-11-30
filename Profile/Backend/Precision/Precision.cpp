@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "Util/Exceptions.h"
 #include "Util/IO.h"
 #include "Precision.h"
@@ -33,10 +35,10 @@ namespace Cyclebite::Profile::Backend::Precision
         switch(v.t)
         {
             case PrecisionType::float128:
-                throw AtlasException("Cannot support a 128-bit float value! The passed value is only 8 bytes.");
+                throw CyclebiteException("Cannot support a 128-bit float value! The passed value is only 8 bytes.");
             
             case PrecisionType::float80:
-                throw AtlasException("Cannot support an 80-bit float on this target!");
+                throw CyclebiteException("Cannot support an 80-bit float on this target!");
 
             case PrecisionType::float64:
                 {
@@ -49,7 +51,7 @@ namespace Cyclebite::Profile::Backend::Precision
                     return (uint16_t)log2( abs(f) );
                 }
             case PrecisionType::float16:
-                throw AtlasException("Cannot support a 16-bit float on this target!");
+                throw CyclebiteException("Cannot support a 16-bit float on this target!");
 
             case PrecisionType::uint64_t:
                 {
@@ -251,7 +253,7 @@ namespace Cyclebite::Profile::Backend::Precision
             {
                 Cyclebite::Profile::Backend::Memory::FindEpochBoundaries();
             }
-            catch (AtlasException &e)
+            catch (CyclebiteException &e)
             {
                 spdlog::critical(e.what());
                 exit(EXIT_FAILURE);

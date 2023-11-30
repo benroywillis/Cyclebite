@@ -1,4 +1,23 @@
-file(GLOB SOURCES BasePointer.cpp Categorize.cpp Collection.cpp ConstantFunction.cpp ConstantSymbol.cpp Cycle.cpp Expression.cpp Function.cpp InductionVariable.cpp IO.cpp Process.cpp Reduction.cpp ReductionVariable.cpp Symbol.cpp Task.cpp)
+file(GLOB SOURCES BasePointer.cpp 
+                  Categorize.cpp 
+                  Collection.cpp 
+                  FunctionExpression.cpp 
+                  ConstantSymbol.cpp 
+                  Cycle.cpp 
+                  OperatorExpression.cpp 
+                  Expression.cpp 
+                  IndexVariable.cpp 
+                  InductionVariable.cpp 
+                  IO.cpp 
+                  Process.cpp 
+                  Reduction.cpp 
+                  ReductionVariable.cpp 
+                  Symbol.cpp 
+                  Task.cpp 
+                  TaskParameter.cpp
+                  Export.cpp
+                  Dimension.cpp
+                  Counter.cpp)
 
 add_library(Grammar SHARED ${SOURCES})
 set_target_properties(

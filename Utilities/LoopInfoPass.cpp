@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "Util/Format.h"
 #include <fstream>
 #include <iostream>
@@ -45,7 +47,7 @@ int main(int argc, char *argv[])
     LLVMContext context;
     SMDiagnostic smerror;
     auto sourceBitcode = parseIRFile(InputFile, smerror, context);
-    Format(sourceBitcode.get());
+    Cyclebite::Util::Format(*sourceBitcode);
 
     // run loop analysis pass
     /* this stuff uses the new pass manager and segfaults when main returns

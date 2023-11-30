@@ -1,3 +1,7 @@
+//==------------------------------==//
+// Copyright 2023 Benjamin Willis
+// SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #pragma once
 #include "Util/Exceptions.h"
 #include "Epoch.h"
@@ -95,13 +99,13 @@ namespace Cyclebite::Profile::Backend::Precision
             case 6: // 128-bit float (two doubles)
                 return PrecisionType::float128;
             case 7: // label type
-                throw AtlasException("Found a label type as an introspected value!");
+                throw CyclebiteException("Found a label type as an introspected value!");
             case 8: // metadata type
-                throw AtlasException("Found a metadata type as an introspected value!");
+                throw CyclebiteException("Found a metadata type as an introspected value!");
             case 9: // MMX vector 64 bits
-                throw AtlasException("Cannot yet support MMX 64 bit vectors!");
+                throw CyclebiteException("Cannot yet support MMX 64 bit vectors!");
             case 10: 
-                throw AtlasException("Found a token as an introspected value!");
+                throw CyclebiteException("Found a token as an introspected value!");
             // llvm derived types
             case 11: // integer type
                 {
@@ -124,7 +128,7 @@ namespace Cyclebite::Profile::Backend::Precision
                         case 1:
                             return PrecisionType::int1_t;
                         default:
-                            throw AtlasException("Cannot yet support an integer of size "+std::to_string(width));
+                            throw CyclebiteException("Cannot yet support an integer of size "+std::to_string(width));
                     }
                 }
             case 12: // Function types
@@ -146,6 +150,7 @@ namespace Cyclebite::Profile::Backend::Precision
                     auto vt = llvm::cast<llvm::VectorType>(ty);
                     return LLVMTy2PrecisionTy(vt->getElementType());
                 }
+            default: throw CyclebiteException("Cannot handle precision type!");
             /* LLVM 15 enums
             // all floating-point llvm type IDs are defined at https://llvm.org/doxygen/Type_8h_source.html
             case 0: 
@@ -165,15 +170,15 @@ namespace Cyclebite::Profile::Backend::Precision
             case 7: // void type
                 return PrecisionType::void_t;
             case 8: // label type
-                throw AtlasException("Found a label type as an introspected value!");
+                throw CyclebiteException("Found a label type as an introspected value!");
             case 9: // metadata type
-                throw AtlasException("Found a metadata type as an introspected value!");
+                throw CyclebiteException("Found a metadata type as an introspected value!");
             case 10: // MMX vector 64 bits
-                throw AtlasException("Cannot yet support MMX 64 bit vectors!");
+                throw CyclebiteException("Cannot yet support MMX 64 bit vectors!");
             case 11:
-                throw AtlasException("Cannot yet support AMX 8192 bit vectors!");
+                throw CyclebiteException("Cannot yet support AMX 8192 bit vectors!");
             case 12: 
-                throw AtlasException("Found a token as an introspected value!");
+                throw CyclebiteException("Found a token as an introspected value!");
             // llvm derived types, defined in https://llvm.org/doxygen/DerivedTypes_8h_source.html
             case 13: // integer type
                 {
@@ -196,7 +201,7 @@ namespace Cyclebite::Profile::Backend::Precision
                         case 1:
                             return PrecisionType::int1_t;
                         default:
-                            throw AtlasException("Cannot yet support an integer of size "+std::to_string(width));
+                            throw CyclebiteException("Cannot yet support an integer of size "+std::to_string(width));
                     }
                 }
             case 14: // Function types
@@ -226,5 +231,6 @@ namespace Cyclebite::Profile::Backend::Precision
                 return PrecisionType::void_t;
                 */
         }
+        return PrecisionType::void_t;
     }
 } // namespace Cyclebite::Memory::Backend::Precision

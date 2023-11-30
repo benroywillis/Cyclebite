@@ -1,5 +1,8 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
+#include "Graph/inc/IO.h"
 #include "Util/Format.h"
 #include "Util/IO.h"
 #include "Util/Print.h"
@@ -17,7 +20,6 @@
 
 using namespace llvm;
 using namespace std;
-using json = nlohmann::json;
 
 cl::opt<std::string> InputFilename("i", cl::desc("Specify input bitcode"), cl::value_desc("bitcode filename"), cl::Required);
 cl::opt<std::string> BlockInfo("j", cl::desc("Specify BlockInfo json"), cl::value_desc("BlockInfo filename"), cl::Required);
@@ -26,7 +28,7 @@ cl::opt<std::string> OutputFilename("o", cl::desc("Specify output json"), cl::va
 int main(int argc, char **argv)
 {
     cl::ParseCommandLineOptions(argc, argv);
-    auto blockCallers = ReadBlockInfo(BlockInfo);
+    Cyclebite::Graph::ReadBlockInfo(BlockInfo);
     auto SourceBitcode = ReadBitcode(InputFilename);
     if (SourceBitcode == nullptr)
     {
@@ -34,18 +36,17 @@ int main(int argc, char **argv)
     }
 
     // Annotate its bitcodes and values
-    CleanModule(SourceBitcode.get());
-    Format(SourceBitcode.get());
+    Cyclebite::Util::Format(*SourceBitcode.get());
 
     map<int64_t, BasicBlock *> IDToBlock;
     map<int64_t, Value *> IDToValue;
-    map<BasicBlock *, Function *> BlockToFPtr;
-    InitializeIDMaps(SourceBitcode.get(), IDToBlock, IDToValue);
+    map<BasicBlock *, const Function *> BlockToFPtr;
+    Cyclebite::Graph::InitializeIDMaps(SourceBitcode.get());
 
     // Call graph, doesn't include function pointers
-    auto CG = getCallGraph(SourceBitcode.get(), blockCallers, BlockToFPtr, IDToBlock);
+    auto CG = getCallGraph(SourceBitcode.get(), Cyclebite::Graph::blockCallers, BlockToFPtr, Cyclebite::Graph::IDToBlock);
 
-    json outputJson;
+    nlohmann::json outputJson;
     for (const auto &node : CG)
     {
         if (node.first == nullptr)

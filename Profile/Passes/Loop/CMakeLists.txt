@@ -1,1 +1,1 @@
-target_sources(AtlasPasses PRIVATE LoopDetector.cpp LoopInfoDump.cpp)
+target_sources(AtlasPasses PRIVATE LoopInfoDump.cpp)

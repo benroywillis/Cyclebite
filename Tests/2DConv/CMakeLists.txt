@@ -1,5 +1,5 @@
 add_executable(2DConv 2DConv.c)
-InjectTracer(2DConv)
+InjectMarkov(2DConv)
 InjectMemory(2DConv)
 
 add_test(NAME 2DConv_Markov_Profile COMMAND 2DConv.markov.native)

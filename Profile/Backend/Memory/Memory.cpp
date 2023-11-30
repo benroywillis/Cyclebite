@@ -1,5 +1,7 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "Util/Exceptions.h"
 #include "Util/IO.h"
 #include "Memory.h"
@@ -48,17 +50,47 @@ namespace Cyclebite::Profile::Backend::Memory
     int64_t lastBlock;
     /// On/off switch for the profiler
     bool memoryActive = false;
+    /// Counter tracking how much memory has been consumed by the profiler
+    uint64_t bytesBitten;
+
+    void updateBittenBytes()
+    {
+        uint64_t bittenBytes = 0;
+        for( const auto& e : epochs )
+        {
+            bittenBytes += sizeof(Epoch) + 
+                           e->blocks.size() * sizeof(int64_t) +
+                           e->free_ptrs.size() * sizeof(int64_t) + 
+                           e->malloc_ptrs.size() * sizeof(int64_t) + 
+                           e->memoryData.rTuples.size()*sizeof(MemTuple) + 
+                           e->memoryData.wTuples.size()*sizeof(MemTuple);
+            for( const auto& ent : e->entrances )
+            {
+                bittenBytes += sizeof(ent.first) + ent.second.size() * sizeof(int64_t);
+            }
+            for( const auto& ex : e->exits )
+            {
+                bittenBytes += sizeof(ex.first) + ex.second.size() * sizeof(int64_t);
+            }
+        }
+        if( bittenBytes > bytesBitten )
+        {
+            bytesBitten = bittenBytes;
+            spdlog::info("New amount of bytes bitten: "+to_string(bytesBitten));
+        }
+    }
 
     extern "C"
     {
         void __Cyclebite__Profile__Backend__MemoryDestroy()
         {
             clock_gettime(CLOCK_MONOTONIC, &end);
+            epochs.insert(currentEpoch);
+            updateBittenBytes();
             spdlog::info( "MEMORYPROFILETIME: "+to_string(CalculateTime(&start, &end))+"s");
-            
+            spdlog::info( "MEMORYPROFILESPACE: "+to_string(bytesBitten));
             memoryActive = false;
             // this is an implicit exit, so store the current iteration information to where it belongs
-            epochs.insert(currentEpoch);
             ProcessEpochBoundaries();
             GenerateMemoryRegions();
             GenerateTaskGraph();
@@ -121,6 +153,7 @@ namespace Cyclebite::Profile::Backend::Memory
             {
                 merge_tuple_set(instToTuple.at(valueID), mt);
             }
+            updateBittenBytes();
         }
 
         void __Cyclebite__Profile__Backend__MemoryLoad(void *address, int64_t valueID, uint64_t datasize)
@@ -151,16 +184,18 @@ namespace Cyclebite::Profile::Backend::Memory
             {
                 merge_tuple_set(instToTuple.at(valueID), mt);
             }
+            updateBittenBytes();
         }
 
         void __Cyclebite__Profile__Backend__MemoryInit(uint64_t a)
         {
+            bytesBitten = 0;
             ReadKernelFile();
             try
             {
                 FindEpochBoundaries();
             }
-            catch (AtlasException &e)
+            catch (CyclebiteException &e)
             {
                 spdlog::critical(e.what());
                 exit(EXIT_FAILURE);
@@ -190,6 +225,7 @@ namespace Cyclebite::Profile::Backend::Memory
             {
                 merge_tuple_set(currentEpoch->memoryData.wTuples, mt);
             }
+            updateBittenBytes();
         }
 
         void __Cyclebite__Profile__Backend__MemoryMov(void* ptr_src, void* ptr_snk, uint64_t dataSize)
@@ -208,6 +244,7 @@ namespace Cyclebite::Profile::Backend::Memory
             {
                 merge_tuple_set(currentEpoch->memoryData.wTuples, mt);
             }
+            updateBittenBytes();
         }
 
         void __Cyclebite__Profile__Backend__MemorySet(void* ptr, uint64_t dataSize)
@@ -221,6 +258,7 @@ namespace Cyclebite::Profile::Backend::Memory
             {
                 merge_tuple_set(currentEpoch->memoryData.wTuples, mt);
             }
+            updateBittenBytes();
         }
 
         void __Cyclebite__Profile__Backend__MemoryMalloc(void* ptr, uint64_t offset)
@@ -233,6 +271,7 @@ namespace Cyclebite::Profile::Backend::Memory
                 mt.offset = (uint32_t)offset-1;
                 currentEpoch->malloc_ptrs.insert(mt);
             }
+            updateBittenBytes();
         }
 
         void __Cyclebite__Profile__Backend__MemoryFree(void* ptr)

@@ -1,17 +1,19 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #pragma once
 #include <exception>
 #include <sstream>
 #include <string>
 
-class AtlasException : public std::exception
+class CyclebiteException : public std::exception
 {
 protected:
     std::string msg;
 
 public:
-    AtlasException(const std::string &arg, const char *file, int line)
+    CyclebiteException(const std::string &arg, const char *file, int line)
     {
         std::ostringstream o;
         o << file << ":" << line << ": " << arg;
@@ -24,4 +26,4 @@ public:
     }
 };
 
-#define AtlasException(arg) AtlasException(arg, __FILE__, __LINE__);
+#define CyclebiteException(arg) CyclebiteException(arg, __FILE__, __LINE__);

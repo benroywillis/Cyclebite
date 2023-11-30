@@ -1,10 +1,12 @@
+//==------------------------------==//
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
+//==------------------------------==//
 #include "Functions.h"
 #include <llvm/IR/Function.h>
 using namespace llvm;
 
-namespace DashTracer::Passes
+namespace Cyclebite::Profile::Passes
 {
     Function *openFunc;
     Function *closeFunc;
@@ -59,4 +61,4 @@ namespace DashTracer::Passes
     Function *PrecisionStore;
     Function *PrecisionInit;
     Function *PrecisionDestroy;
-} // namespace DashTracer::Passes
+} // namespace Cyclebite::Profile::Passes

@@ -1,5 +1,5 @@
 add_executable(1DBlur 1DBlur.c)
-InjectTracer(1DBlur)
+InjectMarkov(1DBlur)
 InjectMemory(1DBlur)
 
 add_test(NAME 1DBlur_Markov_Profile COMMAND  1DBlur.markov.native)
