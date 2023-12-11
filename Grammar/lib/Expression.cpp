@@ -546,7 +546,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 }
                 if( !f )
                 {
-                    throw CyclebiteException("Could not determine the function of a functionexpression!");
+                    throw CyclebiteException("Could not determine the function of a function expression!");
                 }
             }
             else
