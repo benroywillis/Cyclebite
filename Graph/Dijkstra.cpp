@@ -123,6 +123,76 @@ set<uint64_t> Cyclebite::Graph::Dijkstras(const Graph &graph, uint64_t source, u
 /// This algorithm has no way of looking behind
 bool Cyclebite::Graph::FindCycles(const Graph &graph)
 {
+    /*
+    if( graph.getNodes().begin()->get()->NID == 280 )
+    {
+        bool doNothing = true;
+    }
+    // set of nodes that have been visited at least once (ie they are in the queue)
+    set<std::shared_ptr<GraphEdge>, GECompare> visited;
+    // algorithm inspired by https://www.baeldung.com/cs/detecting-cycles-in-directed-graph
+    // queue of nodes that have been touched but their successors have not been fully evaluated yet
+    // a node is removed from the queue when all its outgoing edges have been explored
+    deque<std::shared_ptr<GraphEdge>> Q;
+    // this while loop ensures that all nodes in the subgraph are explored
+    // it handles the case of "cross-edges" or edges that can go from one dfs tree to another, but the other dfs tree cannot go to the first
+    // this makes the algorithm dependent on which node is pushed into the Q first, and thus, the outer while loop ensures that we explore each dfs tree at least once
+    while (visited.size() < graph.edge_count())
+    {
+        // push as many edges to the queue as possible, priming the queue with a path through the subgraph that is depth-first
+        for (auto edge : graph.edges())
+        {
+            if (visited.find(edge) == visited.end())
+            {
+                Q.push_front(edge);
+                break;
+            }
+        }
+        while (!Q.empty())
+        {
+            // this flag monitors whether we find a path through the subgraph that has not yet been explored
+            bool pushedNeighbor = false;
+            // this loop checks to see if the depth-most edge leads to an edge that is already in the queue (and thus forms a cycle)
+            for (const auto &n : Q.front()->getSnk()->getSuccessors())
+            {
+                if (!graph.find(n))
+                {
+                    continue;
+                }
+                if (!graph.find(n->getSnk()))
+                {
+                    // this node is outside the boundaries of the subgraph, skip
+                    continue;
+                }
+                visited.insert(n);
+                // since this is a depth first search, then whenever we have a neighbor that is in the Q, we have found a "back edge" in the depth of the tree ie a cycle
+                for (const auto &entry : Q)
+                {
+                    if (entry == n)
+                    {
+                        return true;
+                    }
+                }
+                if (visited.find(n) == visited.end())
+                {
+                    Q.push_front(n);
+                    pushedNeighbor = true;
+                    // process successors one at a time, we will eventually circle back to this node in the queue
+                    // this enforces the depth first search
+                    break;
+                }
+            }
+            if (!pushedNeighbor)
+            {
+                visited.insert(Q.front());
+                // if we don't push a neighbor, it means this path is a dead-end
+                // so pop the entry, this may unlock an unexplored path
+                Q.pop_front();
+            }
+        }
+    }
+    return false;
+    */
     // set of nodes that have been visited at least once (ie they are in the queue)
     set<std::shared_ptr<GraphNode>, p_GNCompare> visited;
     // algorithm inspired by https://www.baeldung.com/cs/detecting-cycles-in-directed-graph
