@@ -690,6 +690,10 @@ ControlGraph IndirectRecursionFunctionBFS(const std::shared_ptr<CallEdge> &entra
 
 void Cyclebite::Graph::VirtualizeSubgraph(Graph &graph, std::shared_ptr<VirtualNode> &VN, const ControlGraph &subgraph)
 {
+    if( subgraph.getNodes().begin()->get()->NID == 14 )
+    {
+        bool doNothing = true;
+    }
     if( subgraph.getNodes().empty() || subgraph.getEdges().empty() )
     {
         throw CyclebiteException("Subgraph for virtualization is empty!");
@@ -707,6 +711,11 @@ void Cyclebite::Graph::VirtualizeSubgraph(Graph &graph, std::shared_ptr<VirtualN
         if( auto i = dynamic_pointer_cast<ImaginaryEdge>(ent) )
         {
             // skip, we don't transform imaginary nodes or edges
+        }
+        else if ( (VN->find(ent->getWeightedSrc())) && (VN->find(ent->getWeightedSnk())) )
+        {
+            // this is a circling edge, which by convention needs to be in the successors
+            // thus we skip it here, and let the exit node handler do it
         }
         else
         {
@@ -766,16 +775,26 @@ void Cyclebite::Graph::VirtualizeSubgraph(Graph &graph, std::shared_ptr<VirtualN
     {
         // it is possible for an entrance to also be an exit (when an edge from within the subgraph cycles back to an edge within the subgraph)
         // in this case we already handled the edge in the entrances, thus we skip it here
-        if( VN->getSubgraph().find(ex->getSnk()) != VN->getSubgraph().end() )
+        if( (VN->getSubgraph().find(ex->getSnk()) != VN->getSubgraph().end()) )//|| (ex->getSnk() == VN) )
         {
-            continue;
+            //continue;
         }
         // the only thing required for exit edges is to virtualize them
         set<shared_ptr<UnconditionalEdge>, GECompare> replaceEdges;
         replaceEdges.insert(ex);
-        auto newEdge = make_shared<VirtualEdge>(ex->getFreq(), VN, ex->getWeightedSnk(), replaceEdges);
+        shared_ptr<VirtualEdge> newEdge = nullptr;
+        if( VN->getSubgraph().find(ex->getSnk()) != VN->getSubgraph().end() )
+        {
+            newEdge = make_shared<VirtualEdge>(ex->getFreq(), VN, VN, replaceEdges);
+        }
+        else
+        {
+            newEdge = make_shared<VirtualEdge>(ex->getFreq(), VN, ex->getWeightedSnk(), replaceEdges);
+        }
+        ///auto newEdge = make_shared<VirtualEdge>(ex->getFreq(), VN, ex->getWeightedSnk(), replaceEdges);
         EdgeToVE[ex].insert(newEdge);
-        newEdge->setWeight((uint64_t)((float)ex->getFreq() / ex->getWeight()));
+        //newEdge->setWeight((uint64_t)((float)ex->getFreq() / ex->getWeight()))
+        newEdge->setWeight((uint64_t)round(((float)ex->getFreq() / ex->getWeight())));
         graph.removeEdge(ex);
         graph.addEdge(newEdge);
         VN->addSuccessor(newEdge);
