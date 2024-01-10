@@ -14,3 +14,4 @@ kar/passwd.json
 *.elf
 debug_output/
 *.dot
+*.annotated_omp.*
