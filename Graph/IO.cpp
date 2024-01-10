@@ -59,7 +59,6 @@ std::string to_string_float(float f, int precision = 3)
 
 void Cyclebite::Graph::ReadBlockInfo(const std::string &BlockInfo)
 {
-    std::map<int64_t, std::vector<int64_t>> blockCallers;
     std::ifstream inputJson;
     nlohmann::json j;
     try
