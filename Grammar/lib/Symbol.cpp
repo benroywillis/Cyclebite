@@ -19,6 +19,11 @@ Symbol::Symbol(string n) : UID(getNextUID())
     }
 }
 
+string Symbol::getName() const
+{
+    return name;
+}
+
 uint64_t Symbol::getID() const
 {
     return UID;

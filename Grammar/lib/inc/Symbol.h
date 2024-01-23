@@ -15,6 +15,7 @@ namespace Cyclebite::Grammar
         Symbol() = delete;
         virtual ~Symbol() = default;
         virtual std::string dump() const;
+        std::string getName() const;
     protected:
         uint64_t UID;
         static uint64_t nextUID;
