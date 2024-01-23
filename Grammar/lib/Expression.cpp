@@ -203,26 +203,20 @@ bool Expression::hasParallelReduction() const
 {
     for( const auto& rv : getRVs() )
     {
-        for( const auto& addr : rv->getAddresses() )
+        if( const auto& coll = dynamic_pointer_cast<Collection>(output) )
         {
-            // none of the addresses are allowed to be collections whose index variables have the reduction cycle as its dimension
-            // an induction variable whose dimension is the reduction cycle indicates that each iteration of that reduction cycle stores a unique value from the reduction
-            // - this unique value depends on all previous values in order to be correct
-                if( const auto& coll = dynamic_pointer_cast<Collection>(output) )
+            for( const auto& var : coll->getIndices() )
+            {
+                for( const auto& varDim : var->getDimensions() )
                 {
-                    for( const auto& var : coll->getIndices() )
+                    if( rv->getDimensions().contains(varDim) )
                     {
-                        for( const auto& varDim : var->getDimensions() )
-                        {
-                            if( rv->getDimensions().contains(varDim) )
-                            {
-                                // this store touches the same reduction as the reduction variable, indicating that unique values within the reduction are stored
-                                // this is not a parallel reduction
-                                return false;
-                            }
-                        }
+                        // this store touches the same reduction as the reduction variable, indicating that unique values within the reduction are stored
+                        // this is not a parallel reduction
+                        return false;
                     }
                 }
+            }
         }
     }
     return true;
