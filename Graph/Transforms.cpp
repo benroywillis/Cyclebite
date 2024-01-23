@@ -50,7 +50,7 @@ shared_ptr<GraphNode> Cyclebite::Graph::BlockToNode(const Graph &graph, const ll
             // once we find the node that maps to this entry in the NIDMap, we return its parent-most virtual node
             for (const auto &node : graph.nodes())
             {
-                if (node->NID == NIDMap.at(bbID))
+                if (node->ID() == NIDMap.at(bbID))
                 {
                     return node;
                 }
@@ -64,7 +64,7 @@ shared_ptr<GraphNode> Cyclebite::Graph::BlockToNode(const Graph &graph, const ll
                     {
                         for (const auto &subnode : Q.front()->getSubgraph())
                         {
-                            if (subnode->NID == NIDMap.at(bbID))
+                            if (subnode->ID() == NIDMap.at(bbID))
                             {
                                 return VN;
                             }
@@ -690,10 +690,6 @@ ControlGraph IndirectRecursionFunctionBFS(const std::shared_ptr<CallEdge> &entra
 
 void Cyclebite::Graph::VirtualizeSubgraph(Graph &graph, std::shared_ptr<VirtualNode> &VN, const ControlGraph &subgraph)
 {
-    if( subgraph.getNodes().begin()->get()->NID == 14 )
-    {
-        bool doNothing = true;
-    }
     if( subgraph.getNodes().empty() || subgraph.getEdges().empty() )
     {
         throw CyclebiteException("Subgraph for virtualization is empty!");
@@ -1267,7 +1263,7 @@ ControlGraph Cyclebite::Graph::BranchToSelectTransforms(const ControlGraph &grap
         {
             for (const auto &neighbor : graph.getNode(midNode->getWeightedSnk())->getSuccessors())
             {
-                midNodeSuccessors.insert(neighbor->getWeightedSnk()->NID);
+                midNodeSuccessors.insert(neighbor->getWeightedSnk()->ID());
             }
         }
         else
@@ -1608,7 +1604,7 @@ bool hasDirectRecursion(const std::shared_ptr<ControlNode> &node, const std::map
 
 bool Cyclebite::Graph::hasIndirectRecursion(const Cyclebite::Graph::CallGraph &graph, const shared_ptr<Cyclebite::Graph::CallGraphNode> &node)
 {
-    auto cycle = Dijkstras(graph, node->NID, node->NID);
+    auto cycle = Dijkstras(graph, node->ID(), node->ID());
     if (cycle.size() > 1)
     {
         // the loop had more than one node in it, so it must be indirect recursion
@@ -1621,7 +1617,7 @@ bool Cyclebite::Graph::hasIndirectRecursion(const Cyclebite::Graph::CallGraph &g
         auto copy = graph;
         auto finderEdge = make_shared<UnconditionalEdge>(0, node, node);
         copy.removeEdge(finderEdge);
-        auto cycle2 = Dijkstras(copy, node->NID, node->NID);
+        auto cycle2 = Dijkstras(copy, node->ID(), node->ID());
         if (cycle2.size() > 1)
         {
             return true;
@@ -1640,7 +1636,7 @@ bool Cyclebite::Graph::hasIndirectRecursion(const Cyclebite::Graph::CallGraph &g
 /// Returns true if this function has direct recursion and false otherwise. If the input function is indirect and direct recursive, the return value will be true
 bool Cyclebite::Graph::hasDirectRecursion(const Cyclebite::Graph::CallGraph &graph, const shared_ptr<Cyclebite::Graph::CallGraphNode> &src)
 {
-    auto cycle = Dijkstras(graph, src->NID, src->NID);
+    auto cycle = Dijkstras(graph, src->ID(), src->ID());
     if (cycle.size() == 1)
     {
         return true;
@@ -1742,10 +1738,10 @@ set<shared_ptr<CallGraphNode>, p_GNCompare> getIndirectRecursionCycle(const Cycl
                 if (child->getChild() != Q.front())
                 {
                     // see if this node is part of a cycle
-                    auto childCycle = Dijkstras(graphCopy, child->getChild()->NID, child->getChild()->NID);
+                    auto childCycle = Dijkstras(graphCopy, child->getChild()->ID(), child->getChild()->ID());
                     if (childCycle.size() > 1)
                     {
-                        cycle.insert(static_pointer_cast<CallGraphNode>(graphCopy.getOriginalNode(child->getChild()->NID)));
+                        cycle.insert(static_pointer_cast<CallGraphNode>(graphCopy.getOriginalNode(child->getChild()->ID())));
                         Q.push_back(child->getChild());
                         covered.insert(child->getChild());
                     }
@@ -1754,10 +1750,10 @@ set<shared_ptr<CallGraphNode>, p_GNCompare> getIndirectRecursionCycle(const Cycl
                         auto copy = graphCopy;
                         auto finderEdge = make_shared<UnconditionalEdge>(0, child->getChild(), child->getChild());
                         copy.removeEdge(finderEdge);
-                        auto childCycle2 = Dijkstras(copy, child->getChild()->NID, child->getChild()->NID);
+                        auto childCycle2 = Dijkstras(copy, child->getChild()->ID(), child->getChild()->ID());
                         if (childCycle2.size() > 1)
                         {
-                            cycle.insert(static_pointer_cast<CallGraphNode>(graphCopy.getOriginalNode(child->getChild()->NID)));
+                            cycle.insert(static_pointer_cast<CallGraphNode>(graphCopy.getOriginalNode(child->getChild()->ID())));
                             Q.push_back(child->getChild());
                             covered.insert(child->getChild());
                             graphCopy = copy;
@@ -2557,7 +2553,7 @@ void LowFrequencyLoopTransform(ControlGraph& graph)
         // first, find min paths in the graph
         for (const auto &node : graph.nodes())
         {
-            auto nodeIDs = Dijkstras(graph, node->NID, node->NID);
+            auto nodeIDs = Dijkstras(graph, node->ID(), node->ID());
             if (!nodeIDs.empty())
             {
                 // check for cycles within the kernel, if it has more than 1 cycle this kernel will be thrown out
@@ -2570,14 +2566,14 @@ void LowFrequencyLoopTransform(ControlGraph& graph)
                     newCycle->addNode(n);
                     for(const auto& pred : n->getPredecessors() )
                     {
-                        if( nodeIDs.find(pred->getSrc()->NID) != nodeIDs.end() )
+                        if( nodeIDs.find(pred->getSrc()->ID()) != nodeIDs.end() )
                         {
                             newCycle->addEdge(pred);
                         }
                     }
                     for( const auto& succ : n->getSuccessors() )
                     {
-                        if( nodeIDs.find(succ->getSnk()->NID) != nodeIDs.end() )
+                        if( nodeIDs.find(succ->getSnk()->ID()) != nodeIDs.end() )
                         {
                             newCycle->addEdge(succ);
                         }
@@ -3131,7 +3127,7 @@ set<shared_ptr<MLCycle>, KCompare> Cyclebite::Graph::FindMLCycles(ControlGraph &
         // first, find min paths in the graph
         for (const auto &node : graph.nodes())
         {
-            auto nodeIDs = Dijkstras(graph, node->NID, node->NID);
+            auto nodeIDs = Dijkstras(graph, node->ID(), node->ID());
             if (!nodeIDs.empty())
             {
                 // turn the blockIDs of the cycle into nodes and capture the edges of the cycle
@@ -3142,14 +3138,14 @@ set<shared_ptr<MLCycle>, KCompare> Cyclebite::Graph::FindMLCycles(ControlGraph &
                     newKernel->addNode(n);
                     for(const auto& pred : n->getPredecessors() )
                     {
-                        if( nodeIDs.find(pred->getSrc()->NID) != nodeIDs.end() )
+                        if( nodeIDs.find(pred->getSrc()->ID()) != nodeIDs.end() )
                         {
                             newKernel->addEdge(pred);
                         }
                     }
                     for( const auto& succ : n->getSuccessors() )
                     {
-                        if( nodeIDs.find(succ->getSnk()->NID) != nodeIDs.end() )
+                        if( nodeIDs.find(succ->getSnk()->ID()) != nodeIDs.end() )
                         {
                             newKernel->addEdge(succ);
                         }
@@ -3542,13 +3538,13 @@ std::set<std::shared_ptr<ControlNode> , p_GNCompare> Cyclebite::Graph::ReduceMO(
                 }
                 // make a new node if necessary, else graph the existing replacement (if this node is a neighbor of a node that has already been evaluated, a replacement node already exists for it)
                 std::shared_ptr<ControlNode> newNode;
-                if (IDMap.find(n->NID) == IDMap.end())
+                if (IDMap.find(n->ID()) == IDMap.end())
                 {
                     newNode = new ControlNode();
                 }
                 else
                 {
-                    newNode = *newGraph.find(IDMap[n->NID]);
+                    newNode = *newGraph.find(IDMap[n->ID()]);
                 }
                 for (auto og = next(n->originalBlocks.begin()); og != n->originalBlocks.end(); og++)
                 {
@@ -3556,29 +3552,29 @@ std::set<std::shared_ptr<ControlNode> , p_GNCompare> Cyclebite::Graph::ReduceMO(
                     newNode->blocks.insert(*og);
                 }
                 newGraph.insert(newNode);
-                IDMap[n->NID] = newNode->NID;
+                IDMap[n->ID()] = newNode->ID();
                 done.insert(n);
 
                 for (const auto &oldNode : likeNodes)
                 {
                     // each node gets merged into the new node
-                    IDMap[oldNode->NID] = newNode->NID;
+                    IDMap[oldNode->ID()] = newNode->ID();
                     done.insert(oldNode);
                     for (const auto &nei : oldNode->getSuccessors())
                     {
                         // make the neighbor node if it doesn't exist yet
-                        if (IDMap.find(nei->getWeightedSnk()->NID) == IDMap.end())
+                        if (IDMap.find(nei->getWeightedSnk()->ID()) == IDMap.end())
                         {
                             // we have to find out if there is a like node for this neighbor
-                            auto oldNeighbor = *previousGraph.find(nei->getWeightedSnk()->NID);
+                            auto oldNeighbor = *previousGraph.find(nei->getWeightedSnk()->ID());
                             bool match = false;
                             for (const auto &likeNeighbor : previousGraph)
                             {
                                 if (*next(likeNeighbor->originalBlocks.begin()) == *next(oldNeighbor->originalBlocks.begin()))
                                 {
-                                    if (IDMap.find(likeNeighbor->NID) != IDMap.end())
+                                    if (IDMap.find(likeNeighbor->ID()) != IDMap.end())
                                     {
-                                        IDMap[nei->getWeightedSnk()->NID] = IDMap[likeNeighbor->NID];
+                                        IDMap[nei->getWeightedSnk()->ID()] = IDMap[likeNeighbor->ID()];
                                         //done.insert(oldNeighbor);
                                         match = true;
                                         break;
@@ -3589,24 +3585,24 @@ std::set<std::shared_ptr<ControlNode> , p_GNCompare> Cyclebite::Graph::ReduceMO(
                             {
                                 auto newNeighbor = new ControlNode();
                                 newGraph.insert(newNeighbor);
-                                IDMap[nei->getWeightedSnk()->NID] = newNeighbor->NID;
+                                IDMap[nei->getWeightedSnk()->ID()] = newNeighbor->ID();
                             }
                         }
                         // if this neighbor is already in the neighbor map, add its frequency counts together
-                        if (newNode->getSuccessors().find(IDMap[nei->getWeightedSnk()->NID]) == newNode->getSuccessors().end())
+                        if (newNode->getSuccessors().find(IDMap[nei->getWeightedSnk()->ID()]) == newNode->getSuccessors().end())
                         {
-                            newNode->getSuccessors()[IDMap[nei->getWeightedSnk()->NID]] = nei.second;
+                            newNode->getSuccessors()[IDMap[nei->getWeightedSnk()->ID()]] = nei.second;
                         }
                         // else add the neighbor
                         else
                         {
-                            newNode->getSuccessors()[IDMap[nei->getWeightedSnk()->NID]].first += nei->getFreq();
+                            newNode->getSuccessors()[IDMap[nei->getWeightedSnk()->ID()]].first += nei->getFreq();
                         }
                     }
                     for (const auto &pred : oldNode->getPredecessors())
                     {
                         // do the same thing for the predecessors now
-                        if (IDMap.find(pred->getWeightedSrc()->NID) == IDMap.end())
+                        if (IDMap.find(pred->getWeightedSrc()->ID()) == IDMap.end())
                         {
                             // we have to find out if there is a like node for this predecessor
                             auto oldPredecessor = *previousGraph.find(pred);
@@ -3615,9 +3611,9 @@ std::set<std::shared_ptr<ControlNode> , p_GNCompare> Cyclebite::Graph::ReduceMO(
                             {
                                 if (*next(likePredecessor->originalBlocks.begin()) == *next(oldPredecessor->originalBlocks.begin()))
                                 {
-                                    if (IDMap.find(likePredecessor->NID) != IDMap.end())
+                                    if (IDMap.find(likePredecessor->ID()) != IDMap.end())
                                     {
-                                        IDMap[pred->getWeightedSrc()->NID] = IDMap[likePredecessor->NID];
+                                        IDMap[pred->getWeightedSrc()->ID()] = IDMap[likePredecessor->ID()];
                                         match = true;
                                         //done.insert(oldPredecessor);
                                         break;
@@ -3628,10 +3624,10 @@ std::set<std::shared_ptr<ControlNode> , p_GNCompare> Cyclebite::Graph::ReduceMO(
                             {
                                 auto newPred = new ControlNode();
                                 newGraph.insert(newPred);
-                                IDMap[pred->getWeightedSrc()->NID] = newPred->NID;
+                                IDMap[pred->getWeightedSrc()->ID()] = newPred->ID();
                             }
                         }
-                        newNode->getPredecessors().insert(IDMap[pred->getWeightedSrc()->NID]);
+                        newNode->getPredecessors().insert(IDMap[pred->getWeightedSrc()->ID()]);
                     }
                 }
             }

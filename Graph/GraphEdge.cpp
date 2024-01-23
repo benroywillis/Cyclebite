@@ -35,6 +35,11 @@ GraphEdge::GraphEdge(uint64_t ID, std::shared_ptr<GraphNode> sou, std::shared_pt
 
 GraphEdge::~GraphEdge() = default;
 
+uint64_t GraphEdge::ID() const
+{
+    return EID;
+}
+
 uint64_t GraphEdge::getNextEID()
 {
     return nextEID++;

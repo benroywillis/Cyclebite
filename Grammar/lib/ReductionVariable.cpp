@@ -428,7 +428,7 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                 covered.insert(can);
                 while( !Q.empty() )
                 {
-                    auto cycle = Graph::Dijkstras(cycleGraph, Q.front()->NID, Q.front()->NID);
+                    auto cycle = Graph::Dijkstras(cycleGraph, Q.front()->ID(), Q.front()->ID());
                     if( !cycle.empty() )
                     {
                         if( const auto& dn = dynamic_pointer_cast<Graph::DataValue>(Q.front()) )

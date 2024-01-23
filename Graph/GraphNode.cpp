@@ -17,6 +17,11 @@ GraphNode::GraphNode()
 
 GraphNode::~GraphNode() = default;
 
+uint64_t GraphNode::ID() const
+{
+    return NID;
+}
+
 uint64_t GraphNode::getNextNID()
 {
     return nextNID++;

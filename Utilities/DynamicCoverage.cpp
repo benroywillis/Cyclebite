@@ -68,7 +68,7 @@ int main(int argc, char *argv[])
                 if( auto ue = dynamic_pointer_cast<UnconditionalEdge>(pred) )
                 {
                     // retrieve the edge frequency and accumulate it to this node
-                    blockFrequencies[(int64_t)ue->getSnk()->NID] += ue->getFreq();
+                    blockFrequencies[(int64_t)ue->getSnk()->ID()] += ue->getFreq();
                 }
             }
         }

@@ -114,7 +114,7 @@ inline void PrintGraph(const std::set<Cyclebite::Graph::ControlNode *, Cyclebite
 {
     for (const auto &node : nodes)
     {
-        spdlog::info("Examining node " + std::to_string(node->NID));
+        spdlog::info("Examining node " + std::to_string(node->ID()));
         if (auto VKN = dynamic_cast<Cyclebite::Graph::MLCycle *>(node))
         {
             spdlog::info("This node is a virtual kernel pointing to ID " + std::to_string(VKN->KID));
@@ -134,7 +134,7 @@ inline void PrintGraph(const std::set<Cyclebite::Graph::ControlNode *, Cyclebite
         std::string preds;
         for (auto pred : node->getPredecessors())
         {
-            preds += std::to_string(pred->getSrc()->NID);
+            preds += std::to_string(pred->getSrc()->ID());
             if (pred != *prev(node->getPredecessors().end()))
             {
                 preds += ",";
@@ -143,7 +143,7 @@ inline void PrintGraph(const std::set<Cyclebite::Graph::ControlNode *, Cyclebite
         spdlog::info("Predecessors: " + preds);
         for (const auto &neighbor : node->getSuccessors())
         {
-            spdlog::info("Neighbor " + std::to_string(neighbor->getSnk()->NID) + " has instance count " + std::to_string(neighbor->getFreq()) + " and probability " + std::to_string(neighbor->getWeight()));
+            spdlog::info("Neighbor " + std::to_string(neighbor->getSnk()->ID()) + " has instance count " + std::to_string(neighbor->getFreq()) + " and probability " + std::to_string(neighbor->getWeight()));
         }
         std::cout << std::endl;
     }

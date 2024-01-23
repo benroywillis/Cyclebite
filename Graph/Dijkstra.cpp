@@ -36,7 +36,7 @@ set<uint64_t> Cyclebite::Graph::Dijkstras(const Graph &graph, uint64_t source, u
     for (const auto &node : graph.nodes())
     {
         // initialize each dijkstra node to have infinite distance, itself as its predecessor, and the unvisited nodecolor
-        DMap[node->NID] = DijkstraNode(INFINITY, node->NID, std::numeric_limits<uint64_t>::max(), NodeColor::White);
+        DMap[node->ID()] = DijkstraNode(INFINITY, node->ID(), std::numeric_limits<uint64_t>::max(), NodeColor::White);
     }
     DMap[source] = DijkstraNode(0, source, std::numeric_limits<uint64_t>::max(), NodeColor::White);
     // priority queue that holds all newly discovered nodes. Minimum paths get priority
@@ -54,7 +54,7 @@ set<uint64_t> Cyclebite::Graph::Dijkstras(const Graph &graph, uint64_t source, u
             {
                 if (graph.find(neighbor))
                 {
-                    if (neighbor->getSnk()->NID == source)
+                    if (neighbor->getSnk()->ID() == source)
                     {
                         // we've found a loop
                         // the DMap distance will be 0 for the source node so we can't do a comparison of distances on the first go-round
@@ -65,24 +65,24 @@ set<uint64_t> Cyclebite::Graph::Dijkstras(const Graph &graph, uint64_t source, u
                             DMap[source].distance = -log(neighbor->getWeight()) + DMap[Q.front().NID].distance;
                         }
                     }
-                    if (-log(neighbor->getWeight()) + Q.front().distance < DMap[neighbor->getSnk()->NID].distance)
+                    if (-log(neighbor->getWeight()) + Q.front().distance < DMap[neighbor->getSnk()->ID()].distance)
                     {
-                        DMap[neighbor->getSnk()->NID].predecessor = Q.front().NID;
-                        DMap[neighbor->getSnk()->NID].distance = -log(neighbor->getWeight()) + DMap[Q.front().NID].distance;
-                        if (DMap[neighbor->getSnk()->NID].color == NodeColor::White)
+                        DMap[neighbor->getSnk()->ID()].predecessor = Q.front().NID;
+                        DMap[neighbor->getSnk()->ID()].distance = -log(neighbor->getWeight()) + DMap[Q.front().NID].distance;
+                        if (DMap[neighbor->getSnk()->ID()].color == NodeColor::White)
                         {
-                            DMap[neighbor->getSnk()->NID].color = NodeColor::Grey;
-                            Q.push_back(DMap[neighbor->getSnk()->NID]);
+                            DMap[neighbor->getSnk()->ID()].color = NodeColor::Grey;
+                            Q.push_back(DMap[neighbor->getSnk()->ID()]);
                         }
-                        else if (DMap[neighbor->getSnk()->NID].color == NodeColor::Grey)
+                        else if (DMap[neighbor->getSnk()->ID()].color == NodeColor::Grey)
                         {
                             // we have already seen this neighbor, it must be in the queue. We have to find its queue entry and update it
                             for (auto &node : Q)
                             {
-                                if (node.NID == DMap[neighbor->getSnk()->NID].NID)
+                                if (node.NID == DMap[neighbor->getSnk()->ID()].NID)
                                 {
-                                    node.predecessor = DMap[neighbor->getSnk()->NID].predecessor;
-                                    node.distance = DMap[neighbor->getSnk()->NID].distance;
+                                    node.predecessor = DMap[neighbor->getSnk()->ID()].predecessor;
+                                    node.distance = DMap[neighbor->getSnk()->ID()].distance;
                                 }
                             }
                             std::sort(Q.begin(), Q.end(), DCompare);
@@ -106,11 +106,11 @@ set<uint64_t> Cyclebite::Graph::Dijkstras(const Graph &graph, uint64_t source, u
                 return newKernel;
             }
             auto prevNode = DN.second.predecessor;
-            newKernel.insert(graph.getOriginalNode(prevNode)->NID);
+            newKernel.insert(graph.getOriginalNode(prevNode)->ID());
             while (prevNode != source)
             {
                 prevNode = DMap[prevNode].predecessor;
-                newKernel.insert(graph.getOriginalNode(prevNode)->NID);
+                newKernel.insert(graph.getOriginalNode(prevNode)->ID());
             }
             break;
         }
@@ -124,7 +124,7 @@ set<uint64_t> Cyclebite::Graph::Dijkstras(const Graph &graph, uint64_t source, u
 bool Cyclebite::Graph::FindCycles(const Graph &graph)
 {
     /*
-    if( graph.getNodes().begin()->get()->NID == 280 )
+    if( graph.getNodes().begin()->get()->ID() == 280 )
     {
         bool doNothing = true;
     }
@@ -279,7 +279,7 @@ bool Circuit(const std::set<std::shared_ptr<GraphNode>, p_GNCompare> &subgraph, 
     blocked.insert(v);
     for (auto nei : v->getSuccessors())
     {
-        auto succ = subgraph.find(nei->getSnk()->NID);
+        auto succ = subgraph.find(nei->getSnk()->ID());
         if (succ != subgraph.end())
         {
             if (*succ == source)
@@ -303,7 +303,7 @@ bool Circuit(const std::set<std::shared_ptr<GraphNode>, p_GNCompare> &subgraph, 
     {
         for (auto &nei : v->getSuccessors())
         {
-            auto succ = subgraph.find(nei->getSnk()->NID);
+            auto succ = subgraph.find(nei->getSnk()->ID());
             if (succ != subgraph.end())
             {
                 B.at(v).insert(*succ);
@@ -336,7 +336,7 @@ vector<set<std::shared_ptr<GraphNode>>> Cyclebite::Graph::FindAllUniqueCycles(co
         auto s = *it_s;
         for (auto &nei : s->getSuccessors())
         {
-            auto succ = subgraph.find(nei->getSnk()->NID);
+            auto succ = subgraph.find(nei->getSnk()->ID());
             if (succ != subgraph.end())
             {
                 blocked.erase(*succ);

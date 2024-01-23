@@ -12,18 +12,19 @@ namespace Cyclebite::Graph
     class GraphEdge
     {
     public:
-        uint64_t EID;
         GraphEdge();
         GraphEdge(std::shared_ptr<GraphNode> sou, std::shared_ptr<GraphNode> sin);
         GraphEdge(uint64_t ID);
         GraphEdge(uint64_t ID, std::shared_ptr<GraphNode> sou, std::shared_ptr<GraphNode> sin);
         virtual ~GraphEdge();
+        uint64_t ID() const;
         bool hasWeightedSrc() const;
         bool hasWeightedSnk() const;
         const std::shared_ptr<GraphNode> &getSrc() const;
         const std::shared_ptr<GraphNode> &getSnk() const;
         virtual float getWeight() const;
     protected:
+        uint64_t EID;
         float weight;
         std::shared_ptr<GraphNode> src;
         std::shared_ptr<GraphNode> snk;

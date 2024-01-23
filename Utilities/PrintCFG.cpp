@@ -70,15 +70,15 @@ int main(int argc, char *argv[])
     string sourceFile = "Graph GenerateSubgraph() {\n";
     for (auto node : graph.nodes())
     {
-        auto nodeName = "node" + to_string(node->NID);
-        sourceFile += "\tauto " + nodeName + " = make_shared<ControlNode>(" + to_string(node->NID) + ");\n";
+        auto nodeName = "node" + to_string(node->ID());
+        sourceFile += "\tauto " + nodeName + " = make_shared<ControlNode>(" + to_string(node->ID()) + ");\n";
     }
     sourceFile += "\n";
     for (auto edge : graph.edges())
     {
-        auto edgeName = "edge" + to_string(edge->EID);
-        auto srcNode = "node" + to_string(edge->getSrc()->NID);
-        auto snkNode = "node" + to_string(edge->getSnk()->NID);
+        auto edgeName = "edge" + to_string(edge->ID());
+        auto srcNode = "node" + to_string(edge->getSrc()->ID());
+        auto snkNode = "node" + to_string(edge->getSnk()->ID());
         uint64_t weight = 0;
         for (auto succ : edge->getSrc()->getSuccessors())
         {
@@ -98,12 +98,12 @@ int main(int argc, char *argv[])
     sourceFile += "\n\tGraph subgraph;\n";
     for (auto node : graph.nodes())
     {
-        auto newNode = "node" + to_string(node->NID);
+        auto newNode = "node" + to_string(node->ID());
         sourceFile += "\tsubgraph.nodes.insert(" + newNode + ");\n";
     }
     for (auto edge : graph.edges())
     {
-        auto newEdge = "edge" + to_string(edge->EID);
+        auto newEdge = "edge" + to_string(edge->ID());
         sourceFile += "\tsubgraph.edges.insert(" + newEdge + ");\n";
     }
     sourceFile += "\treturn subgraph;\n}";

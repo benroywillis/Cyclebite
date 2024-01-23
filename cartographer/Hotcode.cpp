@@ -34,7 +34,7 @@ set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotCode(c
             if( auto ue = dynamic_pointer_cast<UnconditionalEdge>(pred) )
             {
                 // retrieve the edge frequency and accumulate it to this node
-                blockFrequencies[(int64_t)ue->getSnk()->NID] += ue->getFreq();
+                blockFrequencies[(int64_t)ue->getSnk()->ID()] += ue->getFreq();
             }
         }
     }
@@ -110,7 +110,7 @@ set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotCode(c
             {
                 for (const auto &bn : block->getSuccessors())
                 {
-                    if (bn->getSnk()->NID == (uint64_t)*hbIt)
+                    if (bn->getSnk()->ID() == (uint64_t)*hbIt)
                     {
                         found = true;
                         break;
@@ -139,11 +139,11 @@ set<std::shared_ptr<MLCycle>, KCompare> Cyclebite::Cartographer::DetectHotCode(c
         // first condition, evaluate all successors and rope them into the kernel if they are hot
         for (const auto &nei : block->getSuccessors())
         {
-            if (hotBlocks.find((int64_t)nei->getSnk()->NID) != hotBlocks.end())
+            if (hotBlocks.find((int64_t)nei->getSnk()->ID()) != hotBlocks.end())
             {
-                auto newNode = *nodes.find(nei->getSnk()->NID);
+                auto newNode = *nodes.find(nei->getSnk()->ID());
                 newKern->addNode(newNode);
-                hotBlocks.erase((int64_t)nei->getSnk()->NID);
+                hotBlocks.erase((int64_t)nei->getSnk()->ID());
             }
         }
     }

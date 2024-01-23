@@ -14,7 +14,7 @@ namespace Cyclebite::Graph
     class GraphNode
     {
     public:
-        uint64_t NID;
+        uint64_t ID() const;
         /// Meant to be constructed from a new block description in the input binary file
         virtual ~GraphNode();
         /// returns the predecessor edge pointer if this node is a predecessor of succ. Nullptr otherwise
@@ -29,6 +29,7 @@ namespace Cyclebite::Graph
         void removeSuccessor(std::shared_ptr<GraphEdge> oldEdge);
 
     protected:
+        uint64_t NID;
         GraphNode();
         std::set<std::shared_ptr<GraphEdge>, GECompare> successors;
         std::set<std::shared_ptr<GraphEdge>, GECompare> predecessors;
@@ -42,15 +43,15 @@ namespace Cyclebite::Graph
         using is_transparent = void;
         bool operator()(const std::shared_ptr<GraphNode> &lhs, const std::shared_ptr<GraphNode> &rhs) const
         {
-            return lhs->NID < rhs->NID;
+            return lhs->ID() < rhs->ID();
         }
         bool operator()(const std::shared_ptr<GraphNode> &lhs, uint64_t rhs) const
         {
-            return lhs->NID < rhs;
+            return lhs->ID() < rhs;
         }
         bool operator()(uint64_t lhs, const std::shared_ptr<GraphNode> &rhs) const
         {
-            return lhs < rhs->NID;
+            return lhs < rhs->ID();
         }
     };
 
@@ -59,19 +60,15 @@ namespace Cyclebite::Graph
         using is_transparent = void;
         bool operator()(const GraphNode &lhs, const GraphNode &rhs) const
         {
-            return lhs.NID < rhs.NID;
+            return lhs.ID() < rhs.ID();
         }
         bool operator()(const GraphNode &lhs, uint64_t rhs) const
         {
-            return lhs.NID < rhs;
+            return lhs.ID() < rhs;
         }
         bool operator()(uint64_t lhs, const GraphNode &rhs) const
         {
-            return lhs < rhs.NID;
+            return lhs < rhs.ID();
         }
     };
 } // namespace Cyclebite::Graph
-
-// John 3/2/22
-// The abstraction is now hurting
-//  - the difference between predecessors, successors in GraphNode, ControlNode is taking up more 2x memory

@@ -246,7 +246,7 @@ int Cyclebite::Graph::BuildCFG(Graph &graph, const std::string &filename, bool H
         if (NIDMap.find(newSourceIDs) == NIDMap.end())
         {
             sourceNode = make_shared<ControlNode>();
-            NIDMap[newSourceIDs] = sourceNode->NID;
+            NIDMap[newSourceIDs] = sourceNode->ID();
             sourceNode->blocks.insert(newSourceIDs.begin(), newSourceIDs.end());
             sourceNode->originalBlocks = newSourceIDs;
             graph.addNode(sourceNode);
@@ -269,7 +269,7 @@ int Cyclebite::Graph::BuildCFG(Graph &graph, const std::string &filename, bool H
         if (NIDMap.find(neighborSourceIDs) == NIDMap.end())
         {
             sinkNode = make_shared<ControlNode>();
-            NIDMap[neighborSourceIDs] = sinkNode->NID;
+            NIDMap[neighborSourceIDs] = sinkNode->ID();
             sinkNode->blocks.insert(neighborSourceIDs.begin(), neighborSourceIDs.end());
             sinkNode->originalBlocks = neighborSourceIDs;
             graph.addNode(sinkNode);
@@ -1540,7 +1540,7 @@ const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Mo
                             // this can happen when two blocks who were dynamically used also have a calledge between each other in the static code
                             // since the profile only observes the program after the start of main and before the end of main, two blocks can be live but the edge between them may not be
                             // for example, when the static call edge occurs outside the boundaries of main
-                            spdlog::warn("Nodes " + to_string(callerNode->NID) + " and " + to_string(calleeNode->NID) + " have a statically defined calledge that was not observed in the dynamic profile");
+                            spdlog::warn("Nodes " + to_string(callerNode->ID()) + " and " + to_string(calleeNode->ID()) + " have a statically defined calledge that was not observed in the dynamic profile");
                             if (childNode->getPredecessors().empty() && childNode->getSuccessors().empty())
                             {
                                 dynamicCG.removeNode(childNode);
@@ -2198,7 +2198,7 @@ string Cyclebite::Graph::GenerateDot(const Graph &graph, bool original)
     {
         if( auto in = dynamic_pointer_cast<ImaginaryNode>(node) )
         {
-            dotString += "\t" + to_string(in->NID) + " [label=VOID];\n";
+            dotString += "\t" + to_string(in->ID()) + " [label=VOID];\n";
         }
         else if( auto mlc = dynamic_pointer_cast<MLCycle>(node) )
         {
@@ -2207,7 +2207,7 @@ string Cyclebite::Graph::GenerateDot(const Graph &graph, bool original)
             {
                 label = mlc->Label;
             }
-            dotString += "\t" + to_string(mlc->NID) + " [label=\"" + label + "\", color=blue];\n";
+            dotString += "\t" + to_string(mlc->ID()) + " [label=\"" + label + "\", color=blue];\n";
         }
     }
 
@@ -2243,7 +2243,7 @@ string Cyclebite::Graph::GenerateDot(const Graph &graph, bool original)
             {
                 origBlocks = "VOID";
             }
-            dotString += "\t" + to_string(node->NID) + " [label=\"" + origBlocks + "\"];\n";
+            dotString += "\t" + to_string(node->ID()) + " [label=\"" + origBlocks + "\"];\n";
         }
     }
     // now build out the nodes in the graph
@@ -2251,23 +2251,23 @@ string Cyclebite::Graph::GenerateDot(const Graph &graph, bool original)
     {
         if (auto call = dynamic_pointer_cast<CallEdge>(edge))
         {
-            dotString += "\t" + to_string(call->getSrc()->NID) + " -> " + to_string(call->getSnk()->NID) + " [style=dashed, color=red, label=\""+to_string(call->getFreq())+","+to_string_float(call->getWeight()) + "\"];\n";
+            dotString += "\t" + to_string(call->getSrc()->ID()) + " -> " + to_string(call->getSnk()->ID()) + " [style=dashed, color=red, label=\""+to_string(call->getFreq())+","+to_string_float(call->getWeight()) + "\"];\n";
         }
         else if (auto ret = dynamic_pointer_cast<ReturnEdge>(edge))
         {
-            dotString += "\t" + to_string(ret->getSrc()->NID) + " -> " + to_string(ret->getSnk()->NID) + " [style=dashed, color=blue, label=\""+to_string(ret->getFreq())+","+to_string_float(ret->getWeight()) + "\"];\n";
+            dotString += "\t" + to_string(ret->getSrc()->ID()) + " -> " + to_string(ret->getSnk()->ID()) + " [style=dashed, color=blue, label=\""+to_string(ret->getFreq())+","+to_string_float(ret->getWeight()) + "\"];\n";
         }
         else if (auto cond = dynamic_pointer_cast<ConditionalEdge>(edge))
         {
-            dotString += "\t" + to_string(cond->getSrc()->NID) + " -> " + to_string(cond->getSnk()->NID) + " [style=dotted, label=\""+to_string(cond->getFreq())+","+to_string_float(cond->getWeight()) + "\"];\n";
+            dotString += "\t" + to_string(cond->getSrc()->ID()) + " -> " + to_string(cond->getSnk()->ID()) + " [style=dotted, label=\""+to_string(cond->getFreq())+","+to_string_float(cond->getWeight()) + "\"];\n";
         }
         else if( auto ie = dynamic_pointer_cast<ImaginaryEdge>(edge) )
         {
-            dotString += "\t" + to_string(ie->getSrc()->NID) + " -> " + to_string(ie->getSnk()->NID) + " [label=Imaginary];\n";
+            dotString += "\t" + to_string(ie->getSrc()->ID()) + " -> " + to_string(ie->getSnk()->ID()) + " [label=Imaginary];\n";
         }
         else if( auto ue = dynamic_pointer_cast<UnconditionalEdge>(edge) )
         {
-            dotString += "\t" + to_string(ue->getSrc()->NID) + " -> " + to_string(ue->getSnk()->NID) + " [label=\""+to_string(ue->getFreq())+","+to_string_float(1.0f)+"\"];\n";
+            dotString += "\t" + to_string(ue->getSrc()->ID()) + " -> " + to_string(ue->getSnk()->ID()) + " [label=\""+to_string(ue->getFreq())+","+to_string_float(1.0f)+"\"];\n";
         }
         else
         {
@@ -2284,7 +2284,7 @@ string Cyclebite::Graph::GenerateDot(const Graph &graph, bool original)
             {
                 for (const auto &c : Q.front()->getChildKernels())
                 {
-                    dotString += "\t" + to_string(c->NID) + " -> " + to_string(Q.front()->NID) + " [style=dashed];\n";
+                    dotString += "\t" + to_string(c->ID()) + " -> " + to_string(Q.front()->ID()) + " [style=dashed];\n";
                     Q.push_back(c.get());
                 }
                 Q.pop_front();
@@ -2323,11 +2323,11 @@ string Cyclebite::Graph::GenerateCoverageDot(const set<std::shared_ptr<ControlNo
         }
         if (coveredNodes.find(node) != coveredNodes.end())
         {
-            dotString += "\t" + to_string(node->NID) + " [label=\"" + origBlocks + "\",style=filled,color=blue,fontcolor=white];\n";
+            dotString += "\t" + to_string(node->ID()) + " [label=\"" + origBlocks + "\",style=filled,color=blue,fontcolor=white];\n";
         }
         else
         {
-            dotString += "\t" + to_string(node->NID) + " [label=\"" + origBlocks + "\",style=filled,color=red,fontcolor=black];\n";
+            dotString += "\t" + to_string(node->ID()) + " [label=\"" + origBlocks + "\",style=filled,color=red,fontcolor=black];\n";
         }
     }
     // now build out the nodes in the graph
@@ -2335,13 +2335,13 @@ string Cyclebite::Graph::GenerateCoverageDot(const set<std::shared_ptr<ControlNo
     {
         for (const auto &n : node->getSuccessors())
         {
-            dotString += "\t" + to_string(n->getSrc()->NID) + " -> " + to_string(n->getSnk()->NID) + " [label=" + to_string_float(n->getWeight()) + "];\n";
+            dotString += "\t" + to_string(n->getSrc()->ID()) + " -> " + to_string(n->getSnk()->ID()) + " [label=" + to_string_float(n->getWeight()) + "];\n";
         }
         if (auto VKN = dynamic_pointer_cast<MLCycle>(node))
         {
             for (const auto &p : VKN->getParentKernels())
             {
-                dotString += "\t" + to_string(node->NID) + " -> " + to_string(p->KID) + " [style=dashed];\n";
+                dotString += "\t" + to_string(node->ID()) + " -> " + to_string(p->KID) + " [style=dashed];\n";
             }
         }
     }
@@ -2380,7 +2380,7 @@ string Cyclebite::Graph::GenerateTransformedSegmentedDot(const set<std::shared_p
     map<uint64_t, uint64_t> BlockToNode;
     for (const auto &node : nodes)
     {
-        BlockToNode[(uint64_t)(*node->blocks.begin())] = node->NID;
+        BlockToNode[(uint64_t)(*node->blocks.begin())] = node->ID();
     }
     string dotString = "digraph{\n";
     int j = 0;
@@ -2420,14 +2420,14 @@ string Cyclebite::Graph::GenerateTransformedSegmentedDot(const set<std::shared_p
                 origBlocks += "," + to_string(*block);
             }
         }
-        dotString += "\t" + to_string(node->NID) + " [label=\"" + origBlocks + "\"];\n";
+        dotString += "\t" + to_string(node->ID()) + " [label=\"" + origBlocks + "\"];\n";
     }
     // now build out the nodes in the graph
     for (const auto &node : nodes)
     {
         for (const auto &n : node->getSuccessors())
         {
-            dotString += "\t" + to_string(n->getSrc()->NID) + " -> " + to_string(n->getSnk()->NID) + " [label=" + to_string_float(n->getWeight()) + "];\n";
+            dotString += "\t" + to_string(n->getSrc()->ID()) + " -> " + to_string(n->getSnk()->ID()) + " [label=" + to_string_float(n->getWeight()) + "];\n";
         }
     }
     dotString += "}";
@@ -2634,11 +2634,11 @@ set<pair<int64_t, int64_t>> Cyclebite::Graph::findOriginalBlockIDs(const shared_
                 // on a match with one node we compare the other side
                 // thus if two edges have matching sources but different sinks, they are put in a random order
                 // and, if two edges have the same src and snk, they will match in either case
-                return lhs->getSnk()->NID < rhs->getSnk()->NID;
+                return lhs->getSnk()->ID() < rhs->getSnk()->ID();
             }
             else if( lhs->getSnk() == rhs->getSnk() )
             {
-                return lhs->getSrc()->NID < rhs->getSrc()->NID;
+                return lhs->getSrc()->ID() < rhs->getSrc()->ID();
             }
             else
             {
@@ -2799,7 +2799,7 @@ void Cyclebite::Graph::WriteKernelFile(const ControlGraph &graph, const set<std:
         totalBlocks += (float)kernel->blocks.size();
         for (const auto &n : kernel->getSubgraph())
         {
-            outputJson["Kernels"][to_string(id)]["Nodes"].push_back(n->NID);
+            outputJson["Kernels"][to_string(id)]["Nodes"].push_back(n->ID());
         }
         for (const auto &k : kernel->blocks)
         {
@@ -3039,7 +3039,7 @@ void Cyclebite::Graph::WriteKernelFile(const ControlGraph &graph, const set<std:
                     bool cycleFound = false;
                     for( auto ent : kern->getEntrances() )
                     {
-                        auto cycle = Cyclebite::Graph::Dijkstras(graph, Q.front()->NID, ent->getSnk()->NID);
+                        auto cycle = Cyclebite::Graph::Dijkstras(graph, Q.front()->ID(), ent->getSnk()->ID());
                         if( !cycle.empty() )
                         {
                             cycleFound = true;
@@ -3126,7 +3126,7 @@ ControlGraph Cyclebite::Graph::GenerateStaticCFG(llvm::Module *M)
             else
             {
                 newNode = make_shared<ControlNode>();
-                newNode->originalBlocks.push_back((uint32_t)newNode->NID);
+                newNode->originalBlocks.push_back((uint32_t)newNode->ID());
             }
             for (uint32_t i = 0; i < b->getTerminator()->getNumSuccessors(); i++)
             {
@@ -3138,7 +3138,7 @@ ControlGraph Cyclebite::Graph::GenerateStaticCFG(llvm::Module *M)
                 else
                 {
                     succ = make_shared<ControlNode>();
-                    succ->originalBlocks.push_back((uint32_t)succ->NID);
+                    succ->originalBlocks.push_back((uint32_t)succ->ID());
                     staticGraph.addNode(succ);
                 }
                 if (b->getTerminator()->getNumSuccessors() > 1)
@@ -3166,7 +3166,7 @@ ControlGraph Cyclebite::Graph::GenerateStaticCFG(llvm::Module *M)
                 else
                 {
                     pred = make_shared<ControlNode>();
-                    pred->originalBlocks.push_back((uint32_t)pred->NID);
+                    pred->originalBlocks.push_back((uint32_t)pred->ID());
                     staticGraph.addNode(pred);
                 }
                 if ((*i)->getTerminator()->getNumSuccessors() > 1)
@@ -3201,7 +3201,7 @@ void Cyclebite::Graph::GenerateDynamicCoverage(const std::set<std::shared_ptr<Co
         {
             for (const auto &block : dyn->originalBlocks)
             {
-                if (block == stat->NID)
+                if (block == stat->ID())
                 {
                     StaticToDynamic[stat].insert(dyn);
                 }
@@ -3238,11 +3238,11 @@ string Cyclebite::Graph::GenerateDataDot(const set<shared_ptr<DataValue>, p_GNCo
     {
         if( const auto& n = dynamic_pointer_cast<Inst>(node) )
         {
-            dotString += "\t" + to_string(n->NID) + " [label=\"" + OperationToString[n->getOp()] + "\"];\n";
+            dotString += "\t" + to_string(n->ID()) + " [label=\"" + OperationToString[n->getOp()] + "\"];\n";
         }
         else
         {
-            dotString += "\t" + to_string(node->NID) + ";\n";
+            dotString += "\t" + to_string(node->ID()) + ";\n";
         }
     }
     // now build out the nodes in the graph
@@ -3250,7 +3250,7 @@ string Cyclebite::Graph::GenerateDataDot(const set<shared_ptr<DataValue>, p_GNCo
     {
         for (const auto &n : node->getSuccessors())
         {
-            dotString += "\t" + to_string(n->getSrc()->NID) + " -> " + to_string(n->getSnk()->NID) + ";\n";
+            dotString += "\t" + to_string(n->getSrc()->ID()) + " -> " + to_string(n->getSnk()->ID()) + ";\n";
         }
     }
     dotString += "}";
@@ -3266,14 +3266,14 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
     uint64_t j = 0;
     for (const auto &BB : BBs)
     {
-        BBToSubgraph[BB->NID] = j;
+        BBToSubgraph[BB->ID()] = j;
         dotString += "\tsubgraph cluster_" + to_string(j) + "{\n";
         dotString += "\t\tlabel=\"Basic Block " + to_string(*BB->originalBlocks.begin()) + "\";\n";
         for (auto i : BB->getInstructions())
         {
             if( !llvm::isa<llvm::DbgInfoIntrinsic>(i->getInst()) )
             {
-                dotString += "\t\t" + to_string(i->NID) + ";\n";
+                dotString += "\t\t" + to_string(i->ID()) + ";\n";
             }
         }
         dotString += "\t}\n";
@@ -3291,19 +3291,19 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
             }
             if (node->isState())
             {
-                dotString += "\t" + to_string(node->NID) + " [color=red,label=\"" + OperationToString[node->getOp()] + "\"];\n";
+                dotString += "\t" + to_string(node->ID()) + " [color=red,label=\"" + OperationToString[node->getOp()] + "\"];\n";
             }
             else if (node->isMemory())
             {
-                dotString += "\t" + to_string(node->NID) + " [color=blue,label=\"" + OperationToString[node->getOp()] + "\"];\n";
+                dotString += "\t" + to_string(node->ID()) + " [color=blue,label=\"" + OperationToString[node->getOp()] + "\"];\n";
             }
             else if (node->isFunction())
             {
-                dotString += "\t" + to_string(node->NID) + " [color=green,label=\"" + OperationToString[node->getOp()] + "\"];\n";
+                dotString += "\t" + to_string(node->ID()) + " [color=green,label=\"" + OperationToString[node->getOp()] + "\"];\n";
             }
             else
             {
-                dotString += "\t" + to_string(node->NID) + " [label=\"" + OperationToString[node->getOp()] + "\"];\n";
+                dotString += "\t" + to_string(node->ID()) + " [label=\"" + OperationToString[node->getOp()] + "\"];\n";
             }
         }
         // now build out the nodes in the graph
@@ -3315,7 +3315,7 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
             }
             for (const auto &n : node->getSuccessors())
             {
-                dotString += "\t" + to_string(n->getSrc()->NID) + " -> " + to_string(n->getSnk()->NID) + ";\n";
+                dotString += "\t" + to_string(n->getSrc()->ID()) + " -> " + to_string(n->getSnk()->ID()) + ";\n";
             }
             // build edges from the terminator of this basic block to the successors in the control flow graph
             if (node->isTerminator())
@@ -3337,14 +3337,14 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
                 {
                     for (const auto &succ : node->parent->getSuccessors())
                     {
-                        if (BBs.find(succ->getSnk()->NID) != BBs.end())
+                        if (BBs.find(succ->getSnk()->ID()) != BBs.end())
                         {
-                            dotString += "\t" + to_string(node->NID) + " -> " + to_string((*((*BBs.find(succ->getSnk()->NID))->getNonDbgInsts().begin()))->NID) + " [style=dashed,lhead=cluster_" + to_string(BBToSubgraph[(*BBs.find(succ->getSnk()->NID))->NID]) + ",label=" + to_string_float(succ->getWeight()) + "];\n";
+                            dotString += "\t" + to_string(node->ID()) + " -> " + to_string((*((*BBs.find(succ->getSnk()->ID()))->getNonDbgInsts().begin()))->ID()) + " [style=dashed,lhead=cluster_" + to_string(BBToSubgraph[(*BBs.find(succ->getSnk()->ID()))->ID()]) + ",label=" + to_string_float(succ->getWeight()) + "];\n";
                         }
                         else
                         {
                             // else this is a block outside the kernel... a kernel exit
-                            dotString += "\t" + to_string(node->NID) + " -> " + to_string(succ->getSnk()->NID) + " [style=dashed,label=\"Task Exit," + to_string_float(succ->getWeight()) + "\"];\n";
+                            dotString += "\t" + to_string(node->ID()) + " -> " + to_string(succ->getSnk()->ID()) + " [style=dashed,label=\"Task Exit," + to_string_float(succ->getWeight()) + "\"];\n";
                         }
                     }
                 }
@@ -3354,9 +3354,9 @@ string Cyclebite::Graph::GenerateBBSubgraphDot(const set<std::shared_ptr<Control
             {
                 for( const auto& dest : call->getDestinationFirstInsts() )
                 {
-                    if( BBs.find(dest->parent->NID) != BBs.end() )
+                    if( BBs.find(dest->parent->ID()) != BBs.end() )
                     {
-                        dotString += "\t" + to_string(call->NID) + " -> " + to_string(dest->NID) + " [style=dashed,lhead=cluster_" + to_string(BBToSubgraph[dest->parent->NID]) + ",label=\"CallEdge\"];\n";
+                        dotString += "\t" + to_string(call->ID()) + " -> " + to_string(dest->ID()) + " [style=dashed,lhead=cluster_" + to_string(BBToSubgraph[dest->parent->ID()]) + ",label=\"CallEdge\"];\n";
                     }
                 }
             }
@@ -3375,7 +3375,7 @@ string Cyclebite::Graph::GenerateHighlightedSubgraph(const Graph &graph, const G
     {
         if (subgraph.find(node))
         {
-            dotString += "\t" + to_string(node->NID) + " [color=blue];\n";
+            dotString += "\t" + to_string(node->ID()) + " [color=blue];\n";
         }
     }
     for (const auto &edge : graph.edges())
@@ -3384,15 +3384,15 @@ string Cyclebite::Graph::GenerateHighlightedSubgraph(const Graph &graph, const G
         {
             if (auto ce = dynamic_pointer_cast<CallEdge>(edge))
             {
-                dotString += "\t" + to_string(ce->getSrc()->NID) + " -> " + to_string(ce->getSnk()->NID) + " [label=" + to_string_float(ce->getWeight()) + ",style=dashed,color=blue];\n";
+                dotString += "\t" + to_string(ce->getSrc()->ID()) + " -> " + to_string(ce->getSnk()->ID()) + " [label=" + to_string_float(ce->getWeight()) + ",style=dashed,color=blue];\n";
             }
             else if( auto ue = dynamic_pointer_cast<UnconditionalEdge>(edge) )
             {
-                dotString += "\t" + to_string(ue->getSrc()->NID) + " -> " + to_string(ue->getSnk()->NID) + " [label=" + to_string_float(ue->getWeight()) + ",color=blue];\n";
+                dotString += "\t" + to_string(ue->getSrc()->ID()) + " -> " + to_string(ue->getSnk()->ID()) + " [label=" + to_string_float(ue->getWeight()) + ",color=blue];\n";
             }
             else if( auto i = dynamic_pointer_cast<ImaginaryEdge>(edge) )
             {
-                dotString += "\t" + to_string(ue->getSrc()->NID) + " -> " + to_string(ue->getSnk()->NID) + " [label=Imaginary,color=blue];\n";
+                dotString += "\t" + to_string(ue->getSrc()->ID()) + " -> " + to_string(ue->getSnk()->ID()) + " [label=Imaginary,color=blue];\n";
             }
             else
             {
@@ -3405,15 +3405,15 @@ string Cyclebite::Graph::GenerateHighlightedSubgraph(const Graph &graph, const G
             {
                 if (auto ce = dynamic_pointer_cast<CallEdge>(edge))
                 {
-                    dotString += "\t" + to_string(ce->getSrc()->NID) + " -> " + to_string(ce->getSnk()->NID) + " [label=" + to_string_float(ce->getWeight()) + ",style=dashed];\n";
+                    dotString += "\t" + to_string(ce->getSrc()->ID()) + " -> " + to_string(ce->getSnk()->ID()) + " [label=" + to_string_float(ce->getWeight()) + ",style=dashed];\n";
                 }
                 else if( auto ue = dynamic_pointer_cast<UnconditionalEdge>(edge) )
                 {
-                    dotString += "\t" + to_string(ue->getSrc()->NID) + " -> " + to_string(ue->getSnk()->NID) + " [label=" + to_string_float(ue->getWeight()) + "];\n";
+                    dotString += "\t" + to_string(ue->getSrc()->ID()) + " -> " + to_string(ue->getSnk()->ID()) + " [label=" + to_string_float(ue->getWeight()) + "];\n";
                 }
                 else if( auto i = dynamic_pointer_cast<ImaginaryEdge>(edge) )
                 {
-                    dotString += "\t" + to_string(i->getSrc()->NID) + " -> " + to_string(i->getSnk()->NID) + " [label=Imaginary];\n";
+                    dotString += "\t" + to_string(i->getSrc()->ID()) + " -> " + to_string(i->getSnk()->ID()) + " [label=Imaginary];\n";
                 }
                 else
                 {
@@ -3425,15 +3425,15 @@ string Cyclebite::Graph::GenerateHighlightedSubgraph(const Graph &graph, const G
         {
             if (auto ce = dynamic_pointer_cast<CallEdge>(edge))
             {
-                dotString += "\t" + to_string(ce->getSrc()->NID) + " -> " + to_string(ce->getSnk()->NID) + " [label=" + to_string_float(ce->getWeight()) + ",style=dashed];\n";
+                dotString += "\t" + to_string(ce->getSrc()->ID()) + " -> " + to_string(ce->getSnk()->ID()) + " [label=" + to_string_float(ce->getWeight()) + ",style=dashed];\n";
             }
             else if( auto ue = dynamic_pointer_cast<UnconditionalEdge>(edge) )
             {
-                dotString += "\t" + to_string(ue->getSrc()->NID) + " -> " + to_string(ue->getSnk()->NID) + " [label=" + to_string_float(ue->getWeight()) + "];\n";
+                dotString += "\t" + to_string(ue->getSrc()->ID()) + " -> " + to_string(ue->getSnk()->ID()) + " [label=" + to_string_float(ue->getWeight()) + "];\n";
             }
             else if( auto i = dynamic_pointer_cast<ImaginaryEdge>(edge) )
             {
-                dotString += "\t" + to_string(i->getSrc()->NID) + " -> " + to_string(i->getSnk()->NID) + " [label=Imaginary];\n";
+                dotString += "\t" + to_string(i->getSrc()->ID()) + " -> " + to_string(i->getSnk()->ID()) + " [label=Imaginary];\n";
             }
             else
             {
@@ -3501,12 +3501,12 @@ string Cyclebite::Graph::GenerateCallGraph(const Cyclebite::Graph::CallGraph &CG
     // label function nodes
     for (auto node : CG.nodes())
     {
-        dotString += "\t" + to_string(node->NID) + " [label=\"" + string(static_pointer_cast<CallGraphNode>(node)->getFunction()->getName()) + "\"];\n";
+        dotString += "\t" + to_string(node->ID()) + " [label=\"" + string(static_pointer_cast<CallGraphNode>(node)->getFunction()->getName()) + "\"];\n";
     }
     // draw parent->child edges
     for (auto edge : CG.edges())
     {
-        dotString += "\t" + to_string(edge->getSrc()->NID) + " -> " + to_string(edge->getSnk()->NID) + ";\n";
+        dotString += "\t" + to_string(edge->getSrc()->ID()) + " -> " + to_string(edge->getSnk()->ID()) + ";\n";
     }
     dotString += "}";
     return dotString;
@@ -3515,10 +3515,10 @@ string Cyclebite::Graph::GenerateCallGraph(const Cyclebite::Graph::CallGraph &CG
 string Cyclebite::Graph::GenerateFunctionSubgraph(const Graph &funcGraph, const shared_ptr<CallEdge> &entrance)
 {
     string dotString = "digraph {\n";
-    dotString += "\t" + to_string(entrance->getSnk()->NID) + " [label=ENTRANCE];\n";
+    dotString += "\t" + to_string(entrance->getSnk()->ID()) + " [label=ENTRANCE];\n";
     for (const auto &ex : entrance->rets.dynamicRets)
     {
-        dotString += "\t" + to_string(ex->getSrc()->NID) + " [label=EXIT];\n";
+        dotString += "\t" + to_string(ex->getSrc()->ID()) + " [label=EXIT];\n";
     }
     for (auto node : funcGraph.nodes())
     {
@@ -3526,19 +3526,19 @@ string Cyclebite::Graph::GenerateFunctionSubgraph(const Graph &funcGraph, const 
         {
             if (auto ce = dynamic_pointer_cast<CallEdge>(succ))
             {
-                dotString += "\t" + to_string(ce->getSrc()->NID) + " -> " + to_string(ce->getSnk()->NID) + " [style=dashed,color=red];\n";
+                dotString += "\t" + to_string(ce->getSrc()->ID()) + " -> " + to_string(ce->getSnk()->ID()) + " [style=dashed,color=red];\n";
             }
             else if (auto re = dynamic_pointer_cast<ReturnEdge>(succ))
             {
-                dotString += "\t" + to_string(re->getSrc()->NID) + " -> " + to_string(re->getSnk()->NID) + " [style=dashed,color=blue];\n";
+                dotString += "\t" + to_string(re->getSrc()->ID()) + " -> " + to_string(re->getSnk()->ID()) + " [style=dashed,color=blue];\n";
             }
             else if (auto cond = dynamic_pointer_cast<ConditionalEdge>(succ))
             {
-                dotString += "\t" + to_string(cond->getSrc()->NID) + " -> " + to_string(cond->getSnk()->NID) + " [style=dotted];\n";
+                dotString += "\t" + to_string(cond->getSrc()->ID()) + " -> " + to_string(cond->getSnk()->ID()) + " [style=dotted];\n";
             }
             else
             {
-                dotString += "\t" + to_string(succ->getSrc()->NID) + " -> " + to_string(succ->getSnk()->NID) + ";\n";
+                dotString += "\t" + to_string(succ->getSrc()->ID()) + " -> " + to_string(succ->getSnk()->ID()) + ";\n";
             }
         }
     }

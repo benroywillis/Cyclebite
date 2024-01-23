@@ -122,21 +122,21 @@ string Cyclebite::Grammar::PrintIdxVarTree( const set<shared_ptr<IndexVariable>>
     string dotString = "digraph{\n\trankdir=\"BT\";\n";
     for( const auto& idx : idxVars )
     {
-        dotString += getInstName(idx->getNode()->NID, idx->getNode()->getInst());
+        dotString += getInstName(idx->getNode()->ID(), idx->getNode()->getInst());
         for( const auto& iv : idx->getDimensions() )
         {
-            dotString += getInstName(iv->getNode()->NID, iv->getNode()->getVal());
+            dotString += getInstName(iv->getNode()->ID(), iv->getNode()->getVal());
         }
     }
     for( const auto& idx : idxVars )
     {
         for( const auto& p : idx->getParents() )
         {
-            dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(p->getNode()->NID)+";\n";
+            dotString += "\t"+to_string(idx->getNode()->ID())+" -> "+to_string(p->getNode()->ID())+";\n";
         }
         for( const auto& iv : idx->getDimensions() )
         {
-            dotString += "\t"+to_string(iv->getNode()->NID)+" -> "+to_string(idx->getNode()->NID)+" [style=dotted];\n";
+            dotString += "\t"+to_string(iv->getNode()->ID())+" -> "+to_string(idx->getNode()->ID())+" [style=dotted];\n";
         }
     }
     dotString += "}";
@@ -146,20 +146,20 @@ string Cyclebite::Grammar::PrintIdxVarTree( const set<shared_ptr<IndexVariable>>
 string Cyclebite::Grammar::VisualizeCollection( const shared_ptr<Collection>& coll )
 {
     string dotString = "digraph{\n\trankdir=\"BT\";\n";
-    dotString += getInstName(coll->getBP()->getNode()->NID, coll->getBP()->getNode()->getVal());
+    dotString += getInstName(coll->getBP()->getNode()->ID(), coll->getBP()->getNode()->getVal());
     for( const auto& idx : coll->getIndices() )
     {
-        dotString += getInstName(idx->getNode()->NID, idx->getNode()->getInst());
+        dotString += getInstName(idx->getNode()->ID(), idx->getNode()->getInst());
         for( const auto& iv : idx->getDimensions() )
         {
-            dotString += getInstName(iv->getNode()->NID, iv->getNode()->getVal());
+            dotString += getInstName(iv->getNode()->ID(), iv->getNode()->getVal());
         }
     }
     // print the base pointer edges
     // they should point to their parent-most idxVar
     for( const auto& idx : coll->getIndices() )
     {
-        dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(coll->getBP()->getNode()->NID)+" [style=dashed];\n";
+        dotString += "\t"+to_string(idx->getNode()->ID())+" -> "+to_string(coll->getBP()->getNode()->ID())+" [style=dashed];\n";
     }
     for( const auto& idx : coll->getIndices() )
     {
@@ -167,12 +167,12 @@ string Cyclebite::Grammar::VisualizeCollection( const shared_ptr<Collection>& co
         {
             if( std::find(coll->getIndices().begin(), coll->getIndices().end(), p) != coll->getIndices().end() )
             {
-                dotString += "\t"+to_string(idx->getNode()->NID)+" -> "+to_string(p->getNode()->NID)+";\n";
+                dotString += "\t"+to_string(idx->getNode()->ID())+" -> "+to_string(p->getNode()->ID())+";\n";
             }
         }
         for( const auto& iv : idx->getDimensions() )
         {
-            dotString += "\t"+to_string(iv->getNode()->NID)+" -> "+to_string(idx->getNode()->NID)+" [style=dotted];\n";
+            dotString += "\t"+to_string(iv->getNode()->ID())+" -> "+to_string(idx->getNode()->ID())+" [style=dotted];\n";
         }
     }
     dotString += "}";

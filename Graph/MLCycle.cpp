@@ -114,7 +114,7 @@ bool MLCycle::FullyConnected() const
         std::map<uint64_t, NodeColor> colors;
         for (const auto &node2 : subgraph)
         {
-            colors[node2->NID] = NodeColor::White;
+            colors[node2->ID()] = NodeColor::White;
         }
         // holds newly discovered nodes
         std::deque<std::shared_ptr<ControlNode>> Q;
@@ -124,14 +124,14 @@ bool MLCycle::FullyConnected() const
             for (const auto &neighbor : Q.front()->getSuccessors())
             {
                 // check if this neighbor is within the kernel
-                if (subgraph.find(neighbor->getSnk()->NID) != subgraph.end())
+                if (subgraph.find(neighbor->getSnk()->ID()) != subgraph.end())
                 {
-                    if (colors[neighbor->getSnk()->NID] == NodeColor::White)
+                    if (colors[neighbor->getSnk()->ID()] == NodeColor::White)
                     {
-                        Q.push_back(*(subgraph.find(neighbor->getSnk()->NID)));
+                        Q.push_back(*(subgraph.find(neighbor->getSnk()->ID())));
                     }
                 }
-                colors[neighbor->getSnk()->NID] = NodeColor::Black;
+                colors[neighbor->getSnk()->ID()] = NodeColor::Black;
             }
             Q.pop_front();
         }
