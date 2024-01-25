@@ -10,5 +10,6 @@
 namespace Cyclebite::Grammar
 {
     class Task;
-    void Process(const std::set<std::shared_ptr<Task>>& tasks);
+    struct TaskIDCompare;
+    void Process(const std::set<std::shared_ptr<Task>, TaskIDCompare>& tasks);
 } // namespace Cyclebite::Grammar

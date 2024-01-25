@@ -10,6 +10,7 @@
 namespace Cyclebite::Grammar
 {
     class Task;
+    struct TaskIDCompare;
     class Cycle;
     class IndexVariable;
     class Collection;
@@ -24,5 +25,5 @@ namespace Cyclebite::Grammar
     std::string VisualizeCollection( const std::shared_ptr<Collection>& coll );
     void OMPAnnotateSource( const std::set<std::shared_ptr<Cycle>>& parallelSpots, const std::set<std::shared_ptr<Cycle>>& vectorSpots );
     // print tasks with specialInstructions highlighted
-    void PrintDFGs(const std::set<std::shared_ptr<Task>>& tasks);
+    void PrintDFGs(const std::set<std::shared_ptr<Task>, TaskIDCompare>& tasks);
 } // namespace Cyclebite::Grammar

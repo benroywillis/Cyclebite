@@ -21,7 +21,7 @@ using namespace std;
 /// Red: values that are stored and did not come from a load
 /// Blue: values that are loaded but do not get stored
 /// Red&&Blue: values that are both loaded and stored (this is the "function" of the kernel)
-set<shared_ptr<Cyclebite::Graph::DataValue>> findFunction(const set<shared_ptr<Task>>& tasks)
+set<shared_ptr<Cyclebite::Graph::DataValue>> findFunction(const set<shared_ptr<Task>, TaskIDCompare>& tasks)
 {
     set<shared_ptr<Cyclebite::Graph::DataValue>> funcs;
     // colors for each instruction found during DFG investigation
@@ -222,7 +222,7 @@ set<shared_ptr<Cyclebite::Graph::DataValue>> findFunction(const set<shared_ptr<T
 /// Blue: state values that are stored
 /// Red&&Blue: values that are both used to determine the next state and are stored
 /// Any node that has a color belongs in the "state" box
-set<shared_ptr<Cyclebite::Graph::DataValue>> findState(const set<shared_ptr<Task>>& tasks)
+set<shared_ptr<Cyclebite::Graph::DataValue>> findState(const set<shared_ptr<Task>, TaskIDCompare>& tasks)
 {
     set<shared_ptr<Cyclebite::Graph::DataValue>> state;
     // colors for each instruction found during DFG investigation
@@ -415,7 +415,7 @@ set<shared_ptr<Cyclebite::Graph::DataValue>> findState(const set<shared_ptr<Task
 /// @brief Identifies all instructions that access memory or manipulate memory accesses
 ///
 /// First pass: for each memory instruction, walk the fan-in to their pointers and mark all those instructions blue
-set<shared_ptr<Cyclebite::Graph::DataValue>> findMemory(const set<shared_ptr<Task>>& tasks)
+set<shared_ptr<Cyclebite::Graph::DataValue>> findMemory(const set<shared_ptr<Task>, TaskIDCompare>& tasks)
 {
     set<shared_ptr<Cyclebite::Graph::DataValue>> mem;
     // colors for each instruction found during DFG investigation
@@ -519,7 +519,7 @@ set<shared_ptr<Cyclebite::Graph::DataValue>> findMemory(const set<shared_ptr<Tas
     return mem;
 }
 
-void Cyclebite::Grammar::colorNodes( const set<shared_ptr<Task>>& tasks )
+void Cyclebite::Grammar::colorNodes( const set<shared_ptr<Task>, TaskIDCompare>& tasks )
 {
     auto func  = findFunction(tasks);
     auto state = findState(tasks);

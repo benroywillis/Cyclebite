@@ -94,11 +94,11 @@ void Task::addSourceFiles( set<string>& sources )
     sourceFiles.insert(sources.begin(), sources.end());
 }
 
-set<shared_ptr<Task>> Cyclebite::Grammar::getTasks(const nlohmann::json& instanceJson, 
+set<shared_ptr<Task>, TaskIDCompare> Cyclebite::Grammar::getTasks(const nlohmann::json& instanceJson, 
                                                     const nlohmann::json& kernelJson, 
                                                     const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock)
 {
-    set<shared_ptr<Task>> tasks;
+    set<shared_ptr<Task>, TaskIDCompare> tasks;
     // construct the cycles from the kernel file
     set<shared_ptr<Cycle>> taskCycles;
     auto cycles = ConstructCycles(instanceJson, kernelJson, IDToBlock, taskCycles);
@@ -178,5 +178,23 @@ set<shared_ptr<Task>> Cyclebite::Grammar::getTasks(const nlohmann::json& instanc
         }
         tasks.insert( newTask );
     }
+    // add producer-consumer relationships to tasks
+    for( auto& prod : tasks )
+    {
+        if( instanceJson.contains("Communication") )
+        {
+            if( instanceJson["Communication"].contains(to_string(prod->getID())) )
+            {
+                for( auto& cons : instanceJson["Communication"][to_string(prod->getID())].get<vector<uint64_t>>() )
+                {
+                    auto consTask = *tasks.find(cons);
+                    auto prodConEdge = make_shared<Cyclebite::Graph::GraphEdge>(prod, consTask);
+                    prod->addSuccessor(prodConEdge);
+                    consTask->addPredecessor(prodConEdge);
+                }
+            }
+        }
+    }
+
     return tasks;
 }

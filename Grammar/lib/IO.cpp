@@ -332,7 +332,7 @@ void Cyclebite::Grammar::OMPAnnotateSource( const set<shared_ptr<Cycle>>& parall
     }
 }
 
-void Cyclebite::Grammar::PrintDFGs(const set<shared_ptr<Task>>& tasks)
+void Cyclebite::Grammar::PrintDFGs(const set<shared_ptr<Task>, TaskIDCompare>& tasks)
 {
     for (const auto& t : tasks)
     {

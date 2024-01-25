@@ -47,5 +47,6 @@ namespace Cyclebite::Grammar
         }
     };
     class Task;
-    void colorNodes( const std::set<std::shared_ptr<Task>>& tasks );
+    struct TaskIDCompare;
+    void colorNodes( const std::set<std::shared_ptr<Task>, TaskIDCompare>& tasks );
 } // namespace Cyclebite::Grammar

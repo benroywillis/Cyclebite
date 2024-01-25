@@ -190,7 +190,7 @@ const shared_ptr<Task>& Cycle::getTask() const
     return task;
 }
 
-set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles(const nlohmann::json& instanceJson, 
+set<shared_ptr<Cycle>> Cyclebite::Grammar::ConstructCycles( const nlohmann::json& instanceJson, 
                                                             const nlohmann::json& kernelJson, 
                                                             const map<int64_t, const llvm::BasicBlock*>& IDToBlock,
                                                             set<shared_ptr<Cycle>>& taskCycles)
