@@ -388,12 +388,11 @@ namespace Cyclebite::Profile::Backend::Memory
 
     void GenerateTaskGraph()
     {
-        auto taskComms = GenerateTaskCommunication();
         auto DAG = GenerateInstanceDot();
         // remove the closing brace from the DAG string
         DAG.pop_back();
         // now simply add dotted edges to denote RAW and WAW dependencies
-        for( const auto& task : taskComms )
+        for( const auto& task : TaskCommunications )
         {
             for( const auto& producer : task.second.first )
             {
@@ -421,12 +420,11 @@ namespace Cyclebite::Profile::Backend::Memory
 
     void GenerateTaskOnlyTaskGraph()
     {
-        auto taskComms = GenerateTaskCommunication();
         auto DAG = GenerateTaskOnlyInstanceDot();
         // remove the closing brace from the DAG string
         DAG.pop_back();
         // now simply add dotted edges to denote RAW and WAW dependencies
-        for( const auto& task : taskComms )
+        for( const auto& task : TaskCommunications )
         {
             auto epoch = *epochs.find(task.first);
             if( epoch )
@@ -487,6 +485,39 @@ namespace Cyclebite::Profile::Backend::Memory
         spdlog::info("Found "+to_string(hotInstances)+" hot kernel instances.");
         spdlog::info("Found "+to_string(hotKernels.size())+" unique kernel instances.");
 
+        map<shared_ptr<Kernel>, set<shared_ptr<Kernel>>> communications;
+        for( const auto& epochID : TaskCommunications )
+        {
+            auto epochIt = epochs.find(epochID.first);
+            if( epochIt == epochs.end() )
+            {
+                throw CyclebiteException("Task communication entry did not map to an epoch!");
+            }
+            // we only care about task epochs
+            if( (*epochIt)->kernel )
+            {
+                if( hotKernels.contains( (*epochIt)->kernel ) )
+                {
+                    // we only care about RAW
+                    for( const auto& producerID : epochID.second.first )
+                    {
+                        auto producerIt = epochs.find(producerID);
+                        if( producerIt == epochs.end() )
+                        {
+                            throw CyclebiteException("ProducerID epoch did not map to an epooch!");
+                        }
+                        if( (*producerIt)->kernel )
+                        {
+                            if ( hotKernels.contains((*producerIt)->kernel) )
+                            {
+                                communications[(*epochIt)->kernel].insert( (*producerIt)->kernel );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         const char *kfName = getenv("KERNEL_FILE");
         if (!kfName)
         {
@@ -510,6 +541,10 @@ namespace Cyclebite::Profile::Backend::Memory
             if( input["Kernels"].find( to_string(k->kid) ) != input["Kernels"].end() )
             {
                 output["Kernels"][ to_string(k->kid) ] = input["Kernels"][ to_string(k->kid) ];
+            }
+            for( const auto& producer : communications[k] )
+            {
+                output["Communication"][ to_string(producer->kid) ].push_back( k->kid );
             }
         }
         output["Average Kernel Size (Blocks)"] = input["AVerage Kernel Size (Blocks)"];

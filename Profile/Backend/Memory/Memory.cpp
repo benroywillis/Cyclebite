@@ -91,10 +91,17 @@ namespace Cyclebite::Profile::Backend::Memory
             spdlog::info( "MEMORYPROFILESPACE: "+to_string(bytesBitten));
             memoryActive = false;
             // this is an implicit exit, so store the current iteration information to where it belongs
+            // this function maps epochs to their (processed) memory sets and kernel (if it has one)
             ProcessEpochBoundaries();
+            // dumps a csv of the memory tuples of each epoch
             GenerateMemoryRegions();
+            // implements the algorithm that discovers communication between each epoch
+            GenerateTaskCommunication();
+            // dumps a dot file of the task graph
             GenerateTaskGraph();
+            // dumps a dot file of the task-only DAG for the application
             GenerateTaskOnlyTaskGraph();
+            // dumps the instance.json file
             OutputKernelInstances();
         }
 

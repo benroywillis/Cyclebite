@@ -7,6 +7,8 @@
 
 namespace Cyclebite::Profile::Backend::Memory
 {
+    /// @return { EpochID: ({EpochIDs the key has a RAW with}, {EpochIDs the key has a WAW with}) }
+    extern std::map<uint64_t, std::pair<std::set<uint64_t>, std::set<uint64_t>>> TaskCommunications;
     /// @brief Parses the entrances and exits of kernels to decide which edges in the graph represent task boundaries
     ///
     /// An epoch is a time interval of the program that is taken by a task instance. A task instance can be a single kernel or kernel hierarchy.
@@ -16,5 +18,7 @@ namespace Cyclebite::Profile::Backend::Memory
     void FindEpochBoundaries();
     void GenerateMemoryRegions();
     void ProcessEpochBoundaries();
-    std::map<uint64_t, std::pair<std::set<uint64_t>, std::set<uint64_t>>> GenerateTaskCommunication();
+    /// @brief Implements the algorithm to discover communication between epochs
+    /// @return Populates the TaskCommunications global
+    void GenerateTaskCommunication();
 } // namespace Cyclebite::Profile::Backend::Memory

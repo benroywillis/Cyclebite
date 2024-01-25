@@ -10,6 +10,9 @@
 
 using namespace std;
 
+// maps an epoch ID to its RAW (first) and WAW (second) dependencies
+map<uint64_t, pair<set<uint64_t>, set<uint64_t>>> Cyclebite::Profile::Backend::Memory::TaskCommunications;
+
 namespace Cyclebite::Profile::Backend::Memory
 {
     void FindEpochBoundaries()
@@ -176,15 +179,13 @@ namespace Cyclebite::Profile::Backend::Memory
         return pair(unExplainedConsumers, changes);
     }
 
-    map<uint64_t, pair<set<uint64_t>, set<uint64_t>>> GenerateTaskCommunication()
+    void GenerateTaskCommunication()
     {
-        // maps a code instance ID to its RAW (first) and WAW (second) dependencies
-        map<uint64_t, pair<set<uint64_t>, set<uint64_t>>> taskCommunication;
         // first check to see if CIFootprints is even the correct size
         if( epochs.size() < 2 )
         {
             spdlog::warn("No memory dependency information can be generated because there is only one code instance");
-            return taskCommunication;
+            return;
         }
         // walk backwards through the code instance footprints to generate RAW and WAW dependencies
         for( auto ti = epochs.rbegin(); ti != prev(epochs.rend()); ti++ )
@@ -242,7 +243,7 @@ namespace Cyclebite::Profile::Backend::Memory
                 consumed = newTupleSet.first;
                 if( newTupleSet.second )
                 {
-                    taskCommunication[instance->IID].first.insert((*producer)->IID);
+                    TaskCommunications[instance->IID].first.insert((*producer)->IID);
                 }
                 producer = next(producer);
             }
@@ -255,11 +256,10 @@ namespace Cyclebite::Profile::Backend::Memory
                 producedLater = newTupleSet.first;
                 if( newTupleSet.second )
                 {
-                    taskCommunication[instance->IID].second.insert((*producer)->IID);
+                    TaskCommunications[instance->IID].second.insert((*producer)->IID);
                 }
                 producer = next(producer);
             }
         }
-        return taskCommunication;
     }
 } // namespace Cyclebite::Profile::Backend::Memory
