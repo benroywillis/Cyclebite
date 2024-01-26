@@ -11,6 +11,7 @@
 #include "Collection.h"
 #include "Util/Print.h"
 #include "Util/Exceptions.h"
+#include "TaskParameter.h"
 
 using namespace std;
 using namespace Cyclebite::Grammar;
@@ -302,6 +303,94 @@ set<shared_ptr<Cycle>> VectorizeExpression( const shared_ptr<Expression>& expr )
     return reductionCycles;
 }
 
+void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& taskToExpr )
+{
+    string pipelineName = "CyclebiteGEMM";
+    // Things to dwell on
+    // 1. Non-task code
+    //    - non-task code doesn't split tasks
+    //      -- trivially delete
+    //    - non-task code that splits tasks 
+    //      -- non-task code that doesn't produce anything
+    //         --- probably just implementation-specific control-flow, delete from pipeline
+    //      -- non-task code that produces something
+    //         --- needs to be scheduled before its consumer (pre-task header?)
+    // 2. Multiple task instances
+    //    - Task instances are seperate: enumerate each instance in the Halide file
+    //      -- e.g.,FFT GEMM IFFT
+    //    - Task instances are contiguous:
+    //      --- task instances are on the same input, same implementation, same iterator space
+    //          ---- enumerate each instance in the Halide file
+    //          ---- e.g., stencil stencil stencil stencil stencil [StencilChain]
+    //      --- task instances are on the same input, same implementation, different iterator space (e.g., tiles)
+    //          ---- re-roll these cases, only enumerate a single instance
+    //               ----- lets the Halide scheduler design the tiles
+    //          ---- e.g., stencil stencil stencil stencil stencil [OpenCV]
+    // 3. Non-compliant tasks
+    //    - when a non-compliant task is right in the middle of the pipeline, we need to do something with it
+    //      -- highly-dependent on what the non-compliance is
+    //         --- empty function: 
+    //             ---- produces something
+    //                  ----- consumes something: it probably shuffles memory around... this is trouble
+    //                  ----- doesn't consume anything: it is an IO task, delete from the pipeline
+    //             ---- doesn't produce anything
+    //                  ----- consumes something: probably an IO task, delete from the pipeline
+    //                  ----- doesn't consume anything: it is a "dead" task... be skeptical of these, did something go wrong in EP? If not, delete from the pipeline
+    //         --- non-empty function:
+    //             ---- produces something: we don't understand its type... we are in trouble
+    //             ---- doesn't produce anything: 
+    //                  ----- consumes something: probably an output task, delete from the pipeline
+    //                  ----- doesn't consume anything: it is a "dead" task... be skeptical of these, did something go wrong in EP? If not, delete from the pipeline
+    // 4. Pipeline parameters (GeneratorParams)
+    //    - values that come from "outside" the pipeline
+    //      -- they cannot be explained by any task's produced data
+    //         --- this starts from the first task in the program ie if a given task in the program has a param that is not explained by any of its producers, that is a GeneratorParam
+    //      -- sometimese these values are explained by non-task code; this can be a useful measure for which tasks need a header
+
+    // before anything happens, we need to organize the pipeline in its producer-consumer order
+    // this will allow us to refer to our producers when we generate halide expressions
+    // [2024-01-26] for now we take the task graph and enumerate it according to its producer-consumer relationships
+    // - this does not take into account multiple task instances
+    vector<shared_ptr<Task>> exprOrder;
+    exprOrder.reserve(taskToExpr.size());
+    // thus, we first must find the input task(s), and find each stage in the pipeline that follows them
+    for( const auto& t : taskToExpr )
+    {
+#ifdef DEBUG
+        if( t.first->getPredecessors().empty() && t.first->getSuccessors().empty() )
+        {
+            spdlog::warn("Task "+to_string(t.first->getID())+" order position is ambiguous");
+        }
+#endif
+        if( t.first->getPredecessors().empty() )
+        {
+            exprOrder.push_back(t.first);
+        }
+    }
+    // if we didn't find an starting tasks throw an error, we can't handle this yet
+    if( exprOrder.empty() )
+    {
+        throw CyclebiteException("Cannot yet export an application to Halide that doesn't have at least one starting task!");
+    }
+    // now we build out the order by adding to the list until we have touched all the tasks
+    {
+        auto taskIt = exprOrder.begin();
+        while( taskIt != exprOrder.end() )
+        {
+            auto current = *taskIt;
+            for( const auto& succ : (*taskIt)->getSuccessors() )
+            {
+                exprOrder.push_back( static_pointer_cast<Task>(succ->getSnk()) );
+            }
+        }
+    }
+
+    // with the ordering of the tasks established, we can now build out the halide generator from the tasks
+    // 1. start with the general stuff (Halide generators require some overhead... this is done here)
+    string halideGenerator = "";
+    halideGenerator += "#include <Halide.h>\n\nusing Halide::Generator;\n\nclass "+pipelineName+" : public Generator<"+pipelineName+"> {\npublic:\n";
+}
+
 void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& taskToExpr )
 {
     // first, task name
@@ -334,4 +423,6 @@ void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<E
             }
         }
     }
+    // third, export Halide
+    exportHalide(taskToExpr);
 }
