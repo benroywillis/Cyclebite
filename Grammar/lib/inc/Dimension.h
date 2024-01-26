@@ -38,7 +38,7 @@ namespace Cyclebite::Grammar
                 // if lhs is rhs, they are equal, and std::sets take entries whose comparisons are always false to be equal
                 return false;
             }
-            if( lhs->getCycle()->getChildren().find(rhs->getCycle()) != lhs->getCycle()->getChildren().end() )
+            if( lhs->getCycle()->getChildren().contains(rhs->getCycle()) )
             {
                 // this is my child, I get sorted first
                 return true;

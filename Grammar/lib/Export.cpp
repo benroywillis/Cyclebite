@@ -6,6 +6,7 @@
 #include "Task.h"
 #include "Reduction.h"
 #include "InductionVariable.h"
+#include "BasePointer.h"
 #include "IO.h"
 #include "Graph/inc/IO.h"
 #include "Collection.h"
@@ -378,17 +379,173 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
         while( taskIt != exprOrder.end() )
         {
             auto current = *taskIt;
-            for( const auto& succ : (*taskIt)->getSuccessors() )
+            for( const auto& succ : (current)->getSuccessors() )
             {
                 exprOrder.push_back( static_pointer_cast<Task>(succ->getSnk()) );
+            }
+            auto currentSpot = std::find(exprOrder.begin(), exprOrder.end(), current);
+            taskIt = next(currentSpot);
+        }
+    }
+
+    // enumerate all task parameters that need to be declared as GeneratorParams
+    // - these should be values that cannot be explained by any task in the pipeline
+    //   -- we need to investigate each task for their TaskParameter(s), then enumerate them here
+    set<shared_ptr<TaskParameter>> generatorParams;
+    for( const auto& t : taskToExpr )
+    {
+        for( const auto& expr : t.second )
+        {
+            for( const auto& s : expr->getSymbols() )
+            {
+                if( const auto& param = static_pointer_cast<TaskParameter>(s) )
+                {
+                    generatorParams.insert(param);
+                }
             }
         }
     }
 
+    // TODO
+    // 1. Not all reductions will be accumulate - generalize this
+    // 2. Get the contained types of the input and output collections to the pipeline
+    //    - what happens when these are user-defined types?
     // with the ordering of the tasks established, we can now build out the halide generator from the tasks
+
     // 1. start with the general stuff (Halide generators require some overhead... this is done here)
     string halideGenerator = "";
     halideGenerator += "#include <Halide.h>\n\nusing Halide::Generator;\n\nclass "+pipelineName+" : public Generator<"+pipelineName+"> {\npublic:\n";
+    // 2. inject GeneratorParam(s) 
+    for( const auto& param : generatorParams )
+    {
+        string typeStr;
+        llvm::raw_string_ostream ty(typeStr);
+        param->getNode()->getVal()->getType()->print(ty);
+        halideGenerator += "\tGeneratorParam<"+ty.str()+"> "+param->getName()+"{ \"+"+param->getName()+"\", "+to_string(0)+"};\n";
+    }
+    // 3. inject inputs
+    for( const auto& expr : taskToExpr.at(exprOrder.front()) )
+    {
+        for( const auto& in : expr->getInputs() )
+        {
+            if( const auto& coll = dynamic_pointer_cast<Collection>(in) )
+            {
+                string typeStr;
+                llvm::raw_string_ostream ty(typeStr);
+                coll->getBP()->getNode()->getVal()->getType()->print(ty);
+                halideGenerator += "\tInput<Buffer<"+ty.str()+">> "+coll->getName()+"{\""+coll->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
+            }
+        }
+    }
+    // 4. inject output
+    for( const auto& expr : taskToExpr.at(exprOrder.back()) )
+    {
+        if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
+        {
+            string typeStr;
+            llvm::raw_string_ostream ty(typeStr);
+            coll->getBP()->getNode()->getVal()->getType()->print(ty);
+            halideGenerator += "\tOutput<Buffer<"+ty.str()+">> "+coll->getName()+"{\""+coll->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
+        }
+    }
+    // 5. start generator
+    halideGenerator += "\tvoid generate() {\n";
+    // 5a. List all Vars (all dimensions used by the pipeline)
+    set<shared_ptr<IndexVariable>> allVars;
+    for( const auto& t : taskToExpr )
+    {
+        for( const auto& expr : t.second )
+        {
+            for( const auto& s : expr->getSymbols() )
+            {
+                if( const auto& coll = dynamic_pointer_cast<Collection>(s) )
+                {
+                    for( const auto& var : coll->getIndices() )
+                    {
+                        allVars.insert(var);
+                    }
+                }
+            }
+        }
+    }
+    for( const auto& var : allVars )
+    {
+        halideGenerator += "\t\tVar "+var->getName()+"("+var->getName()+");\n";
+    }
+    // 5b. print the expressions
+    for( const auto& t : taskToExpr )
+    {
+        for( const auto& expr : t.second )
+        {
+            // 5b.1 enumerate any reduction variables necessary
+            for( const auto& rv : expr->getRVs() )
+            {
+                vector<shared_ptr<InductionVariable>> ivs;
+                for( const auto& dim : rv->getDimensions() )
+                {
+                    if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
+                    {
+                        ivs.push_back(iv);
+                    }
+                }
+                if( !ivs.empty() )
+                {
+                    halideGenerator += "\t\tRDom "+rv->getName()+"(";
+                    halideGenerator += to_string(ivs.front()->getSpace().min)+", "+to_string(ivs.front()->getSpace().max);
+                    for( auto iv = next(ivs.begin()); iv != ivs.end(); iv++ )
+                    {
+                        halideGenerator += ", "+to_string((*iv)->getSpace().min)+", "+to_string((*iv)->getSpace().max);
+                    }
+                    halideGenerator += ");\n";
+                }
+            }
+            vector<shared_ptr<InductionVariable>> exprDims;
+            // 5b.2 enumerate all vars used in the expression
+            for( const auto& coll : expr->getCollections() )
+            {
+                for( const auto& dim : coll->getDimensions() )
+                {
+                    if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
+                    {
+                        exprDims.push_back(iv);
+                    }
+                }
+            }
+            halideGenerator += "\t\tFunc "+expr->getName()+"(\""+expr->getName()+"\");\n";
+            halideGenerator += "\t\t"+expr->getName()+"(";
+            if( exprDims.size() )
+            {
+                halideGenerator += exprDims.front()->dump();
+                for( auto it = next(exprDims.begin()); it != exprDims.end(); it++ )
+                {
+                    halideGenerator += ", "+(*it)->dump();
+                }
+            }
+            halideGenerator += ") ";
+            if( !expr->getRVs().empty() )
+            {
+                // assume its accumulate for now
+                halideGenerator += "+= ";
+            }
+            else
+            {
+                halideGenerator += "= ";
+            }
+            halideGenerator += expr->dump()+";\n\n";
+        }
+    }
+    // 5c. Assign the last pipestage to "out"
+    // we need the expression name of the last pipe stage
+    halideGenerator += "\t\tFunc output;\n";
+    //halideGenerator += "\t\toutput()";
+
+    // and close off the generator
+    halideGenerator += "\t}\n};\n";
+    halideGenerator += "HALIDE_REGISTER_GENERATOR("+pipelineName+", "+pipelineName+")";
+
+    ofstream generatorStream("Halide_generator.cpp");
+    generatorStream << halideGenerator;
+    generatorStream.close();
 }
 
 void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& taskToExpr )
