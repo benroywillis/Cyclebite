@@ -381,7 +381,10 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             auto current = *taskIt;
             for( const auto& succ : (current)->getSuccessors() )
             {
-                exprOrder.push_back( static_pointer_cast<Task>(succ->getSnk()) );
+                if( taskToExpr.contains( static_pointer_cast<Task>(succ->getSnk())) )
+                {
+                    exprOrder.push_back( static_pointer_cast<Task>(succ->getSnk()) );
+                }
             }
             auto currentSpot = std::find(exprOrder.begin(), exprOrder.end(), current);
             taskIt = next(currentSpot);
@@ -451,18 +454,24 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     // 5. start generator
     halideGenerator += "\tvoid generate() {\n";
     // 5a. List all Vars (all dimensions used by the pipeline)
-    set<shared_ptr<IndexVariable>> allVars;
+    set<shared_ptr<InductionVariable>> allVars;
     for( const auto& t : taskToExpr )
     {
         for( const auto& expr : t.second )
         {
-            for( const auto& s : expr->getSymbols() )
+            for( const auto& in : expr->getInputs() )
             {
-                if( const auto& coll = dynamic_pointer_cast<Collection>(s) )
+                if( const auto& coll = dynamic_pointer_cast<Collection>(in) )
                 {
                     for( const auto& var : coll->getIndices() )
                     {
-                        allVars.insert(var);
+                        for( const auto& dim : var->getDimensions() )
+                        {
+                            if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
+                            {
+                                allVars.insert(iv);
+                            }
+                        }
                     }
                 }
             }
@@ -470,7 +479,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     }
     for( const auto& var : allVars )
     {
-        halideGenerator += "\t\tVar "+var->getName()+"("+var->getName()+");\n";
+        halideGenerator += "\t\tVar "+var->getName()+"(\""+var->getName()+"\");\n";
     }
     // 5b. print the expressions
     for( const auto& t : taskToExpr )

@@ -140,6 +140,79 @@ const set<shared_ptr<BasePointer>>& IndexVariable::getOffsetBPs() const
 
 string IndexVariable::dump() const
 {
+    // we are interested in printing the index variable in terms of its dimension
+    // in this case we are interested in finding the child-most dimension in the indexVariable tree, then print that dimension plus any offset this indexVariable does to it
+    // e.g., dim + offset ; dim * offset ; dim / offset ; etc.
+    
+    shared_ptr<Dimension> childMostDim = nullptr;
+    // if this idxVar has its own exclusive dimension, we are done
+    auto exclusives = getExclusiveDimensions();
+    if( exclusives.size() == 1 )
+    {
+        childMostDim = *exclusives.begin();
+    }
+    else
+    {
+        // to find the child-most dim, we need to walk backward in the hierarchy tree
+        deque<shared_ptr<IndexVariable>> Q;
+        set<shared_ptr<IndexVariable>> covered;
+        Q.push_front(make_shared<IndexVariable>(*this));
+        covered.insert(Q.front());
+        while( !Q.empty() )
+        {
+            for( const auto& p : Q.front()->getParents() )
+            {
+                if( p->getExclusiveDimensions().size() == 1 )
+                {
+                    childMostDim = *p->getExclusiveDimensions().begin();
+                    break;
+                }
+            }
+            if( childMostDim )
+            {
+                break;
+            }
+        }
+    }
+    if( !childMostDim )
+    {
+        PrintVal(node->getInst());
+        spdlog::warn("Could not find dimension for index variable dump");
+        return name;
+    }
+    else if( dynamic_pointer_cast<InductionVariable>(childMostDim) == nullptr )
+    {
+        PrintVal(node->getInst());
+        spdlog::warn("idxVar dimension was not an induction variable. Can't support printing this yet.");
+        return name;
+    }
+    
+    // to generate the offset to the dimension expression, we evaluate the instruction that lies underneath this indexVariable
+    // there are two cases here (as of 2024-01-28)
+    // 1. GEPs will "join" the indices together
+    //    - arises when the programmer statically defines the configuration of 2D memory
+    //      -- e.g., double (*p)[SIZE] = (double (*)[SIZE])malloc(sizeof(double[SIZE][SIZE]))
+    // thus to discover the "offset" of idxVars we need to first find how they are used in these geps
+    if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(getNode()->getInst()) )
+    {
+        // binary ops are the easiest case
+        // find the constant in the expression
+        auto offset = getOffset();
+        if( offset.coefficient == static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+        {
+            spdlog::warn("Could not determine the offset of a var");
+            offset.coefficient = 0;
+        }
+        return static_pointer_cast<InductionVariable>(childMostDim)->getName() + Graph::OperationToString.at(Graph::GetOp(bin->getOpcode()))+to_string(offset.coefficient);
+    }
+    else if( node == childMostDim->getNode() )
+    {
+        // idxVars will match the dimension when the dimension is used exactly like a dimension
+        // e.g., ptr = gep %bp, %dim0, %dim1
+        // - this case is commonly found when the memory configuration of the array is statically-defined (as stated above)
+        // thus we just need to print the dimension, and we are done!
+        return name;
+    }
     return name;
 }
 

@@ -44,8 +44,8 @@ namespace Cyclebite::Grammar
         const std::set<std::shared_ptr<Cyclebite::Grammar::Dimension>>& getDimensions() const;
         /// @brief Returns only the dimension associated with this indexVariable
         ///
-        /// There is generally no way to individually order dimensions. 
-        /// But if you use the indexVariable tree to eliminate the dimensions of the parents, you can come up with the dimensions that exclusively belong to this indexVariable
+        /// This method used the indexVariable tree to find the dimensions that are exclusive to this index variable
+        /// An "exclusive" dimension is one which does not belong to any parents of this index variable - it is unique to this node in the hierarchy tree
         /// Note: this method may return an empty set if it cannot find any exclusive dimensions for this indexVariable
         /// @return Only the dimensions that are exclusive to this indexVariable (according to the indexVariable hierarchy). If no exclusive dimensions can be found, this set is empty
         const std::set<std::shared_ptr<Cyclebite::Grammar::Dimension>> getExclusiveDimensions() const;
