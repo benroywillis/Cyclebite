@@ -448,10 +448,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
         {
             if( const auto& coll = dynamic_pointer_cast<Collection>(in) )
             {
-                string typeStr;
-                llvm::raw_string_ostream ty(typeStr);
-                coll->getBP()->getNode()->getVal()->getType()->print(ty);
-                halideGenerator += "\tInput<Buffer<"+ty.str()+">> "+coll->getName()+"{\""+coll->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
+                halideGenerator += "\tInput<Buffer<"+coll->getBP()->getContainedTypeString()+">> "+coll->getName()+"{\""+coll->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
             }
         }
     }
@@ -462,10 +459,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
         if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
         {
             outputName = coll->getName();
-            string typeStr;
-            llvm::raw_string_ostream ty(typeStr);
-            coll->getBP()->getNode()->getVal()->getType()->print(ty);
-            halideGenerator += "\tOutput<Buffer<"+ty.str()+">> "+coll->getName()+"{\""+coll->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
+            halideGenerator += "\tOutput<Buffer<"+coll->getBP()->getContainedTypeString()+">> "+coll->getName()+"{\""+coll->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
         }
     }
     // 5. start generator

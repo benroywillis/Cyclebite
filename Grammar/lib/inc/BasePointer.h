@@ -27,6 +27,8 @@ namespace Cyclebite::Grammar
         ~BasePointer() = default;
         const std::shared_ptr<Cyclebite::Graph::DataValue>& getNode() const;
         bool isOffset( const llvm::Value* val ) const;
+        const llvm::Type* getContainedType() const;
+        const std::string getContainedTypeString() const;
     private:
         std::shared_ptr<Cyclebite::Graph::DataValue> node;
     };

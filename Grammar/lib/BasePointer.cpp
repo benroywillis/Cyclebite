@@ -100,6 +100,86 @@ bool BasePointer::isOffset( const llvm::Value* val ) const
     return false;
 }
 
+const llvm::Type* BasePointer::getContainedType() const
+{
+    // llvm no longer supports contained types in their class definition - types are inferred from the instructions
+    // thus, to find the contained primitive type of this base pointer, we have to walk the DFG looking for geps
+    // - when we find a load, it will extract a certain type from the pointer - this gives us our answer
+    //   -- corner case: sometimes the load is a byte array that is casted to something else before it is used - we want the type from that case, not the loaded type
+    deque<const llvm::Value*> Q;
+    set<const llvm::Value*> covered;
+    Q.push_front(node->getVal());
+    covered.insert(node->getVal());
+    while( !Q.empty() )
+    {
+        if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
+        {
+            // check the returned type of the load
+            if( !llvm::isa<llvm::PointerType>(ld->getType()) )
+            {
+                if( const auto& ar = llvm::dyn_cast<llvm::ArrayType>(ld->getType()) )
+                {
+                    return ar->getArrayElementType();
+                }
+                else if( const auto& vt = llvm::dyn_cast<llvm::VectorType>(ld->getType()) )
+                {
+                    return vt->getElementType();
+                }
+                else if( const auto& st = llvm::dyn_cast<llvm::StructType>(ld->getType()) )
+                {
+                    throw CyclebiteException("Cannot yet support base pointers that house user-defined structures!");
+                }
+                else if( const auto& ft = llvm::dyn_cast<llvm::FunctionType>(ld->getType()) )
+                {
+                    throw CyclebiteException("Found a base pointer that holds a function type!");
+                }
+                else
+                {
+                    return ld->getType();
+                }
+            }
+        }
+        else if( const auto& st = llvm::dyn_cast<llvm::StoreInst>(Q.front()) )
+        {
+            // base pointers can be put into local allocations
+            // thus, if the base pointer is the value operand in this store, we need to follow the pointer now
+            if( st->getValueOperand() == Q.front() )
+            {
+                if( !covered.contains(st->getPointerOperand()) )
+                {
+                    Q.push_back(st->getPointerOperand());
+                    covered.insert(st->getPointerOperand());
+                }
+            }
+        }
+        else
+        {
+            for( const auto& use : Q.front()->users() )
+            {
+                if( !covered.contains(use) )
+                {
+                    Q.push_back(use);
+                    covered.insert(use);
+                }
+            }
+        }
+        Q.pop_front();
+    }
+    return nullptr;
+}
+
+const string BasePointer::getContainedTypeString() const
+{
+    if( getContainedType() )
+    {
+        string typeStr;
+        llvm::raw_string_ostream ty(typeStr);
+        getContainedType()->print(ty);
+        return typeStr;
+    }
+    return "UnknownType";
+}
+
 uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
 {
     if( call->getCalledFunction() )
