@@ -5,9 +5,12 @@
 #pragma once
 #include <string>
 #include <memory>
+#include <map>
 
 namespace Cyclebite::Grammar
 {
+    class Dimension;
+    class ReductionVariable;
     class Symbol 
     {
     public:
@@ -15,6 +18,7 @@ namespace Cyclebite::Grammar
         Symbol() = delete;
         virtual ~Symbol() = default;
         virtual std::string dump() const;
+        virtual std::string dumpHalide( const std::map<std::shared_ptr<Dimension>, std::shared_ptr<ReductionVariable>>& dimToRV ) const;
         std::string getName() const;
     protected:
         uint64_t UID;

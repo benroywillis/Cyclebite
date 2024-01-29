@@ -54,6 +54,7 @@ namespace Cyclebite::Grammar
         /// @retval Either a Collection or TaskRegister that this expression is stored to after its evaluation. If the expression is not stored, nullptr is returned.
         const std::shared_ptr<Symbol>& getOutput() const;
         std::string dump() const override;
+        std::string dumpHalide( const std::map<std::shared_ptr<Dimension>, std::shared_ptr<ReductionVariable>>& dimToRV ) const override;
     protected:
         /// the task in which the expression is derived
         std::shared_ptr<Task> t;
@@ -69,7 +70,7 @@ namespace Cyclebite::Grammar
     };
     class ReductionVariable;
     std::vector<std::shared_ptr<Expression>> getExpressions( const std::shared_ptr<Task>& t, 
-                                               const std::set<std::shared_ptr<Collection>>& colls, 
-                                               const std::set<std::shared_ptr<ReductionVariable>>& rvs,
-                                               const std::set<std::shared_ptr<InductionVariable>>& vars );
+                                                             const std::set<std::shared_ptr<Collection>>& colls, 
+                                                             const std::set<std::shared_ptr<ReductionVariable>>& rvs,
+                                                             const std::set<std::shared_ptr<InductionVariable>>& vars );
 } // namespace Cyclebite::Grammar

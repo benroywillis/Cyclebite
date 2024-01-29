@@ -17,7 +17,8 @@ namespace Cyclebite::Grammar
         /// @param c The cycle in which this IV governs the recurrence or exit condition
         /// @param targetExit The terminator instruction that recurs and exits the cycle
         InductionVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n, const std::shared_ptr<Cycle>& c, const llvm::Instruction* targetExit );
-        std::string dump() const override; 
+        std::string dump() const override;
+        std::string dumpHalide( const std::map<std::shared_ptr<Dimension>, std::shared_ptr<ReductionVariable>>& dimToRV ) const override;
     };
     std::set<std::shared_ptr<InductionVariable>> getInductionVariables(const std::shared_ptr<Task>& t);
 } // namespace Cyclebite::Grammar

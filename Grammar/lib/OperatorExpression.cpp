@@ -59,3 +59,32 @@ string OperatorExpression::dump() const
     printedName = flip ? !printedName : printedName;
     return expr;
 }
+
+string OperatorExpression::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+{
+    string expr = "";
+    bool flip = false;
+    if( !printedName )
+    {
+        flip = true;
+        if( output )
+        {
+            expr += output->dumpHalide(dimToRV) + " <- ";
+        }
+    }
+    expr += Graph::OperationToString.at(op) + string(" (");
+    printedName = true;
+    if( !args.empty() )
+    {
+        auto arg = args.begin();
+        expr += (*arg++)->dumpHalide(dimToRV);
+        while( arg != args.end() )
+        {
+            expr += ", ";
+            expr += (*arg++)->dumpHalide(dimToRV);
+        }
+    }
+    expr += " )";
+    printedName = flip ? !printedName : printedName;
+    return expr;
+}

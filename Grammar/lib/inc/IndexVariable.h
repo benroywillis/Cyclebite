@@ -52,6 +52,7 @@ namespace Cyclebite::Grammar
         const std::set<std::shared_ptr<Cyclebite::Grammar::BasePointer>>& getOffsetBPs() const;
         const PolySpace getSpace() const;
         std::string dump() const override;
+        std::string dumpHalide( const std::map<std::shared_ptr<Dimension>, std::shared_ptr<ReductionVariable>>& dimToRV ) const override;
         /// @brief Returns true if the given value is the index variable or a transformed version of it
         ///
         /// The method will only search until one of two conditions are satisfied

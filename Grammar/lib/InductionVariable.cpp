@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
 #include "InductionVariable.h"
+#include "ReductionVariable.h"
 #include "IO.h"
 #include "Task.h"
 #include "Graph/inc/IO.h"
@@ -659,6 +660,17 @@ string InductionVariable::dump() const
     return name;
 }
 
+string InductionVariable::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+{
+    for( const auto& dim : dimToRV )
+    {
+        if( dim.first.get() == this )
+        {
+            return dim.second->getName();
+        }
+    }
+    return name;
+}
 
 set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(const shared_ptr<Task>& t)
 {

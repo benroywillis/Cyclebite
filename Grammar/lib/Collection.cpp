@@ -151,6 +151,25 @@ string Collection::dump() const
     return expr;
 }
 
+string Collection::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+{
+    string expr = name;
+    if( !vars.empty() )
+    {
+        expr += "( ";
+        auto v = vars.begin();
+        expr += (*v)->dumpHalide(dimToRV);
+        v = next(v);
+        while ( v != vars.end() )
+        {
+            expr += ", "+(*v)->dumpHalide(dimToRV);
+            v = next(v);
+        }
+        expr += ") ";
+    }
+    return expr;
+}
+
 set<shared_ptr<IndexVariable>> Collection::overlaps( const shared_ptr<Collection>& coll ) const
 {
     set<shared_ptr<IndexVariable>> overlapDims;

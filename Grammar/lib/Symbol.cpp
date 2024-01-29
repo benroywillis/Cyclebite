@@ -34,6 +34,11 @@ string Symbol::dump() const
     return name;
 }
 
+string Symbol::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+{
+    return name;
+}
+
 uint64_t Symbol::getNextUID()
 {
     return nextUID++;
