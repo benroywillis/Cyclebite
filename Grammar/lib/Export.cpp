@@ -304,7 +304,7 @@ set<shared_ptr<Cycle>> VectorizeExpression( const shared_ptr<Expression>& expr )
     return reductionCycles;
 }
 
-void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& taskToExpr )
+void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& taskToExpr, const map<shared_ptr<Task>, set<string>>& taskLabels )
 {
     string pipelineName = "CyclebiteGEMM";
     // Things to dwell on
@@ -389,6 +389,21 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             auto currentSpot = std::find(exprOrder.begin(), exprOrder.end(), current);
             taskIt = next(currentSpot);
         }
+    }
+    // some post-processing of the pipeline
+    // 1. Get rid of the input tasks
+    set<shared_ptr<Task>> toRemove;
+    for( const auto& entry : exprOrder )
+    {
+        if( taskLabels.at(entry).contains("Init") )
+        {
+            toRemove.insert(entry);
+        }
+    }
+    for( const auto& r : toRemove )
+    {
+        auto entry = std::find(exprOrder.begin(), exprOrder.end(), r);
+        exprOrder.erase(entry);
     }
 
     // enumerate all task parameters that need to be declared as GeneratorParams
@@ -482,9 +497,9 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
         halideGenerator += "\t\tVar "+var->getName()+"(\""+var->getName()+"\");\n";
     }
     // 5b. print the expressions
-    for( const auto& t : taskToExpr )
+    for( const auto& t : exprOrder )
     {
-        for( const auto& expr : t.second )
+        for( const auto& expr : taskToExpr.at(t) )
         {
             // 5b.1 enumerate any reduction variables necessary
             for( const auto& rv : expr->getRVs() )
@@ -510,15 +525,19 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             }
             vector<shared_ptr<InductionVariable>> exprDims;
             // 5b.2 enumerate all vars used in the expression
-            for( const auto& coll : expr->getCollections() )
+            if( const auto& outputColl = dynamic_pointer_cast<Collection>(expr->getOutput()) )
             {
-                for( const auto& dim : coll->getDimensions() )
+                for( const auto& dim : outputColl->getDimensions() )
                 {
                     if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
                     {
                         exprDims.push_back(iv);
                     }
                 }
+            }
+            else
+            {
+                throw CyclebiteException("Cannot print a task that doesn't have a collection as output!");
             }
             halideGenerator += "\t\tFunc "+expr->getName()+"(\""+expr->getName()+"\");\n";
             halideGenerator += "\t\t"+expr->getName()+"(";
@@ -545,8 +564,34 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     }
     // 5c. Assign the last pipestage to "out"
     // we need the expression name of the last pipe stage
-    halideGenerator += "\t\tFunc output;\n";
-    //halideGenerator += "\t\toutput()";
+    halideGenerator += "\t\tFunc output(\"output\");\n";
+    // it will have the same Vars as the last pipe stage
+    vector<shared_ptr<InductionVariable>> outputDims;
+    for( const auto& expr : taskToExpr.at(exprOrder.back()) )
+    {
+        // 5b.2 enumerate all vars used in the expression
+        if( const auto& outputColl = dynamic_pointer_cast<Collection>(expr->getOutput()) )
+        {
+            for( const auto& dim : outputColl->getDimensions() )
+            {
+                if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
+                {
+                    outputDims.push_back(iv);
+                }
+            }
+        }
+        halideGenerator += "\t\toutput(";
+        string varString = "";
+        if( outputDims.size() )
+        {
+            varString += outputDims.front()->dump();
+            for( auto it = next(outputDims.begin()); it != outputDims.end(); it++ )
+            {
+                varString += ", "+(*it)->dump();
+            }
+        }
+        halideGenerator += varString+") = "+expr->getName()+"("+varString+");\n";
+    }
 
     // and close off the generator
     halideGenerator += "\t}\n};\n";
@@ -561,6 +606,7 @@ void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<E
 {
     // first, task name
     cout << endl;
+    map<shared_ptr<Task>, set<string>> taskToLabel;
     // second, task optimization and export
     for( const auto& t : taskToExpr )
     {
@@ -579,7 +625,9 @@ void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<E
             {
                 auto parallelSpots = ParallelizeCycles( expr );
                 auto vectorSpots   = VectorizeExpression( expr );
-                spdlog::info("Cyclebite-Template Label: Task"+to_string(t.first->getID())+" -> "+MapTaskToName(expr, parallelSpots));
+                auto exprLabel = MapTaskToName(expr, parallelSpots);
+                taskToLabel[t.first].insert(exprLabel);
+                spdlog::info("Cyclebite-Template Label: Task"+to_string(t.first->getID())+" -> "+exprLabel);
                 OMPAnnotateSource(parallelSpots, vectorSpots);
                 cout << endl;
             }
@@ -590,5 +638,5 @@ void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<E
         }
     }
     // third, export Halide
-    exportHalide(taskToExpr);
+    exportHalide(taskToExpr, taskToLabel);
 }
