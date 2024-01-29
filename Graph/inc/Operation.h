@@ -101,5 +101,14 @@ namespace Cyclebite::Graph
     };
     void initOpToString();
     extern std::map<Operation, const char *> OperationToString;
+    /// @brief Maps an LLVM instruction to its Cyclebite::Graph::Operation
+    /// @param op Opcode from the llvm Instruction (e.g., inst->getOpcode())
+    /// @return Cyclebite Operation enum member corresponding to the input arg
     Operation GetOp(unsigned int op);
+    bool isTerminator(Operation op);
+    bool isMemoryInst(Operation op);
+    bool isBinaryOp(Operation op);
+    bool isCastOp(Operation op);
+    bool isComparator(Operation op);
+    bool isVectorOp(Operation op);
 } // namespace Cyclebite:Graph

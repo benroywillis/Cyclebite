@@ -156,3 +156,33 @@ void Cyclebite::Graph::initOpToString()
         // default case
         (Operation::nop, "nop");
 }
+
+bool Cyclebite::Graph::isTerminator(Operation op)
+{
+    return op < Operation::stackpush;
+}
+
+bool Cyclebite::Graph::isMemoryInst(Operation op)
+{
+    return (op > Operation::resume) && (op < Operation::fneg);
+}
+
+bool Cyclebite::Graph::isBinaryOp(Operation op)
+{
+    return (op > Operation::atomicrmw) && (op < Operation::trunc);
+}
+
+bool Cyclebite::Graph::isCastOp(Operation op)
+{
+    return (op > Operation::xorop) && (op < Operation::icmp);
+}
+
+bool Cyclebite::Graph::isComparator(Operation op)
+{
+    return (op > Operation::addrspacecast) && (op < Operation::extractelem);
+}
+
+bool Cyclebite::Graph::isVectorOp(Operation op)
+{
+    return (op > Operation::select) && (op < Operation::landingpad);
+}
