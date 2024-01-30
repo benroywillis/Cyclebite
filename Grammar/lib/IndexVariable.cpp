@@ -176,11 +176,16 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Re
                     childMostDim = *p->getExclusiveDimensions().begin();
                     break;
                 }
+                else
+                {
+                    Q.push_back(p);
+                }
             }
             if( childMostDim )
             {
                 break;
             }
+            Q.pop_front();
         }
         if( !childMostDim )
         {
