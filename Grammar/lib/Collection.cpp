@@ -156,7 +156,7 @@ string Collection::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Reduc
     string expr = name;
     if( !vars.empty() )
     {
-        expr += "( ";
+        expr += "(";
         auto v = vars.begin();
         expr += (*v)->dumpHalide(dimToRV);
         v = next(v);
@@ -165,7 +165,7 @@ string Collection::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Reduc
             expr += ", "+(*v)->dumpHalide(dimToRV);
             v = next(v);
         }
-        expr += ") ";
+        expr += ")";
     }
     return expr;
 }
