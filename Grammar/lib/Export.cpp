@@ -20,14 +20,14 @@ using namespace Cyclebite::Grammar;
 string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vector<int> outputDimensions, bool reduction, int reductionDimensions, bool inPlace, bool parallel )
 {
     // LUT
-    // Task     | # of inputs | # of outputs            | # of input dimensions | # of output dimensions | reduction | reduction dimensions | special  |
-    // RandInit |      0      |      any                |          any          |           any          |     0     |           -          | "rand()" |
-    // ZIP      |      2      |       1                 |        any,any        |           any          |     0     |           -          |          |
-    // Map      |      1      |  1 (works out of place) |          any          |       same as input    |     0     |           -          |          |
-    // Foreach  |      1      |  0 (worked in-place)    |          any          |       same as input    |     0     |           -          |          |
-    // GEMV     |      2      |       1                 |          2,1          |            1           |     1     |           1          |          |
-    // GEMM     |      2      |       1                 |          2,2          |            2           |     1     |           1          |          |
-    // Stencil  |      1      |       1                 |           2           |       same as input    |     1     |           2          |          |
+    // Task     | # of inputs |      # of outputs      | # of input dimensions | # of output dimensions | reduction | reduction dimensions | special  |
+    // Init     |      0      |          any           |          any          |           any          |     0     |           -          | "rand()" |
+    // ZIP      |      2      |           1            |        any,any        |           any          |     0     |           -          |          |
+    // Map      |      1      | 1 (works out of place) |          any          |       same as input    |     0     |           -          |          |
+    // Foreach  |      1      |  0 (worked in-place)   |          any          |       same as input    |     0     |           -          |          |
+    // GEMV     |      2      |           1            |          2,1          |            1           |     1     |           1          |          |
+    // GEMM     |      2      |           1            |          2,2          |            2           |     1     |           1          |          |
+    // Stencil  |      1      |           1            |           2           |       same as input    |     1     |           2          |          |
 #if DEBUG
     string inDimString = "";
     if( !inputDimensions.empty() )
@@ -353,6 +353,8 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     // [2024-01-26] for now we take the task graph and enumerate it according to its producer-consumer relationships
     // - this does not take into account multiple task instances
     vector<shared_ptr<Task>> exprOrder;
+    set<shared_ptr<Task>> pipelineInputs;
+    //set<shared_ptr<Task>> pipelineOutputs;
     exprOrder.reserve(taskToExpr.size());
     // thus, we first must find the input task(s), and find each stage in the pipeline that follows them
     for( const auto& t : taskToExpr )
@@ -392,15 +394,14 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     }
     // some post-processing of the pipeline
     // 1. Get rid of the input tasks
-    set<shared_ptr<Task>> toRemove;
     for( const auto& entry : exprOrder )
     {
         if( taskLabels.at(entry).contains("Init") )
         {
-            toRemove.insert(entry);
+            pipelineInputs.insert(entry);
         }
     }
-    for( const auto& r : toRemove )
+    for( const auto& r : pipelineInputs )
     {
         auto entry = std::find(exprOrder.begin(), exprOrder.end(), r);
         exprOrder.erase(entry);
@@ -600,9 +601,174 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     halideGenerator += "\t}\n};\n";
     halideGenerator += "HALIDE_REGISTER_GENERATOR("+pipelineName+", "+pipelineName+")";
 
-    ofstream generatorStream("Halide_generator.cpp");
-    generatorStream << halideGenerator;
-    generatorStream.close();
+    {
+        ofstream generatorStream("Halide_generator.cpp");
+        generatorStream << halideGenerator;
+        generatorStream.close();
+    }
+
+    // now export the driver of the generator
+    // some general includes
+    string halideDriver = "#include <iostream>\n#include \"TimingLib.h\"\n\n#if HALIDE_AUTOSCHEDULE == 1\n#include \""+pipelineName+"_autoschedule_true_generated.h\"\n#endif\n#include \""+pipelineName+"_autoschedule_false_generated.h\"\n\n#include \"HalideBuffer.h\"\n\nusing namespace std;\nusing namespace Halide;\n\n";
+    // start main
+    halideDriver += "int main(int argc, char** argv) {\n";
+    // we start with the number of input args there should be to the program
+    int argc = 0;
+    for( const auto& input : pipelineInputs ) {
+        for( const auto& expr : taskToExpr.at(input) ) {
+            if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) ) {
+                argc++;
+            }
+        }
+    }
+    // account for the extra arg and thread count in the dynamic program arguments
+    argc += 2;
+    // this should be inputs only, the generator params are passed to the generator binary later
+    halideDriver += "\tif( argc != "+to_string(argc)+" ) {\n\t\tcout << \"Usage: ";
+    int inputId = 0;
+    for( const auto& input : pipelineInputs )
+    {
+        for( const auto& expr : taskToExpr.at(input) )
+        {
+                if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
+                {
+                    halideDriver += "input"+to_string(inputId++)+"<"+coll->getBP()->getContainedTypeString()+"> ";
+                }
+        }
+    }
+    // we add a thread parameter to every driver
+    halideDriver += "threads<int>\" << endl;\n\t\treturn 1;\n\t}\n\tint threads = stoi(argv["+to_string(argc-1)+"]);\n\tcout << \"Setting thread count to \"+to_string(threads) << endl;\n\thalide_set_num_threads(threads);\n\n";
+    // prompt the user to inject any special input reading functions they use here
+    halideDriver += "\t// USER: if you have any special reading functions for your inputs, inject them here and pass those parameters to the runtime buffers listed below (i.e., replace \"nullptr\" with your pointers)\n";
+    // now enumerate the inputs
+    inputId = 0;
+    for( const auto& input : pipelineInputs ) {
+        for( const auto& expr : taskToExpr.at(input) ) {
+                if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
+                {
+                    halideDriver += "\tRuntime::Buffer<"+coll->getBP()->getContainedTypeString()+"> input"+to_string(inputId)+"( nullptr";
+                    for( const auto& dim : coll->getDimensions() )
+                    {
+                        if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
+                        {
+                            if( (iv->getSpace().max != static_cast<int>(STATIC_VALUE::UNDETERMINED)) && (iv->getSpace().max != static_cast<int>(STATIC_VALUE::INVALID)) )
+                            {
+                                if( (iv->getSpace().min != static_cast<int>(STATIC_VALUE::UNDETERMINED)) && (iv->getSpace().min != static_cast<int>(STATIC_VALUE::INVALID)) )
+                                {
+                                    halideDriver += ", "+to_string( abs(iv->getSpace().max - iv->getSpace().min) );
+                                }
+                                else
+                                {
+                                    // we can't determine what the dimension of this input is, so we leave it up to the user
+                                    halideDriver += ", USER: fill in the size of this dimension for your input";
+                                }
+                            }
+                            else
+                            {
+                                // we can't determine what the dimension of this input is, so we leave it up to the user
+                                halideDriver += ", USER: fill in the size of this dimension for your input";
+                            }
+                        }
+                    }
+                    halideDriver += ");\n\tinput"+to_string(inputId++)+".allocate();\n";
+                }
+        }
+    }
+    // don't forget to allocate the output too
+    int outputId = 0;
+    for( const auto& expr : taskToExpr.at(exprOrder.back()) ) {
+        if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) ) {
+            halideDriver += "\tRuntime::Buffer<"+coll->getBP()->getContainedTypeString()+"> output"+to_string(outputId)+"( nullptr";
+            for( const auto& dim : coll->getDimensions() )
+            {
+                if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
+                {
+                    if( (iv->getSpace().max != static_cast<int>(STATIC_VALUE::UNDETERMINED)) && (iv->getSpace().max != static_cast<int>(STATIC_VALUE::INVALID)) )
+                    {
+                        if( (iv->getSpace().min != static_cast<int>(STATIC_VALUE::UNDETERMINED)) && (iv->getSpace().min != static_cast<int>(STATIC_VALUE::INVALID)) )
+                        {
+                            halideDriver += ", "+to_string( abs(iv->getSpace().max - iv->getSpace().min) );
+                        }
+                        else
+                        {
+                            // we can't determine what the dimension of this input is, so we leave it up to the user
+                            halideDriver += ", USER: fill in the size of this dimension for your output";
+                        }
+                    }
+                    else
+                    {
+                        // we can't determine what the dimension of this input is, so we leave it up to the user
+                        halideDriver += ", USER: fill in the size of this dimension for your output";
+                    }
+                }
+            }
+            halideDriver += ");\n\toutput"+to_string(outputId++)+".allocate();\n";
+        }
+    }
+    // now inject the calls to the generators (autoschedule and non-autoschedule)
+    halideDriver += "\n#if HALIDE_AUTOSCHEDULE == 1\n\tdouble autotime = __TIMINGLIB_benchmark([&]() {\n\t\tauto out = "+pipelineName+"_autoschedule_true_generated(";
+    inputId = 0;
+    for( const auto& input : pipelineInputs ) {
+        for( const auto& expr : taskToExpr.at(input) ) {
+                if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) ) {
+                    if( inputId > 0 ) halideDriver += ", ";
+                    halideDriver += "input"+to_string(inputId++);
+                }
+        }
+    }
+    outputId = 0;
+    for( const auto& expr : taskToExpr.at(exprOrder.back()) ) {
+        if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
+        {
+            halideDriver += ", output"+to_string(outputId++);
+        }
+    }
+    // do the host syncro thing with the output (if necessary, this only matters when pipelines are run on a GPU)
+    halideDriver += ");\n";
+    outputId = 0;
+    for( const auto& expr : taskToExpr.at(exprOrder.back()) ) {
+        if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
+        {
+            halideDriver += "\t\toutput"+to_string(outputId)+".device_sync();\n";
+            halideDriver += "\t\toutput"+to_string(outputId++)+".copy_to_host();\n";
+        }
+    }
+    halideDriver += "\t});\n#endif\n";
+    // now repeat the whole thing for the autoscheduler
+    halideDriver += "\n\tdouble time = __TIMINGLIB_benchmark([&]() {\n\t\tauto out = "+pipelineName+"_autoschedule_false_generated(";
+    inputId = 0;
+    for( const auto& input : pipelineInputs ) {
+        for( const auto& expr : taskToExpr.at(input) ) {
+                if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) ) {
+                    if( inputId > 0 ) halideDriver += ", ";
+                    halideDriver += "input"+to_string(inputId++);
+                }
+        }
+    }
+    outputId = 0;
+    for( const auto& expr : taskToExpr.at(exprOrder.back()) ) {
+        if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
+        {
+            halideDriver += ", output"+to_string(outputId++);
+        }
+    }
+    halideDriver += ");\n";
+    // do the host syncro thing with the output (if necessary, this only matters when pipelines are run on a GPU)
+    outputId = 0;
+    for( const auto& expr : taskToExpr.at(exprOrder.back()) ) {
+        if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
+        {
+            halideDriver += "\t\toutput"+to_string(outputId)+".device_sync();\n";
+            halideDriver += "\t\toutput"+to_string(outputId++)+".copy_to_host();\n";
+        }
+    }
+    halideDriver += "\t});\n\tcout << \"Success!\" << endl;\n\treturn 0;\n}";
+    // dump the driver
+    {
+        ofstream generatorStream("Halide_driver.cpp");
+        generatorStream << halideDriver;
+        generatorStream.close();
+    }
 }
 
 void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& taskToExpr )

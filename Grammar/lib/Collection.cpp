@@ -40,9 +40,9 @@ Collection::Collection( const std::vector<std::shared_ptr<IndexVariable>>& v, co
     }
 }
 
-const set<shared_ptr<Dimension>> Collection::getDimensions() const
+const set<shared_ptr<Dimension>, DimensionSort> Collection::getDimensions() const
 {
-    set<shared_ptr<Dimension>> dims;
+    set<shared_ptr<Dimension>, DimensionSort> dims;
     for( const auto& var : vars )
     {
         dims.insert(var->getDimensions().begin(), var->getDimensions().end());

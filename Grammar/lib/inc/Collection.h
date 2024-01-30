@@ -18,7 +18,7 @@ namespace Cyclebite::Grammar
         ~Collection() = default;
         uint32_t getNumDims() const;
         /// Returns the index variables belonging to this collection that are dimensions of the underlying base pointer
-        const std::set<std::shared_ptr<Dimension>> getDimensions() const;
+        const std::set<std::shared_ptr<Dimension>, DimensionSort> getDimensions() const;
         /// Returns the spaces of each dimension in the collection
         std::vector<PolySpace> getPolyhedralSpace() const;
         const std::shared_ptr<IndexVariable>& operator[](unsigned i) const;
