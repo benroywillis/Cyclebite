@@ -457,49 +457,58 @@ set<shared_ptr<Cyclebite::Graph::DataValue>> findMemory(const set<shared_ptr<Tas
                     }
                 }
             }
-            if( const auto& ptr = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()) )
+            else if( Cyclebite::Graph::DNIDMap.contains(ld->getPointerOperand()) )
             {
-                Q.push_back(ptr);
-                covered.insert(ptr);
-                auto r = colors.insert(make_shared<NodeColor>(ld, OpColor::Blue));
-                if (!r.second)
+                if( const auto& ptr = llvm::dyn_cast<llvm::Instruction>(ld->getPointerOperand()) )
                 {
-                    (*r.first)->colors.insert(OpColor::Blue);
+                    Q.push_back(ptr);
+                    covered.insert(ptr);
+                    auto r = colors.insert(make_shared<NodeColor>(ld, OpColor::Blue));
+                    if (!r.second)
+                    {
+                        (*r.first)->colors.insert(OpColor::Blue);
+                    }
                 }
             }
         }
         for( const auto& st : sts )
         {
-            if( const auto& ptr =  llvm::dyn_cast<llvm::Instruction>(st->getPointerOperand()) )
+            if( Cyclebite::Graph::DNIDMap.contains(st->getPointerOperand()) )
             {
-                Q.push_back(ptr);
-                covered.insert(ptr);
-                auto r = colors.insert(make_shared<NodeColor>(st, OpColor::Blue));
-                if (!r.second)
+                if( const auto& ptr =  llvm::dyn_cast<llvm::Instruction>(st->getPointerOperand()) )
                 {
-                    (*r.first)->colors.insert(OpColor::Blue);
+                    Q.push_back(ptr);
+                    covered.insert(ptr);
+                    auto r = colors.insert(make_shared<NodeColor>(st, OpColor::Blue));
+                    if (!r.second)
+                    {
+                        (*r.first)->colors.insert(OpColor::Blue);
+                    }
                 }
             }
         }
         while (!Q.empty())
         {
-            auto r = colors.insert(make_shared<NodeColor>(Q.front(), OpColor::Blue));
-            if (!r.second)
+            if( Cyclebite::Graph::DNIDMap.contains(Q.front()) )
             {
-                (*r.first)->colors.insert(OpColor::Blue);
-            }
-            for (auto &u : Q.front()->operands())
-            {
-                auto v = u.get();
-                if (covered.find(v) != covered.end())
+                auto r = colors.insert(make_shared<NodeColor>(Q.front(), OpColor::Blue));
+                if (!r.second)
                 {
-                    continue;
+                    (*r.first)->colors.insert(OpColor::Blue);
                 }
-                else if (auto inst = llvm::dyn_cast<llvm::Instruction>(v))
+                for (auto &u : Q.front()->operands())
                 {
-                    Q.push_back(inst);
+                    auto v = u.get();
+                    if (covered.find(v) != covered.end())
+                    {
+                        continue;
+                    }
+                    else if (auto inst = llvm::dyn_cast<llvm::Instruction>(v))
+                    {
+                        Q.push_back(inst);
+                    }
+                    covered.insert(v);
                 }
-                covered.insert(v);
             }
             if (!Q.empty())
             {

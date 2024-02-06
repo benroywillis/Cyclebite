@@ -689,12 +689,11 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
     // 1. find the sources of the conditional branches. Each source maps 1:1 with a Var
     // 2. for each user of each source
     //      evaluate its users (look for GEPs that feed loads that feed function constituents)... the GEPs that appear first will be using "higher-dimensional" Vars 
-
     // induction variables are exclusively for the facilitation of cyclical behavior.
     // thus, we will start from all the cycle-inducing instructions, walk backwards through the graph, and find the IVs (likely through PHIs and ld/st with the same pointer)
     for( const auto& cycle : t->getCycles() )
     {
-        for( const auto& e : cycle->getNonChildExits() )
+        for( const auto& e : cycle->getNonCycleExits() )
         {
             auto d = static_pointer_cast<Inst>(DNIDMap.at(e));
             if( (d->isTerminator()) && (d->parent->getSuccessors().size() > 1) )
