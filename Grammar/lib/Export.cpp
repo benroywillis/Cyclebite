@@ -383,7 +383,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             auto current = *taskIt;
             for( const auto& succ : (current)->getSuccessors() )
             {
-                if( taskToExpr.contains( static_pointer_cast<Task>(succ->getSnk())) )
+                if( taskToExpr.contains( static_pointer_cast<Task>(succ->getSnk()) ) )
                 {
                     exprOrder.push_back( static_pointer_cast<Task>(succ->getSnk()) );
                 }
@@ -439,7 +439,8 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     {
         string typeStr;
         llvm::raw_string_ostream ty(typeStr);
-        param->getNode()->getVal()->getType()->print(ty);
+        //PrintVal(param->getNode()->getVal());
+        //param->getNode()->getVal()->getType()->print(ty);
         halideGenerator += "\tGeneratorParam<"+ty.str()+"> "+param->getName()+"{ \"+"+param->getName()+"\", "+to_string(0)+"};\n";
     }
     // 3. inject inputs

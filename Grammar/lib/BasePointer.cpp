@@ -138,6 +138,17 @@ const llvm::Type* BasePointer::getContainedType() const
                     return ld->getType();
                 }
             }
+            else
+            {
+                for( const auto& use : ld->users() )
+                {
+                    if( !covered.contains(use) )
+                    {
+                        Q.push_back(use);
+                        covered.insert(use);
+                    }
+                }
+            }
         }
         else if( const auto& st = llvm::dyn_cast<llvm::StoreInst>(Q.front()) )
         {
