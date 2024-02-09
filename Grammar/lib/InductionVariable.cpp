@@ -693,7 +693,8 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
     // thus, we will start from all the cycle-inducing instructions, walk backwards through the graph, and find the IVs (likely through PHIs and ld/st with the same pointer)
     for( const auto& cycle : t->getCycles() )
     {
-        for( const auto& e : cycle->getNonCycleExits() )
+        // non-child exits will capture both hierarchical loops and cycle exits
+        for( const auto& e : cycle->getNonChildExits() )
         {
             auto d = static_pointer_cast<Inst>(DNIDMap.at(e));
             if( (d->isTerminator()) && (d->parent->getSuccessors().size() > 1) )
