@@ -158,11 +158,25 @@ string Collection::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Reduc
     {
         expr += "(";
         auto v = vars.begin();
-        expr += (*v)->dumpHalide(dimToRV);
-        v = next(v);
+        // this loop waits until a valid (dimension > -1) idxVar is found to start printing
+        string symbolText = "";
+        while( symbolText.empty() && (v != vars.end()) )
+        {
+            symbolText = (*v)->dumpHalide(dimToRV);
+            if( !symbolText.empty() )
+            {
+                expr += symbolText;
+            }
+            v = next(v);
+        }
+        symbolText.clear();
         while ( v != vars.end() )
         {
-            expr += ", "+(*v)->dumpHalide(dimToRV);
+            symbolText = (*v)->dumpHalide(dimToRV);
+            if( !symbolText.empty() )
+            {
+                expr += ", "+symbolText;
+            }
             v = next(v);
         }
         expr += ")";

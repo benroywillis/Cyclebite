@@ -189,9 +189,16 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Re
         }
         if( !childMostDim )
         {
-            PrintVal(node->getInst());
-            spdlog::warn("Could not find dimension for index variable dump");
-            return name;
+            if( getDimensions().empty() )
+            {
+                return "";
+            }
+            else
+            {
+                PrintVal(node->getInst());
+                spdlog::warn("Could not find dimension for index variable dump");
+                return name;
+            }
         }
         else if( dynamic_pointer_cast<InductionVariable>(childMostDim) == nullptr )
         {
