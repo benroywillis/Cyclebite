@@ -370,7 +370,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             exprOrder.push_back(t.first);
         }
     }
-    // if we didn't find an starting tasks throw an error, we can't handle this yet
+    // if we didn't find any starting tasks throw an error, we can't handle this yet
     if( exprOrder.empty() )
     {
         throw CyclebiteException("Cannot yet export an application to Halide that doesn't have at least one starting task!");
@@ -396,9 +396,12 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     // 1. Get rid of the input tasks
     for( const auto& entry : exprOrder )
     {
-        if( taskLabels.at(entry).contains("Init") )
+        if( taskLabels.contains(entry) )
         {
-            pipelineInputs.insert(entry);
+            if( taskLabels.at(entry).contains("Init") )
+            {
+                pipelineInputs.insert(entry);
+            }
         }
     }
     for( const auto& r : pipelineInputs )

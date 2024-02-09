@@ -115,6 +115,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tas
     map<shared_ptr<Task>, vector<shared_ptr<Expression>>> taskToExpr;
     for( const auto& t : tasks )
     {
+        vector<shared_ptr<Expression>> exprs;
         try
         {
 #ifdef DEBUG
@@ -169,7 +170,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tas
             }
 #endif
             // each task should have exactly one expression
-            auto exprs = getExpressions(t, cs, rvs, vars);
+            exprs = getExpressions(t, cs, rvs, vars);
 #ifdef DEBUG
             spdlog::info("Expressions:");
             for( const auto& expr : exprs )
@@ -178,7 +179,6 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tas
             }
             spdlog::info("Grammar Success");
 #endif
-            taskToExpr[t] = exprs;
         }
         catch(CyclebiteException& e)
         {
@@ -187,6 +187,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tas
             cout << endl;
 #endif
         }
+        taskToExpr[t] = exprs;
     }
     Export(taskToExpr);
 }
