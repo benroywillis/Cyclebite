@@ -134,7 +134,7 @@ string Expression::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Reduc
         b = next(b);
         while( b != symbols.end() )
         {
-            expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+(*b)->dump();
+            expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+(*b)->dumpHalide(dimToRV );
             b = next(b);
             o = next(o);
         }
