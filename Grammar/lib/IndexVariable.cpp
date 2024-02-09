@@ -1112,33 +1112,13 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             }
             if( !ptrGeps.empty() )
             {
-                // We get the idxVar that is our highest-dimension index, then draw edges from it to the ptrGeps of the current gep
-                // The highest-dimension index of the gep is the one that is in the first position
-                auto highestIndex = llvm::cast<llvm::GetElementPtrInst>(gep->getInst())->getOperand(1);
-                shared_ptr<IndexVariable> highestDimIdxVar = nullptr;
-                for( const auto& idxVar : idxVarOrder )
-                {
-                    if( idxVar->isValueOrTransformedValue(highestIndex) )
-                    {
-                        highestDimIdxVar = idxVar;
-                        break;
-                    }
-                }
-                if( !highestDimIdxVar )
-                {
-                    PrintVal(gep->getInst());
-                    PrintVal(highestIndex);
-                    for( const auto& idx : idxVarOrder )
-                    {
-                        PrintVal(idx->getNode()->getInst());
-                    }
-                    throw CyclebiteException("Could not find highest-dimension index variable!");
-                }
-                // now that we have our highest-dimension idxVar, draw the edges from it to its new parents
+                // now we need the idxVar hierarchy that comes from the "right side" of the gep (the indices)
+                // we just found this above... it is encoded in the idxVarOrder
+                // thus we just add the new parent-most gep to the idxVarOrder tree
                 for( auto& p : ptrGeps )
                 {
-                    highestDimIdxVar->addParent(p);
-                    p->addChild(highestDimIdxVar);
+                    p->addChild(idxVarOrder.front());
+                    idxVarOrder.front()->addParent(p);
                 }
             }
 
