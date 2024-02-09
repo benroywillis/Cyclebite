@@ -774,25 +774,25 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
 
 void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& taskToExpr )
 {
-    // first, task name
-    cout << endl;
-    map<shared_ptr<Task>, set<string>> taskToLabel;
-    // second, task optimization and export
-    for( const auto& t : taskToExpr )
+    try
     {
-        for( const auto& expr : t.second )
+        // first, task name
+        cout << endl;
+        map<shared_ptr<Task>, set<string>> taskToLabel;
+        // second, task optimization and export
+        for( const auto& t : taskToExpr )
         {
-#ifdef DEBUG
-            for( const auto& coll : expr->getCollections() )
+            for( const auto& expr : t.second )
             {
-                auto dotString = VisualizeCollection(coll);
-                ofstream tStream("Task"+to_string(expr->getTask()->getID())+"_Collection"+to_string(coll->getID())+".dot");
-                tStream << dotString;
-                tStream.close();
-            }
-#endif
-            try
-            {
+    #ifdef DEBUG
+                for( const auto& coll : expr->getCollections() )
+                {
+                    auto dotString = VisualizeCollection(coll);
+                    ofstream tStream("Task"+to_string(expr->getTask()->getID())+"_Collection"+to_string(coll->getID())+".dot");
+                    tStream << dotString;
+                    tStream.close();
+                }
+    #endif
                 auto parallelSpots = ParallelizeCycles( expr );
                 auto vectorSpots   = VectorizeExpression( expr );
                 auto exprLabel = MapTaskToName(expr, parallelSpots);
@@ -801,12 +801,12 @@ void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<E
                 OMPAnnotateSource(parallelSpots, vectorSpots);
                 cout << endl;
             }
-            catch( CyclebiteException& e )
-            {
-                spdlog::critical(e.what());
-            }
         }
+        // third, export Halide
+        exportHalide(taskToExpr, taskToLabel);
     }
-    // third, export Halide
-    exportHalide(taskToExpr, taskToLabel);
+    catch ( CyclebiteException& e )
+    {
+        spdlog::critical(e.what());
+    }
 }
