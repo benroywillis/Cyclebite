@@ -234,6 +234,84 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Re
             return name;
         }
     }
+    else if( exclusives.size() == 2 )
+    {
+        // this is an example of an idxVar that combines two dimensions together using affine transformations
+        // in this case our goal is to combine these dimensions in their order
+        set<shared_ptr<InductionVariable>, DimensionSort> vars;
+        for( const auto& e : exclusives )
+        {
+            if( const auto& iv = dynamic_pointer_cast<InductionVariable>(e) )
+            {
+                vars.insert(iv);
+            }
+        }
+        // there is likely an operator between these two, and it should be implied in the DFG somewhere
+        // to find it, we walk the DFG until we find an instruction that combines the dimensions together
+        const llvm::BinaryOperator* combiner = nullptr;
+        deque<const llvm::Instruction*> Q;
+        set<const llvm::Instruction*> covered;
+        Q.push_front(node->getInst());
+        covered.insert(node->getInst());
+        while( !Q.empty() )
+        {
+            for( const auto& op : Q.front()->operands() )
+            {
+                if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(op) )
+                {
+                    // this is the operator we are seaarching for
+                    // confirm it is the one by confirming both operands are our exclusive dimensions
+                    set<shared_ptr<InductionVariable>, DimensionSort> toEliminate;
+                    for( const auto& op : bin->operands() )
+                    {
+                        for( const auto& v : vars )
+                        {
+                            if( op == v->getNode()->getVal() )
+                            {
+                                toEliminate.insert(v);
+                                break;
+                            }
+                        }
+                    }
+                    if( toEliminate == vars )
+                    {
+                        // we have found the op we were looking for
+                        combiner = bin;
+                        break;
+                    }
+                }
+                else
+                {
+                    if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(op) )
+                    {
+                        if( !covered.contains(inst) )
+                        {
+                            Q.push_back(inst);
+                            covered.insert(inst);
+                        }
+                    }
+                }
+            }
+            if( combiner )
+            {
+                break;
+            }
+            else
+            {
+                Q.pop_front();
+            }
+        }
+        if( !combiner )
+        {
+            throw CyclebiteException("Could not combine a multi-dimensional idxVar into a cohesive expression!");
+        }
+        // with the operation to combine them, we can now make the print
+        string print = "";
+        print += (*vars.begin())->dumpHalide(dimToRV);
+        print += string(Cyclebite::Graph::OperationToString.at(Cyclebite::Graph::GetOp(combiner->getOpcode())));
+        print += (*next(vars.begin()))->dumpHalide(dimToRV);
+        return print;
+    }
     return name;
 }
 
@@ -1129,9 +1207,6 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             }
         }
     }
-    // find sources to each var
-    set<shared_ptr<IndexVariable>> newIdxs;
-    //newIdxs.reserve(idxVars.size()*2); // make sure to reserve many spots so we don't invalidate iterators during the execution of the loop
     for( const auto& idx : idxVars )
     {
         // find out if this index var is using an induction variable;
@@ -1143,103 +1218,6 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             }
         }
     }
-    idxVars.insert(newIdxs.begin(), newIdxs.end());
-    // determine if a non-leaf node in the idxVar tree is by itself loaded
-    /*for( const auto& idx : idxVars )
-    {
-        if( !idx->getChildren().empty() )
-        {
-            // we evaluate its uses. Each one must satisfy the following:
-            // 1. it must have a gep that has no offset (or be a gep itself)
-            // 2. the gep must be used by a load 
-            // 3. the load must not have any memory-group uses
-            bool noBadUses = true;
-            set<const llvm::GetElementPtrInst*> geps;
-            set<const llvm::LoadInst*> lds;
-            if( const auto& g = llvm::dyn_cast<llvm::GetElementPtrInst>(idx->getNode()->getInst()) )
-            {
-                geps.insert( g );
-            }
-            else
-            {
-                for( const auto& use : idx->getNode()->getInst()->users() )
-                {
-                    if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use) )
-                    {
-                        if( const auto& g = llvm::dyn_cast<llvm::GetElementPtrInst>(use) )
-                        {
-                            geps.insert( g );
-                        }
-                        else
-                        {
-                            deque<const llvm::Instruction*> Q;
-                            Q.push_front(useInst);
-                            while( !Q.empty() )
-                            {
-                                if( const auto& cast = llvm::dyn_cast<llvm::CastInst>(Q.front()) )
-                                {
-                                    for( const auto& castUse : cast->users() )
-                                    {
-                                        if( const auto& castUseInst = llvm::dyn_cast<llvm::Instruction>(castUse) )
-                                        {
-                                            Q.push_back(castUseInst);
-                                        }
-                                    }
-                                }
-                                else if( const auto& g = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
-                                {
-                                    geps.insert(g);
-                                }
-                                Q.pop_front();
-                            }
-                        }
-                    }
-                }
-            }
-            for( const auto& gep : geps )
-            {
-                for( const auto& use : gep->users() )
-                {
-                    if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(use) )
-                    {
-                        lds.insert(ld);
-                    }
-                }
-            }
-            if( lds.empty() )
-            {
-                // geps may lead to function calls, and in that case we want a collection for the memory that has been offset
-                //idx->setLoaded(true);
-                noBadUses = false;
-            }
-            else
-            {
-                for( const auto& ld : lds )
-                {
-                    for( const auto& use : ld->users() )
-                    {
-                        if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use) )
-                        {
-                            auto node = static_pointer_cast<Graph::Inst>(Graph::DNIDMap.at(useInst));
-                            if( node->isMemory() )
-                            {
-                                noBadUses = false;
-                                break;
-                            }
-                        }
-                    }
-                    if( !noBadUses )
-                    {
-                        break;
-                    }
-                }
-            }
-            if( noBadUses )
-            {
-                idx->setLoaded(true);
-            }
-        }
-    }*/
 #ifdef DEBUG
     auto dotString = PrintIdxVarTree(idxVars);
     ofstream tStream("IdxVarTree_Task"+to_string(t->getID())+".dot");
