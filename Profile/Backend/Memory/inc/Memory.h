@@ -27,7 +27,7 @@ namespace Cyclebite::Profile::Backend::Memory
 
     /// Thresholds
     /// Minimum offset a memory tuple must have (in bytes) to be considered for memory prod/cons graph 
-    constexpr uint32_t MIN_TUPLE_OFFSET  = 32;
+    constexpr uint32_t MIN_MEMORY_OFFSET = 128;
     /// Minimum acceptable frequency for a kernel instance
     constexpr uint64_t MIN_EPOCH_FREQ    = 32;
     /// Minimum block overlap for an epoch to match a kernel

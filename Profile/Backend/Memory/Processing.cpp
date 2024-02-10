@@ -68,28 +68,21 @@ namespace Cyclebite::Profile::Backend::Memory
 
             // 2. process memory regions
             // a.) a memory region must be larger than the minimum in order for us to care about it
-            bool min = false;
+            uint64_t totalOffset = 0;
             for( const auto& r : instance->memoryData.rTuples )
             {
-                if( r.offset > MIN_TUPLE_OFFSET )
-                {
-                    min = true;
-                    break;
-                }
+                totalOffset += r.offset+1;
             }
-            if( !min )
+            if( totalOffset < MIN_MEMORY_OFFSET )
             {
                 instance->memoryData.rTuples.clear();
             }
-            min = false;
+            totalOffset = 0;
             for( const auto& w : instance->memoryData.wTuples )
             {
-                if( w.offset > MIN_TUPLE_OFFSET )
-                {
-                    min = true;
-                }
+                totalOffset += w.offset+1;
             }
-            if( !min )
+            if( totalOffset < MIN_MEMORY_OFFSET )
             {
                 instance->memoryData.wTuples.clear();
             }
@@ -168,10 +161,10 @@ namespace Cyclebite::Profile::Backend::Memory
                     if( overlap.base + overlap.offset > 0 )
                     {
                         remove_tuple_set(unExplainedConsumers, overlap);
-                        if( overlap.offset > MIN_TUPLE_OFFSET )
-                        {
+                        //if( overlap.offset > MIN_MEMORY_OFFSET )
+                        //{
                             changes = true;
-                        }
+                        //}
                     }
                 }
             }
@@ -198,7 +191,7 @@ namespace Cyclebite::Profile::Backend::Memory
             {
                 for( const auto& t : (*producer)->memoryData.wTuples )
                 {
-                    if( t.type == __TA_MemType::Memcpy )
+                    /*if( t.type == __TA_MemType::Memcpy )
                     {
                         // memcpy hides the true producer of the data of interest
                         // thus we have to find the read tuple that was copied (in the producer's read tuples) and "pass it on" to the consumer's read data
@@ -234,7 +227,7 @@ namespace Cyclebite::Profile::Backend::Memory
                         {
                             merge_tuple_set(consumed, passItOn);
                         }
-                    }
+                    }*/
                     // memset just writes to things, effectively making it the last writer of that data
                     // thus there is nothing to pass on to the consumer
                     // if a producer memset a memory region, the regular last-writer code will take care of this case
