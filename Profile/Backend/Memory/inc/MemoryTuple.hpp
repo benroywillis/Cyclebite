@@ -337,9 +337,14 @@ namespace Cyclebite::Profile::Backend::Memory
     /// @param  tuple   New tuple to push into the set
     inline void merge_tuple_set(std::set<MemTuple, MTCompare>& array, const MemTuple& tuple)
     {
+        // the MTCompare function only returns true if there is OVERLAP between tuples - however, when we combine tuples, we want to find CONTIGUOUS tuples as well
+        // this means that we need to expand the range of the input tuple by one in each direction such that contiguous and overlapping tuples are combined
+        MemTuple searchTuple = tuple;
+        searchTuple.base = searchTuple.base - 1;
+        searchTuple.offset = searchTuple.offset + 1;
         // this algorithm needs to be recursive
         // getting one memory entry that unifies multiple entries in the set will require recursion to satisfy
-        auto match = array.find(tuple);
+        auto match = array.find(searchTuple);
         auto newTuple = tuple;
         while( match != array.end() )
         {
@@ -366,7 +371,10 @@ namespace Cyclebite::Profile::Backend::Memory
                 // no case yet for __TA_TemporalAccess::Random
             }
             newTuple = merge_tuples(existingTuple, newTuple);
-            match = array.find(newTuple);
+            searchTuple = newTuple;
+            searchTuple.base = searchTuple.base - 1;
+            searchTuple.offset = searchTuple.offset + 1;
+            match = array.find(searchTuple);
         }
         auto it = array.insert(newTuple);
 #ifdef DEBUG
