@@ -155,7 +155,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         }
         if( bins.size() != 1 )
         {
-            PrintVal(node->getVal());
+            Cyclebite::Util::PrintVal(node->getVal());
             throw CyclebiteException("Cannot yet handle an induction variable that is operated on by none or multiple operators!");
         }
     }
@@ -234,7 +234,7 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
                 }
                 else
                 {
-                    PrintVal(targetExit);
+                    Cyclebite::Util::PrintVal(targetExit);
                     throw CyclebiteException("Cannot yet handle this targetExit type when searching for initial IV value!");
                 }
                 while( !instQ.empty() )
@@ -291,13 +291,13 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     }
     else
     {
-        PrintVal(n->getVal());
-        PrintVal(targetExit);
+        Cyclebite::Util::PrintVal(n->getVal());
+        Cyclebite::Util::PrintVal(targetExit);
         throw CyclebiteException("Could not find a starting place to determine the initial value of an IV!");
     }
     if( initValue == static_cast<int>(STATIC_VALUE::INVALID) )
     {
-        PrintVal(node->getVal());
+        Cyclebite::Util::PrintVal(node->getVal());
         throw CyclebiteException("Could not find initialization value for IV!");
     }
     // quick check here to make sure the sign we extract from the comparator makes sense
@@ -370,9 +370,9 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
         else
         {
 #ifdef DEBUG
-            PrintVal(node->getVal());
-            PrintVal(br->getCondition());
-            PrintVal(br);
+            Cyclebite::Util::PrintVal(node->getVal());
+            Cyclebite::Util::PrintVal(br->getCondition());
+            Cyclebite::Util::PrintVal(br);
 #endif
             throw CyclebiteException("Cycle iterator inst was not fed by a recognized instruction type!");
         }
@@ -401,8 +401,8 @@ InductionVariable::InductionVariable( const std::shared_ptr<Cyclebite::Graph::Da
     if( cmpBoundary == static_cast<int>(STATIC_VALUE::INVALID) )
     {
 #ifdef DEBUG
-        PrintVal(node->getVal());
-        PrintVal(targetCmp);
+        Cyclebite::Util::PrintVal(node->getVal());
+        Cyclebite::Util::PrintVal(targetCmp);
 #endif
         throw CyclebiteException("Could not find a valid boundary for an induction variable!");
     }
@@ -705,7 +705,7 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
                 deque<const llvm::Instruction*> Q;
                 Q.push_front(llvm::cast<llvm::Instruction>(d->getVal()));
                 covered.insert(llvm::cast<llvm::Instruction>(d->getVal()));
-                PrintVal(Q.front());
+                Cyclebite::Util::PrintVal(Q.front());
                 while( !Q.empty() )
                 {
                     for( auto& use : Q.front()->operands() )

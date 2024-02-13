@@ -105,14 +105,14 @@ const llvm::LoadInst* Collection::getLoad() const
     }
     if( lds.size() > 1 )
     {
-        PrintVal(indexBP->getNode()->getVal());
+        Cyclebite::Util::PrintVal(indexBP->getNode()->getVal());
         for( const auto& var : vars )
         {
-            PrintVal(var->getNode()->getInst());
+            Cyclebite::Util::PrintVal(var->getNode()->getInst());
         }
         for( const auto& ld : lds )
         {
-            PrintVal(ld);
+            Cyclebite::Util::PrintVal(ld);
         }
         throw CyclebiteException("Collection maps to more than one load!");
     }
@@ -279,8 +279,8 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                     }
                     else
                     {
-                        PrintVal( llvm::cast<llvm::StoreInst>(i->getInst())->getValueOperand() );
-                        PrintVal(i->getInst());
+                        Cyclebite::Util::PrintVal( llvm::cast<llvm::StoreInst>(i->getInst())->getValueOperand() );
+                        Cyclebite::Util::PrintVal(i->getInst());
                         spdlog::warn("Could not find the value of a task store in the DNID map!");
                     }
                 }
@@ -336,10 +336,10 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                             {
                                 if( idxVar != i )
                                 {
-                                    PrintVal(gep);
-                                    PrintVal(idx);
-                                    PrintVal(i->getNode()->getInst());
-                                    PrintVal(idxVar->getNode()->getInst());
+                                    Cyclebite::Util::PrintVal(gep);
+                                    Cyclebite::Util::PrintVal(idx);
+                                    Cyclebite::Util::PrintVal(i->getNode()->getInst());
+                                    Cyclebite::Util::PrintVal(idxVar->getNode()->getInst());
                                     throw CyclebiteException("Found more than one idxVar for this dimension of a gep!");
                                 }
                             }
@@ -449,9 +449,9 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                         {
                             if( idx != i )
                             {
-                                PrintVal(bin);
-                                PrintVal(i->getNode()->getInst());
-                                PrintVal(idx->getNode()->getInst());
+                                Cyclebite::Util::PrintVal(bin);
+                                Cyclebite::Util::PrintVal(i->getNode()->getInst());
+                                Cyclebite::Util::PrintVal(idx->getNode()->getInst());
                                 throw CyclebiteException("Found more than one idxVar for this dimension of a gep!");
                             }
                         }
@@ -544,7 +544,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
         }
         else if( collBPs.empty() )
         {
-            PrintVal(st);
+            Cyclebite::Util::PrintVal(st);
             throw CyclebiteException("Could not find a base pointer for this memory op!");
         }
         set<const llvm::Value*> eps;

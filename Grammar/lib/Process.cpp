@@ -55,7 +55,7 @@ void DisectConstant( vector<shared_ptr<Symbol>>& vec, const llvm::Constant* con)
     }
     else
     {
-        PrintVal(con);
+        Cyclebite::Util::PrintVal(con);
         throw CyclebiteException("Cannot recognize this constant type!");
     }
 }
@@ -102,7 +102,7 @@ vector<shared_ptr<InductionVariable>> getOrdering( const llvm::GetElementPtrInst
         }
         if( !found )
         {
-            PrintVal(gep);
+            Cyclebite::Util::PrintVal(gep);
             throw CyclebiteException("Cannot map a gep index to an induction variable!");
         }
     }
@@ -128,7 +128,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tas
             spdlog::info("Induction Variables:");
             for( const auto& var : vars )
             {
-                spdlog::info(var->dump()+" -> "+PrintVal(var->getNode()->getVal(), false));
+                spdlog::info(var->dump()+" -> "+Cyclebite::Util::PrintVal(var->getNode()->getVal(), false));
             }            
 #endif
             // get all reduction variables
@@ -137,7 +137,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tas
             spdlog::info("Reductions");
             for( const auto& rv : rvs )
             {
-                spdlog::info(rv->dump()+" -> "+PrintVal(rv->getNode()->getVal(), false));
+                spdlog::info(rv->dump()+" -> "+Cyclebite::Util::PrintVal(rv->getNode()->getVal(), false));
             }
 #endif
             // get all base pointers
@@ -146,7 +146,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tas
             spdlog::info("Base Pointers");
             for( const auto& bp : bps )
             {
-                spdlog::info(bp->dump()+" -> "+PrintVal(bp->getNode()->getVal(), false));
+                spdlog::info(bp->dump()+" -> "+Cyclebite::Util::PrintVal(bp->getNode()->getVal(), false));
             }
 #endif
             // get index variables
@@ -157,7 +157,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tas
             {
                 string dimension = "";
                 dimension = "(dimension "+to_string(idx->getDimensionIndex())+") ";
-                spdlog::info(dimension+idx->dump()+" -> "+PrintVal(idx->getNode()->getInst(), false));
+                spdlog::info(dimension+idx->dump()+" -> "+Cyclebite::Util::PrintVal(idx->getNode()->getInst(), false));
             }
 #endif
             // construct collections

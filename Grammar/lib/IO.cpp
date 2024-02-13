@@ -78,7 +78,7 @@ void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::jso
         {
             if( Cyclebite::Graph::DNIDMap.find(inst) == Cyclebite::Graph::DNIDMap.end() )
             {
-                PrintVal(inst);
+                Cyclebite::Util::PrintVal(inst);
                 throw CyclebiteException("Found a significant memory op that's not live!");
             }
             // mark as significant
@@ -86,7 +86,7 @@ void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::jso
         }
         else
         {
-            PrintVal(IDToValue.at(value));
+            Cyclebite::Util::PrintVal(IDToValue.at(value));
             throw CyclebiteException("Significant memory op is not an instruction!");
         }
     }
@@ -95,7 +95,7 @@ void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::jso
 inline string getInstName( uint64_t NID, const llvm::Value* v )
 {
     string name = "";
-    string instString = PrintVal(v, false);
+    string instString = Cyclebite::Util::PrintVal(v, false);
     if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(v) )
     {
         auto start = instString.find("%");

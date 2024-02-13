@@ -300,7 +300,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 {
                     if( !nodeToExpr.contains(succInst) )
                     {
-                        PrintVal(succInst->getInst());
+                        Cyclebite::Util::PrintVal(succInst->getInst());
                         throw CyclebiteException("Could not map an expression's store to a Symbol!");
                     }
                     symbolOutput = nodeToExpr.at(succInst);
@@ -337,13 +337,13 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     if( found )
                     {
                         cout << endl;
-                        PrintVal(ld);
-                        PrintVal(coll->getBP()->getNode()->getVal());
-                        PrintVal(coll->getLoad());
-                        PrintVal(coll->getIndices().back()->getNode()->getInst());
-                        PrintVal(found->getBP()->getNode()->getVal());
-                        PrintVal(found->getLoad());
-                        PrintVal(found->getIndices().back()->getNode()->getInst());
+                        Cyclebite::Util::PrintVal(ld);
+                        Cyclebite::Util::PrintVal(coll->getBP()->getNode()->getVal());
+                        Cyclebite::Util::PrintVal(coll->getLoad());
+                        Cyclebite::Util::PrintVal(coll->getIndices().back()->getNode()->getInst());
+                        Cyclebite::Util::PrintVal(found->getBP()->getNode()->getVal());
+                        Cyclebite::Util::PrintVal(found->getLoad());
+                        Cyclebite::Util::PrintVal(found->getIndices().back()->getNode()->getInst());
                         throw CyclebiteException("Mapped more than one collection to a load value!");
                     }
                     else
@@ -382,17 +382,17 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             }
             else 
             {
-                PrintVal(ld);
+                Cyclebite::Util::PrintVal(ld);
                 for( const auto& coll : colls )
                 {
-                    PrintVal(coll->getBP()->getNode()->getVal());
+                    Cyclebite::Util::PrintVal(coll->getBP()->getNode()->getVal());
                     for( const auto& idx : coll->getIndices() )
                     {
-                        PrintVal(idx->getNode()->getInst());
+                        Cyclebite::Util::PrintVal(idx->getNode()->getInst());
                     }
                     if( coll->getLoad() )
                     {
-                        PrintVal(coll->getLoad());
+                        Cyclebite::Util::PrintVal(coll->getLoad());
                     }
                 }
                 throw CyclebiteException("Could not find a collection to describe this load!");
@@ -447,12 +447,12 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             }
             if( liveIncomingValues.size() > 1 )
             {
-                PrintVal(phi);
+                Cyclebite::Util::PrintVal(phi);
                 throw CyclebiteException("Cannot yet build predication expressions for this task!");
             }
             else if( liveIncomingValues.empty() )
             {
-                PrintVal(phi);
+                Cyclebite::Util::PrintVal(phi);
                 throw CyclebiteException("Could not find a live incoming value for this phi that is used in the task expression!");
             }
             else
@@ -586,7 +586,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             // the only example so far that has used this is optimized (-O3) StencilChain/Naive, which uses an "identity shuffle" (example, StencilChain/Naive)
             // we don't support shufflevectors yet because they usually contain more than one operation at once, and may be transformed later
             // example: StencilChain/Naive/DFG_Kernel15.svg (shufflevector transforms i8 to i32, then i32 is converted to float before the MAC takes place)
-            PrintVal(node->getInst());
+            Cyclebite::Util::PrintVal(node->getInst());
             throw CyclebiteException("Cannot support shufflevector instructions yet!");
         }
         else if( const auto& unary = llvm::dyn_cast<llvm::UnaryInstruction>(op) )
@@ -638,8 +638,8 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             // the value is a constant that is not known till runtime
             // llvm has undefined values as a result of the optimizer to allow for constant-qualified values that aren't known till runtime
             // we don't support this yet
-            PrintVal(con);
-            PrintVal(node->getInst());
+            Cyclebite::Util::PrintVal(con);
+            Cyclebite::Util::PrintVal(node->getInst());
             throw CyclebiteException("Cannot support undefined constants yet");
         }
         else if( const auto& convec = llvm::dyn_cast<llvm::ConstantVector>(op) )
@@ -695,8 +695,8 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
         }
         else
         {
-            PrintVal(op);
-            PrintVal(node->getVal());
+            Cyclebite::Util::PrintVal(op);
+            Cyclebite::Util::PrintVal(node->getVal());
             throw CyclebiteException("Constant used in an expression is not an integer!");
         }
     }
@@ -710,13 +710,13 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
     }
     else
     {
-        PrintVal(op);
-        PrintVal(node->getVal());
+        Cyclebite::Util::PrintVal(op);
+        Cyclebite::Util::PrintVal(node->getVal());
         throw CyclebiteException("Cannot recognize this operand type when building an expression!");
     }
     if( newSymbols.empty() )
     {
-        PrintVal(op);
+        Cyclebite::Util::PrintVal(op);
         throw CyclebiteException("Could not build a symbol for this llvm::value!");
     }
     return newSymbols;

@@ -27,7 +27,7 @@ ReductionVariable::ReductionVariable( const set<shared_ptr<Dimension>, Dimension
     {
         if( llvm::Intrinsic::getBaseName( intrin->getIntrinsicID() ) != "llvm.fmuladd" )
         {
-            PrintVal(node->getVal());
+            Cyclebite::Util::PrintVal(node->getVal());
             throw CyclebiteException("Cannot yet handle this intrinsic as a reduction variable!");
         }
         bin = Cyclebite::Graph::Operation::fadd;
@@ -231,7 +231,7 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     else
                     {
                         spdlog::warn("Cannot yet handle this intrinsic when evaluating reduction variables:");
-                        PrintVal(intrin);
+                        Cyclebite::Util::PrintVal(intrin);
                     }
                     if( !seen.contains(intrin) )
                     {
@@ -304,7 +304,7 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                             else
                             {
                                 spdlog::warn("Cannot yet handle this intrinsic when evaluating reduction variables:");
-                                PrintVal(intrin);
+                                Cyclebite::Util::PrintVal(intrin);
                             }
                         }
                     }

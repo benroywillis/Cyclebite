@@ -317,7 +317,7 @@ void resolveNullFunctionCall(const shared_ptr<ControlNode> &srcNode, set<shared_
     // to help prevent this, the user can pass -Werror
     // at this point, the only way I can think of to detect this case is to see if there is actually a function name (with a preceding @ symbol)
     // the above mechanism will fail if the null function call has a global variable in its arguments list (globals are preceded by @ too)
-    auto instString = PrintVal(call, false);
+    auto instString = Cyclebite::Util::PrintVal(call, false);
     if (blockCallers.find(Cyclebite::Util::GetBlockID(call->getParent())) != blockCallers.end())
     {
         // this is a multi-dimensional problem, even with basic block splitting
@@ -344,7 +344,7 @@ void resolveNullFunctionCall(const shared_ptr<ControlNode> &srcNode, set<shared_
     {
         // this case could be due to either an empty function being called (a function that isn't in the input bitcode module) or profiler error... There really isn't any way of us knowing at this stage
 #ifdef DEBUG
-        PrintVal(call->getParent());
+        Cyclebite::Util::PrintVal(call->getParent());
         spdlog::warn("Blockcallers did not contain information for a null function call observed in the dynamic profile. This could be due to an empty function or profiler error.");
         set<const BasicBlock *> BBSuccs;
         for (unsigned i = 0; i < call->getParent()->getTerminator()->getNumSuccessors(); i++)
@@ -814,7 +814,7 @@ void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::ma
             {
 #ifdef DEBUG
                 spdlog::info("The following instruction calls an empty function:");
-                PrintVal(call);
+                Cyclebite::Util::PrintVal(call);
 #endif
                 continue;
             }
@@ -951,9 +951,9 @@ void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::ma
             {
 #ifdef DEBUG
                 spdlog::warn("Could not map call instruction to a profile edge: ");
-                PrintVal(call);
+                Cyclebite::Util::PrintVal(call);
                 spdlog::warn("From Basic Block:");
-                PrintVal(BB);
+                Cyclebite::Util::PrintVal(BB);
 #endif
             }
         } // for each sink node
@@ -1129,9 +1129,9 @@ void UpgradeEdges(const llvm::Module *sourceBitcode, Graph &graph, const std::ma
             {
 #ifdef DEBUG
                 spdlog::warn("Could not map call instruction to a profile edge: ");
-                PrintVal(call);
+                Cyclebite::Util::PrintVal(call);
                 spdlog::warn("From Basic Block:");
-                PrintVal(BB);
+                Cyclebite::Util::PrintVal(BB);
 #endif
             }
         } // for each sink node

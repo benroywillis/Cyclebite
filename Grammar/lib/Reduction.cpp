@@ -61,7 +61,7 @@ bool Reduction::isParallelReduction() const
         }
         else
         {
-            PrintVal(intrin);
+            Cyclebite::Util::PrintVal(intrin);
             throw CyclebiteException("Cannot yet handle this intrinsic when determining reduction parallelism!");
         }
     }

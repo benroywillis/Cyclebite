@@ -274,7 +274,7 @@ set<shared_ptr<Cyclebite::Graph::DataValue>> findState(const set<shared_ptr<Task
                         }
                         else
                         {
-                            throw CyclebiteException("This terminator is not yet supported: " + PrintVal(i->getInst(), false));
+                            throw CyclebiteException("This terminator is not yet supported: " + Cyclebite::Util::PrintVal(i->getInst(), false));
                         }
                     }
                 }

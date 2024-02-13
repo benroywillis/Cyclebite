@@ -195,14 +195,14 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Re
             }
             else
             {
-                PrintVal(node->getInst());
+                Cyclebite::Util::PrintVal(node->getInst());
                 spdlog::warn("Could not find dimension for index variable dump");
                 return name;
             }
         }
         else if( dynamic_pointer_cast<InductionVariable>(childMostDim) == nullptr )
         {
-            PrintVal(node->getInst());
+            Cyclebite::Util::PrintVal(node->getInst());
             spdlog::warn("idxVar dimension was not an induction variable. Can't support printing this yet.");
             return name;
         }
@@ -915,7 +915,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                     else
                     {
                         // we don't know what the affine offset is (for sure), so just push + 1
-                        PrintVal(phi);
+                        Cyclebite::Util::PrintVal(phi);
                         spdlog::warn("Could not figure out ;exactly what the offset for this phi should be, setting to + 1");
                         of.constant = 1;
                         of.transform = Cyclebite::Graph::Operation::add;
@@ -999,13 +999,13 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         {
                             for( const auto& idx : idxVars )
                             {
-                                PrintVal(idx->getNode()->getVal());
+                                Cyclebite::Util::PrintVal(idx->getNode()->getVal());
                             }
                             for( const auto& gep : gh )
                             {
-                                PrintVal(gep->getInst());
+                                Cyclebite::Util::PrintVal(gep->getInst());
                             }
-                            PrintVal(gep->getInst());
+                            Cyclebite::Util::PrintVal(gep->getInst());
                             throw CyclebiteException("Could not find parent idxVar!");
                         }
                         p->addChild(newIdx);

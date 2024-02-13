@@ -151,7 +151,7 @@ int main(int argc, char *argv[])
                         catch( exception& e )
                         {
                             spdlog::critical("OpToString map failed on the following instruction: ");
-                            PrintVal(i->getInst());
+                            Cyclebite::Util::PrintVal(i->getInst());
                         }
                     }
                 }
