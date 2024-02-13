@@ -13,8 +13,9 @@ namespace Cyclebite::Grammar
     public:
         ConstantSymbol(T b) : Symbol("const") , bits(b) {}
         std::string dump() const;
+        std::string dumpHalide( const std::map<std::shared_ptr<Dimension>, std::shared_ptr<ReductionVariable>>& dimToRV ) const;
         T getVal() const;
-    private:
+    protected:
         T bits;
     };
     template class ConstantSymbol<int>;

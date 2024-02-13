@@ -5,6 +5,7 @@
 #include "Util/Exceptions.h"
 #include "Util/Annotate.h"
 #include "Util/Print.h"
+#include "Util/Helpers.h"
 #include "BasePointer.h"
 #include "IO.h"
 #include "Task.h"
@@ -181,14 +182,20 @@ const llvm::Type* BasePointer::getContainedType() const
 
 const string BasePointer::getContainedTypeString() const
 {
-    if( getContainedType() )
+    const auto& containedTy = Cyclebite::Util::getContainedType(node->getVal());
+    if( const auto& st = llvm::dyn_cast<llvm::StructType>(containedTy) )
     {
-        string typeStr;
-        llvm::raw_string_ostream ty(typeStr);
-        getContainedType()->print(ty);
-        return typeStr;
+        Cyclebite::Util::PrintVal(node->getVal());
+        Cyclebite::Util::PrintVal(st);
+        throw CyclebiteException("Cannot yet handle base pointers that contain structures!");
     }
-    return "UnknownType";
+    else if( const auto& fp = llvm::dyn_cast<llvm::FunctionType>(containedTy) )
+    {
+        Cyclebite::Util::PrintVal(node->getVal());
+        Cyclebite::Util::PrintVal(fp);
+        throw CyclebiteException("A base pointer points to a function!");
+    }
+    return Cyclebite::Util::PrintVal( Cyclebite::Util::getContainedType(node->getVal()), false );
 }
 
 uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
@@ -387,7 +394,7 @@ const llvm::Value* Cyclebite::Grammar::getPointerSource(const llvm::Value* ptr)
         }
         Q.pop_front();
     }
-    spdlog::warn("Could not find source of pointer "+PrintVal(ptr, false));
+    spdlog::warn("Could not find source of pointer "+Cyclebite::Util::PrintVal(ptr, false));
     return ptr;
 }
 
@@ -480,7 +487,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                         }
                                         else
                                         {
-                                            PrintVal(alloc);
+                                            Cyclebite::Util::PrintVal(alloc);
                                             spdlog::warn("Base-pointer-eligible alloc is not in the dynamic profile");
                                         }
                                         covered.insert(alloc);
@@ -525,7 +532,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                     }
                                     else
                                     {
-                                        PrintVal(call);
+                                        Cyclebite::Util::PrintVal(call);
                                         spdlog::warn("Base-pointer-eligible call is not in the dynamic profile");
                                     }
                                     covered.insert(call);
@@ -543,7 +550,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                     }
                                     else
                                     {
-                                        PrintVal(arg);
+                                        Cyclebite::Util::PrintVal(arg);
                                         spdlog::warn("Base-pointer-eligible arg is not in the dynamic profile");
                                     }
                                     covered.insert(arg);
@@ -567,7 +574,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                         }
                                         else
                                         {
-                                            PrintVal(glob);
+                                            Cyclebite::Util::PrintVal(glob);
                                             spdlog::warn("Base-pointer-eligible global is not in the dynamic profile");
                                         }
                                         covered.insert(glob);

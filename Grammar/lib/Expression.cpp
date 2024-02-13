@@ -9,6 +9,7 @@
 #include "FunctionExpression.h"
 #include "Task.h"
 #include "TaskParameter.h"
+#include "ConstantArray.h"
 #include "OperatorExpression.h"
 #include "Graph/inc/Dijkstra.h"
 #include "Graph/inc/IO.h"
@@ -362,6 +363,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             }
             else if( const auto& con = llvm::dyn_cast<llvm::Constant>( getPointerSource(ld->getPointerOperand()) ) )
             {
+                getConstant(opInst, con, newSymbols, nodeToExpr);
                 // this may be loading from a constant global structure
                 // in that case we are interested in finding out which value we are pulling from the structure
                 // this may or may not be possible, if the indices are or aren't statically determinable

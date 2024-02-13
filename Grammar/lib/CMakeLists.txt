@@ -3,6 +3,7 @@ file(GLOB SOURCES BasePointer.cpp
                   Collection.cpp 
                   FunctionExpression.cpp 
                   ConstantSymbol.cpp 
+                  ConstantArray.cpp
                   Cycle.cpp 
                   OperatorExpression.cpp 
                   Expression.cpp 
