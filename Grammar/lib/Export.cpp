@@ -13,9 +13,13 @@
 #include "Util/Print.h"
 #include "Util/Exceptions.h"
 #include "TaskParameter.h"
+#include "ConstantArray.h"
 
 using namespace std;
 using namespace Cyclebite::Grammar;
+
+// instantiation of the map that holds the globals for export
+map<const llvm::Constant*, shared_ptr<ConstantSymbol>> Cyclebite::Grammar::constants;
 
 string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vector<int> outputDimensions, bool reduction, int reductionDimensions, bool inPlace, bool parallel )
 {
@@ -436,7 +440,15 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
 
     // 1. start with the general stuff (Halide generators require some overhead... this is done here)
     string halideGenerator = "";
-    halideGenerator += "#include <Halide.h>\n\nusing Halide::Generator;\n\nclass "+pipelineName+" : public Generator<"+pipelineName+"> {\npublic:\n";
+    halideGenerator += "#include <Halide.h>\n\nusing Halide::Generator;\n\n";
+    // print any globals we need to declare for all tasks
+    for( const auto& con : constants )
+    {
+        halideGenerator += con.second->dumpC()+";\n";
+    }
+    halideGenerator += "\n\n";
+    // now start the generator definition
+    halideGenerator += "class "+pipelineName+" : public Generator<"+pipelineName+"> {\npublic:\n";
     // 2. inject GeneratorParam(s) 
     for( const auto& param : generatorParams )
     {
