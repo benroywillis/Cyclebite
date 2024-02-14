@@ -36,7 +36,7 @@ string ConstantArray::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Re
 
 string ConstantArray::dumpC() const
 {
-    string cArray = "const "+TypeToString.at(t)+" "+name+" = { ";
+    string cArray = "const "+TypeToString.at(t)+" "+name+"["+to_string(arraySize)+"] = { ";
     for( unsigned i = 0; i < (unsigned)arraySize; i++ )
     {
         if( i > 0 )
@@ -47,7 +47,7 @@ string ConstantArray::dumpC() const
         {
             case ConstantType::SHORT : cArray += to_string( ((short*)array)[i] ); break;
             case ConstantType::INT   : cArray += to_string( ((int*)array)[i] ); break;
-            case ConstantType::FLOAT : cArray += to_string( ((float*)array)[i] ); break;
+            case ConstantType::FLOAT : cArray += to_string( ((float*)array)[i] )+"f"; break;
             case ConstantType::DOUBLE: cArray += to_string( ((double*)array)[i] ); break;
             case ConstantType::INT64 : cArray += to_string( ((int64_t*)array)[i] ); break;
             default                  : cArray += "";
