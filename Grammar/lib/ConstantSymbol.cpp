@@ -15,6 +15,11 @@ void Cyclebite::Grammar::initTypeToString()
     Cyclebite::Graph::map_init(TypeToString) (ConstantType::SHORT, "short")(ConstantType::INT, "int")(ConstantType::FLOAT, "float")(ConstantType::DOUBLE, "double")(ConstantType::UNKNOWN, "");
 }
 
+const llvm::Constant* ConstantSymbol::getConstant() const
+{
+    return c;
+}
+
 string ConstantSymbol::dump() const
 {
     switch(t)

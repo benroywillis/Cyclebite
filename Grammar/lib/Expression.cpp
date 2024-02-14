@@ -9,7 +9,6 @@
 #include "FunctionExpression.h"
 #include "Task.h"
 #include "TaskParameter.h"
-#include "ConstantArray.h"
 #include "OperatorExpression.h"
 #include "Graph/inc/Dijkstra.h"
 #include "Graph/inc/IO.h"
@@ -363,12 +362,15 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             }
             else if( const auto& con = llvm::dyn_cast<llvm::Constant>( getPointerSource(ld->getPointerOperand()) ) )
             {
-                getConstant(opInst, con, newSymbols, nodeToExpr);
-                // this may be loading from a constant global structure
+                // this should've been handled by the getConstants() method in Process()... so we'll just go through the motions for now (BW 2024-02-14)
                 // in that case we are interested in finding out which value we are pulling from the structure
                 // this may or may not be possible, if the indices are or aren't statically determinable
                 // ex: StencilChain/Naive(BB 170)
-                if( con->getType()->isPointerTy() )
+                if( Cyclebite::Graph::DNIDMap.contains(con) )
+                {
+                    newSymbols.push_back( nodeToExpr.at(Cyclebite::Graph::DNIDMap.at(con)) );
+                }
+                else if( con->getType()->isPointerTy() )
                 {
                     bool canBeNull = false;
                     bool canBeFreed = false;
@@ -377,7 +379,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                         // the pointer's allocation is not large enough, thus there is no collection that will represent it
                         // we still need this value in our expression, whatever it may be, so just make a constant symbol for it
                         int constantVal = 0;
-                        auto newSymbol = make_shared<ConstantSymbol>(&constantVal, ConstantType::INT);
+                        auto newSymbol = make_shared<ConstantSymbol>(con, &constantVal, ConstantType::INT);
                         nodeToExpr[ opInst ] = newSymbol;
                         newSymbols.push_back(newSymbol); 
                     }
@@ -612,14 +614,14 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
     {
         if( con->getType()->isIntegerTy() )
         {
-            newSymbols.push_back(make_shared<ConstantSymbol>( con->getUniqueInteger().getRawData(), ConstantType::INT64));
+            newSymbols.push_back(make_shared<ConstantSymbol>( con, con->getUniqueInteger().getRawData(), ConstantType::INT64));
         }
         else if( con->getType()->isFloatTy() )
         {
             if( const auto& conF = llvm::dyn_cast<llvm::ConstantFP>(con) )
             {
                 float val = conF->getValueAPF().convertToFloat();
-                newSymbols.push_back(make_shared<ConstantSymbol>( &val, ConstantType::FLOAT));
+                newSymbols.push_back(make_shared<ConstantSymbol>( con, &val, ConstantType::FLOAT));
             }
             else
             {
@@ -631,7 +633,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             if( const auto& conD = llvm::dyn_cast<llvm::ConstantFP>(con) )
             {
                 double val = conD->getValueAPF().convertToDouble();
-                newSymbols.push_back(make_shared<ConstantSymbol>( &val, ConstantType::DOUBLE));
+                newSymbols.push_back(make_shared<ConstantSymbol>( con, &val, ConstantType::DOUBLE));
             }
             else
             {
@@ -653,14 +655,14 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             {
                 if( convec->getOperand(i)->getType()->isIntegerTy() )
                 {
-                    newSymbols.push_back(make_shared<ConstantSymbol>( convec->getOperand(i)->getUniqueInteger().getRawData(), ConstantType::INT64));
+                    newSymbols.push_back(make_shared<ConstantSymbol>( con, convec->getOperand(i)->getUniqueInteger().getRawData(), ConstantType::INT64));
                 }
                 else if( convec->getOperand(i)->getType()->isFloatTy() )
                 {
                     if( const auto& conF = llvm::dyn_cast<llvm::ConstantFP>(convec->getOperand(i)) )
                     {
                         float val = conF->getValueAPF().convertToFloat();
-                        newSymbols.push_back(make_shared<ConstantSymbol>( &val, ConstantType::FLOAT));
+                        newSymbols.push_back(make_shared<ConstantSymbol>( con, &val, ConstantType::FLOAT));
                     }
                     else
                     {
@@ -672,7 +674,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     if( const auto& conD = llvm::dyn_cast<llvm::ConstantFP>(convec->getOperand(i)) )
                     {
                         double val = conD->getValueAPF().convertToDouble();
-                        newSymbols.push_back(make_shared<ConstantSymbol>( &val, ConstantType::DOUBLE));
+                        newSymbols.push_back(make_shared<ConstantSymbol>( con, &val, ConstantType::DOUBLE));
                     }
                     else
                     {
@@ -729,16 +731,17 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
     return newSymbols;
 }
 
-/// @brief Expression builder for a function expression
-/// @param t The task in which this function group belongs
-/// @param insts A vector of all instructions in the function group, in reverse-order that they operate (inst that gets stored is first, inst(s) with only memory inputs is last)
-/// @param rv A reduction variable, if necessary. If this argument is non-null, the returned expression is a Reduction. Otherwise it is an Expression.
-/// @param colls The collections in the task
-/// @return An expression that describes the entire function group. Member symbols may contain symbols within them.
+/// @brief Expression builder for a task
+/// @param t        The task in which this function group belongs
+/// @param insts    A vector of all instructions in the function group, in reverse-order that they operate (inst that gets stored is first, inst(s) with only memory inputs is last)
+/// @param rvs      Reduction variables, if necessary. If this argument is non-empty, the returned expression is a Reduction. Otherwise it is an Expression.
+/// @param colls    The collections in the task
+/// @return         An expression that describes the entire function group. Member symbols may contain symbols within them.
 const shared_ptr<Expression> constructExpression( const shared_ptr<Task>& t, 
                                                   const vector<shared_ptr<Cyclebite::Graph::Inst>>& insts, 
                                                   const set<shared_ptr<ReductionVariable>>& rvs, 
-                                                  const set<shared_ptr<Collection>>& colls, 
+                                                  const set<shared_ptr<Collection>>& colls,
+                                                  const set<shared_ptr<ConstantSymbol>>& cons,
                                                   const set<shared_ptr<InductionVariable>>& vars )
 {
     shared_ptr<Expression> expr;
@@ -760,6 +763,15 @@ const shared_ptr<Expression> constructExpression( const shared_ptr<Task>& t,
         for( const auto& st : coll->getStores() )
         {
             nodeToExpr[ Cyclebite::Graph::DNIDMap.at(st) ] = coll;
+        }
+    }
+    // initiate the constants that were found before in the nodeToExpr array
+    for( const auto& con : cons )
+    {
+        // the DNIDMap will only contain constants that come from GlobalVariables - these are the objects that may contain static arrays (see Graph/IO.cpp lines 2007-2020)
+        if( Cyclebite::Graph::DNIDMap.contains(con->getConstant()) )
+        {
+            nodeToExpr[ Cyclebite::Graph::DNIDMap.at(con->getConstant()) ] = con;
         }
     }
     // if there is a reduction variable, it's phi should be put into nodeToExpr
@@ -788,6 +800,7 @@ const shared_ptr<Expression> constructExpression( const shared_ptr<Task>& t,
             //nodeToExpr[rv->getNode()] = rv;
         }
     }
+
     // now we iterate (from start to finish) over the instructions in the expression, each time building a Symbol for each one, until all instructions in the expression have a symbol built for them
     vector<Cyclebite::Graph::Operation> ops;
     auto builtExpr = buildExpression( *insts.begin(), t, (*insts.begin())->getInst(), nodeToExpr, colls, vars );
@@ -855,6 +868,7 @@ const shared_ptr<Expression> constructExpression( const shared_ptr<Task>& t,
 vector<shared_ptr<Expression>> Cyclebite::Grammar::getExpressions( const shared_ptr<Task>& t, 
                                                                    const set<shared_ptr<Collection>>& colls, 
                                                                    const set<shared_ptr<ReductionVariable>>& rvs, 
+                                                                   const set<shared_ptr<ConstantSymbol>>& cons,
                                                                    const set<shared_ptr<InductionVariable>>& vars )
 {
     vector<shared_ptr<Expression>> FGTs;
@@ -918,7 +932,7 @@ vector<shared_ptr<Expression>> Cyclebite::Grammar::getExpressions( const shared_
             }
             Q.pop_front();
         }
-        FGTs.push_back( constructExpression(t, group, rvs, colls, vars) );
+        FGTs.push_back( constructExpression(t, group, rvs, colls, cons, vars) );
     }
     return FGTs;
 }

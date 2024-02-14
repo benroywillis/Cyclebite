@@ -11,6 +11,7 @@
 namespace Cyclebite::Grammar
 {
     class IndexVariable;
+    class Task;
     class ConstantArray : public ConstantSymbol
     {
     public:
@@ -18,7 +19,7 @@ namespace Cyclebite::Grammar
         /// @param idxVars  The index variables that index this constant array, if any. 
         /// @param a        A pointer to the array that contains the constant values of the constant array
         /// @param size     The number of elements in the input array
-        ConstantArray( const std::vector<std::shared_ptr<IndexVariable>>& idxVars, void* a, ConstantType type, int size) : ConstantSymbol(a, type), vars(idxVars), arraySize(size) 
+        ConstantArray( const llvm::Constant* c, const std::vector<std::shared_ptr<IndexVariable>>& idxVars, void* a, ConstantType type, int size) : ConstantSymbol(c, a, type), vars(idxVars), arraySize(size) 
         {
             switch(t)
             {
@@ -97,8 +98,5 @@ namespace Cyclebite::Grammar
     };
 
     std::string getArrayType(const llvm::Constant* ptr);
-    void getConstant( const std::shared_ptr<Cyclebite::Graph::Inst>& opInst, 
-                      const llvm::Constant* con, 
-                      std::vector<std::shared_ptr<Symbol>>& newSymbols, 
-                      std::map<std::shared_ptr<Cyclebite::Graph::DataValue>, std::shared_ptr<Symbol>>& nodeToExpr );
+    std::set<std::shared_ptr<ConstantSymbol>> getConstants( const std::shared_ptr<Task>& t, const std::set<std::shared_ptr<IndexVariable>>& idxVars );
 } // namespace Cyclebite::Grammar

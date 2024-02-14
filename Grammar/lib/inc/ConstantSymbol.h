@@ -5,6 +5,7 @@
 #pragma once
 #include "Symbol.h"
 #include "Util/Exceptions.h"
+#include <llvm/IR/Constant.h>
 
 namespace Cyclebite::Grammar
 {
@@ -23,7 +24,7 @@ namespace Cyclebite::Grammar
     class ConstantSymbol : public Symbol
     {
     public:
-        ConstantSymbol( const void* a, ConstantType type ) : Symbol("const")
+        ConstantSymbol( const llvm::Constant* c, const void* a, ConstantType type ) : Symbol("const"), c(c)
         {
             initTypeToString();
             t = type;
@@ -38,6 +39,7 @@ namespace Cyclebite::Grammar
                 default: throw CyclebiteException("Cannot yet support "+TypeToString.at(t)+" in a ConstantSymbol!");
             }
         }
+        const llvm::Constant* getConstant() const;
         std::string dump() const;
         std::string dumpHalide( const std::map<std::shared_ptr<Dimension>, std::shared_ptr<ReductionVariable>>& dimToRV ) const;
         virtual std::string dumpC() const;
@@ -46,6 +48,7 @@ namespace Cyclebite::Grammar
         /// @return The type held by the constant. Interpret the value placed into the pointer with this type.
         ConstantType getVal(void* ret) const;
     protected:
+        const llvm::Constant* c;
         union {
             short s;
             int i;

@@ -69,8 +69,10 @@ namespace Cyclebite::Grammar
         static void FindInputs( Expression* expr );
     };
     class ReductionVariable;
+    class ConstantSymbol;
     std::vector<std::shared_ptr<Expression>> getExpressions( const std::shared_ptr<Task>& t, 
                                                              const std::set<std::shared_ptr<Collection>>& colls, 
                                                              const std::set<std::shared_ptr<ReductionVariable>>& rvs,
+                                                             const std::set<std::shared_ptr<ConstantSymbol>>& cons,
                                                              const std::set<std::shared_ptr<InductionVariable>>& vars );
 } // namespace Cyclebite::Grammar

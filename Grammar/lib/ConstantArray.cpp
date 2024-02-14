@@ -4,7 +4,9 @@
 //==------------------------------==//
 #include "ConstantArray.h"
 #include "IndexVariable.h"
+#include "Task.h"
 #include "Export.h"
+#include "Graph/inc/IO.h"
 #include "Util/Helpers.h"
 #include "Util/Print.h"
 #include <llvm/IR/DerivedTypes.h>
@@ -31,7 +33,22 @@ int ConstantArray::getArraySize() const
 
 string ConstantArray::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
 {
-    return this->dump();
+    if( !vars.empty() )
+    {
+        string dump = name+"("+vars.front()->dumpHalide( dimToRV );
+        auto varIt = next(vars.begin());
+        while( varIt != vars.end() )
+        {
+            dump += ", "+(*varIt)->dumpHalide(dimToRV);
+            varIt = next(varIt);
+        }
+        dump += ")";
+        return dump;
+    }
+    else
+    {
+        return name;
+    }
 }
 
 string ConstantArray::dumpC() const
@@ -178,6 +195,13 @@ void recurThroughArray( T* array, const llvm::ConstantArray* a, unsigned scale, 
     }
 }
 
+/// @brief Returns the data contained inside a constant aggregate structure (array or vector)
+///
+/// This method employs an internal recursive method that dives into the types contained within the structure (if the array is multidimensional, it requires a depth search of the types)
+/// @tparam T   The type of the base element that should be expected. The base element is the primitive data type contained in the structure (float, int, short). Currently, contains with multiple types are not supported. 
+/// @param a            A pointer to the llvm::ConstantArray* object to be searched through
+/// @param arraySize    That amount of elements that should be present in the structure
+/// @return             A dynamically-allocated array containing the values in the constant. This value needs to be freed by the user. 
 template <typename T>
 T* getContainedArray( const llvm::ConstantArray* a, unsigned arraySize )
 {
@@ -187,56 +211,123 @@ T* getContainedArray( const llvm::ConstantArray* a, unsigned arraySize )
     return containedArray;
 }
 
-void Cyclebite::Grammar::getConstant( const shared_ptr<Cyclebite::Graph::Inst>& opInst, const llvm::Constant* con, vector<shared_ptr<Symbol>>& newSymbols, map<shared_ptr<Cyclebite::Graph::DataValue>, shared_ptr<Symbol>>& nodeToExpr )
+/// @brief Finds the Cyclebite::Grammar::IndexVariables that index a global constant structure
+///
+/// This is inspired by the constant filter array declared in git@github.com:benroywillis/Algorithms/tree/devb/StencilChain/Naive/StencilChain.cpp
+/// @retval     A vector in dimension-order of the index variables used on this global.
+const vector<shared_ptr<IndexVariable>> findContainedArrayVars( const llvm::ConstantArray* a, const set<shared_ptr<IndexVariable>>& idxVars )
 {
-    // this may be loading from a constant global structure
-    // in that case we are interested in finding out which value we are pulling from the structure
-    // this may or may not be possible, if the indices are or aren't statically determinable
-    // ex: StencilChain/Naive(BB 170)
-    if( const auto& conPtr = llvm::dyn_cast<llvm::PointerType>(con->getType()) )
+    vector<shared_ptr<IndexVariable>> vars;
+    deque<const llvm::Value*> Q;
+    set<const llvm::Value*> covered;
+    Q.push_front(a);
+    covered.insert(a);
+    while( !Q.empty() )
     {
-        // we are interested in knowing if this pointer points to an array
-        // to figure that out we need to find a use of this pointer that indicates what type it points tonnnnnn
-        if( llvm::isa<llvm::ArrayType> ( Cyclebite::Util::getFirstContainedType(con) ) ||
-            llvm::isa<llvm::VectorType>( Cyclebite::Util::getFirstContainedType(con) ) )
+        Cyclebite::Util::PrintVal(Q.front());
+        if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
         {
-            if( const auto& glob = llvm::dyn_cast<llvm::GlobalVariable>(con) )
+            // the gep will indicate which index variables are used here
+            for( const auto& idx : gep->indices() )
             {
-                if( const auto& conAg = llvm::dyn_cast<llvm::ConstantAggregate>(glob->getInitializer()) )
+                if( Cyclebite::Graph::DNIDMap.contains(idx) )
                 {
-                    if( const auto& conArray = llvm::dyn_cast<llvm::ConstantArray>(conAg) )
+                    for( const auto& idxVar : idxVars )
                     {
-                        // implement a method to recur through the layers of the array
-                        // - find the base type
-                        // - find the permutation of entries (in this case 5 * 5)
-                        unsigned arraySize = getArraySize(conArray->getType());
-                        auto at = getBaseType(conArray->getType());
-                        if( at->isFloatTy() )
+                        if( idxVar->getNode()->getInst() == idx.get() )
                         {
-                            float* containedArray = getContainedArray<float>(conArray, arraySize);
-                            vector<shared_ptr<IndexVariable>> vars;
-                            auto newSymbol = make_shared<ConstantArray>(vars, containedArray, ConstantType::FLOAT, arraySize);
-                            nodeToExpr[ opInst ] = newSymbol;
-                            newSymbols.push_back(newSymbol);
-                            constants[con] = newSymbol;
-                            free(containedArray);
+                            vars.push_back(idxVar);
+                            break;
                         }
                     }
                 }
             }
-        } 
-        else if( const auto& structTy = llvm::dyn_cast<llvm::StructType>( Cyclebite::Util::getFirstContainedType(con) ) )
-        {
-            throw CyclebiteException("Cannot yet support constant arrays that contain user-defined structures!");
         }
-        else if( const auto& funcTy   = llvm::dyn_cast<llvm::FunctionType>( Cyclebite::Util::getFirstContainedType(con) ) )
+        else
         {
-            throw CyclebiteException("Found a constant pointer used in the function group that pointed to a function!");
+            for( const auto& use : Q.front()->users() )
+            {
+                if( !covered.contains(use) )
+                {
+                    Q.push_back(use);
+                    covered.insert(use);
+                }
+            }
         }
-        else if( const auto& intTy    = llvm::dyn_cast<llvm::IntegerType>( Cyclebite::Util::getFirstContainedType(con) ) )
-        {
-            // call the method to build a ConstantSymbol<int>
+        Q.pop_front();
+    }
+    return vars;
+}
 
+set<shared_ptr<ConstantSymbol>> Cyclebite::Grammar::getConstants( const shared_ptr<Task>& t, const set<shared_ptr<IndexVariable>>& idxVars )
+{
+    set<shared_ptr<ConstantSymbol>> cons;
+    for( const auto& c : t->getCycles() )
+    {
+        for( const auto& b : c->getBody() )
+        {
+            for( const auto& i : b->getInstructions() )
+            {
+                if( const auto& inst = dynamic_pointer_cast<Cyclebite::Graph::Inst>(i) )
+                {
+                    for( const auto& op : inst->getInst()->operands() )
+                    {
+                        if( const auto& con = llvm::dyn_cast<llvm::Constant>(op) )
+                        {
+                            // this may be loading from a constant global structure
+                            // in that case we are interested in finding out which value we are pulling from the structure
+                            // this may or may not be possible, if the indices are or aren't statically determinable
+                            // ex: StencilChain/Naive(BB 170)
+                            if( const auto& conPtr = llvm::dyn_cast<llvm::PointerType>(con->getType()) )
+                            {
+                                // we are interested in knowing if this pointer points to an array
+                                // to figure that out we need to find a use of this pointer that indicates what type it points tonnnnnn
+                                if( llvm::isa<llvm::ArrayType> ( Cyclebite::Util::getFirstContainedType(con) ) ||
+                                    llvm::isa<llvm::VectorType>( Cyclebite::Util::getFirstContainedType(con) ) )
+                                {
+                                    if( const auto& glob = llvm::dyn_cast<llvm::GlobalVariable>(con) )
+                                    {
+                                        if( const auto& conAg = llvm::dyn_cast<llvm::ConstantAggregate>(glob->getInitializer()) )
+                                        {
+                                            if( const auto& conArray = llvm::dyn_cast<llvm::ConstantArray>(conAg) )
+                                            {
+                                                // implement a method to recur through the layers of the array
+                                                // - find the base type
+                                                // - find the permutation of entries (in this case 5 * 5)
+                                                unsigned arraySize = getArraySize(conArray->getType());
+                                                auto at = getBaseType(conArray->getType());
+                                                if( at->isFloatTy() )
+                                                {
+                                                    float* containedArray = getContainedArray<float>(conArray, arraySize);
+                                                    auto vars = findContainedArrayVars(conArray, idxVars);
+                                                    auto newCon = make_shared<ConstantArray>(con, vars, containedArray, ConstantType::FLOAT, arraySize);
+                                                    constants[con] = newCon;
+                                                    cons.insert(newCon);
+                                                    free(containedArray);
+                                                }
+                                            }
+                                        }
+                                    }
+                                } 
+                                else if( const auto& structTy = llvm::dyn_cast<llvm::StructType>( Cyclebite::Util::getFirstContainedType(con) ) )
+                                {
+                                    throw CyclebiteException("Cannot yet support constant arrays that contain user-defined structures!");
+                                }
+                                else if( const auto& funcTy   = llvm::dyn_cast<llvm::FunctionType>( Cyclebite::Util::getFirstContainedType(con) ) )
+                                {
+                                    throw CyclebiteException("Found a constant pointer used in the function group that pointed to a function!");
+                                }
+                                else if( const auto& intTy    = llvm::dyn_cast<llvm::IntegerType>( Cyclebite::Util::getFirstContainedType(con) ) )
+                                {
+                                    // call the method to build a ConstantSymbol<int>
+
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
+    return cons;
 }

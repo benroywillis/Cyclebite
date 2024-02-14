@@ -11,6 +11,7 @@
 #include "IO.h"
 #include "Reduction.h"
 #include "IndexVariable.h"
+#include "ConstantArray.h"
 #include "Util/Annotate.h"
 #include "Util/Print.h"
 #include "Task.h"
@@ -29,14 +30,14 @@ void DisectConstant( vector<shared_ptr<Symbol>>& vec, const llvm::Constant* con)
 {
     if( con->getType()->isIntegerTy() )
     {
-        vec.push_back(make_shared<ConstantSymbol>(con->getUniqueInteger().getRawData(), ConstantType::INT64));
+        vec.push_back(make_shared<ConstantSymbol>(con, con->getUniqueInteger().getRawData(), ConstantType::INT64));
     }
     else if( con->getType()->isFloatTy() )
     {
         if( const auto& conF = llvm::dyn_cast<llvm::ConstantFP>(con) )
         {
             float val = conF->getValueAPF().convertToFloat();
-            vec.push_back(make_shared<ConstantSymbol>( &val, ConstantType::FLOAT ));
+            vec.push_back(make_shared<ConstantSymbol>( con, &val, ConstantType::FLOAT ));
         }
         else
         {
@@ -48,7 +49,7 @@ void DisectConstant( vector<shared_ptr<Symbol>>& vec, const llvm::Constant* con)
         if( const auto& conD = llvm::dyn_cast<llvm::ConstantFP>(con) )
         {
             double val = conD->getValueAPF().convertToDouble();
-            vec.push_back(make_shared<ConstantSymbol>( &val, ConstantType::DOUBLE ));
+            vec.push_back(make_shared<ConstantSymbol>( con, &val, ConstantType::DOUBLE ));
         }
         else
         {
@@ -162,6 +163,15 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tas
                 spdlog::info(dimension+idx->dump()+" -> "+Cyclebite::Util::PrintVal(idx->getNode()->getInst(), false));
             }
 #endif
+            // gather constants that are important to the expression of our task
+            auto cons   = getConstants(t, idxVars);
+#ifdef DEBUG
+            spdlog::info("Constant expressions:");
+            for( const auto& c : cons )
+            {
+                spdlog::info(c->dump()+" -> "+Cyclebite::Util::PrintVal(c->getConstant(), false));
+            }
+#endif
             // construct collections
             auto cs   = getCollections(t, bps, idxVars);
 #ifdef DEBUG
@@ -172,7 +182,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tas
             }
 #endif
             // each task should have exactly one expression
-            exprs = getExpressions(t, cs, rvs, vars);
+            exprs = getExpressions(t, cs, rvs, cons, vars);
 #ifdef DEBUG
             spdlog::info("Expressions:");
             for( const auto& expr : exprs )
