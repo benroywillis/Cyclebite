@@ -216,7 +216,7 @@ namespace Cyclebite::Profile::Backend::Memory
             lastBlock = (int64_t)a;
         }
 
-        void __Cyclebite__Profile__Backend__MemoryCpy(void* ptr_src, void* ptr_snk, uint64_t dataSize)
+        void __Cyclebite__Profile__Backend__MemoryCpy(void* ptr_snk, void* ptr_src, uint64_t dataSize)
         {
             MemTuple mt;
             mt.type = __TA_MemType::Memcpy;
@@ -235,7 +235,7 @@ namespace Cyclebite::Profile::Backend::Memory
             updateBittenBytes();
         }
 
-        void __Cyclebite__Profile__Backend__MemoryMov(void* ptr_src, void* ptr_snk, uint64_t dataSize)
+        void __Cyclebite__Profile__Backend__MemoryMov(void* ptr_snk, void* ptr_src, uint64_t dataSize)
         {
             MemTuple mt;
             mt.type = __TA_MemType::Memmov;
