@@ -2004,6 +2004,20 @@ void Cyclebite::Graph::BuildDFG( set<std::shared_ptr<ControlBlock>, p_GNCompare>
                         newNode->addPredecessor(newEdge);
                         argNode->addSuccessor(newEdge);
                     }
+                    else if( const auto& con = dyn_cast<Constant>(val) )
+                    {
+                        // we are interested in constantAggregates, which may be used like static arrays in the code
+                        if( const auto& glob = dyn_cast<GlobalVariable>(con) )
+                        {
+                            if( const auto& conArray = dyn_cast<ConstantAggregate>(glob->getInitializer()) )
+                            {
+                                // we have found a constant worthy of the DNIDMap, so map it
+                                auto newCon = make_shared<DataValue>(con);
+                                DNIDMap.insert( pair<const llvm::Value*, const shared_ptr<DataValue>>(con, newCon) );
+                                graph.addNode(newCon);
+                            }
+                        }
+                    }
                     // you can only communicate with globals via ld/st in LLVM IR
                     // thus, all we have to do is look at instruction operands to find their uses (ie an instruction cannot be used directly by a global)
                     /*else if( const auto& glob = dyn_cast<GlobalValue>(val) )
