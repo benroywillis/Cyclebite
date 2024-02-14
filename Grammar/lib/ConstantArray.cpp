@@ -4,6 +4,7 @@
 //==------------------------------==//
 #include "ConstantArray.h"
 #include "IndexVariable.h"
+#include "Export.h"
 #include "Util/Helpers.h"
 #include "Util/Print.h"
 #include <llvm/IR/DerivedTypes.h>
@@ -12,44 +13,47 @@
 using namespace Cyclebite::Grammar;
 using namespace std;
 
-template <typename T>
-const vector<shared_ptr<IndexVariable>>& ConstantArray<T>::getVars() const
+const vector<shared_ptr<IndexVariable>>& ConstantArray::getVars() const
 {
     return vars;
 }
 
-template <typename T>
-const T* ConstantArray<T>::getArray() const
+ConstantType ConstantArray::getArray(void** ret) const
 {
-    return array;
+    *ret = array;
+    return t;
 }
 
-template <typename T>
-int ConstantArray<T>::getArraySize() const
+int ConstantArray::getArraySize() const
 {
     return arraySize;
 }
 
-template <typename T>
-string ConstantArray<T>::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+string ConstantArray::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
 {
     return this->dump();
 }
 
-template<typename T>
-string ConstantArray<T>::dumpArray_C() const
+string ConstantArray::dumpC() const
 {
-    string type = string(typeid(T).name());
-    string cArray = "const "+type+" "+this->name+" = { ";
-    for( unsigned i = 0; i < arraySize; i++ )
+    string cArray = "const "+TypeToString.at(t)+" "+name+" = { ";
+    for( unsigned i = 0; i < (unsigned)arraySize; i++ )
     {
         if( i > 0 )
         {
             cArray += ", ";
         }
-        cArray += to_string(array[i]);
+        switch(t)
+        {
+            case ConstantType::SHORT : cArray += to_string( ((short*)array)[i] ); break;
+            case ConstantType::INT   : cArray += to_string( ((int*)array)[i] ); break;
+            case ConstantType::FLOAT : cArray += to_string( ((float*)array)[i] ); break;
+            case ConstantType::DOUBLE: cArray += to_string( ((double*)array)[i] ); break;
+            case ConstantType::INT64 : cArray += to_string( ((int64_t*)array)[i] ); break;
+            default                  : cArray += "";
+        }
     }
-    cArray += " };";
+    cArray += " }";
     return cArray;
 }
 
@@ -211,9 +215,10 @@ void Cyclebite::Grammar::getConstant( const shared_ptr<Cyclebite::Graph::Inst>& 
                         {
                             float* containedArray = getContainedArray<float>(conArray, arraySize);
                             vector<shared_ptr<IndexVariable>> vars;
-                            auto newSymbol = make_shared<ConstantArray<float>>(vars, containedArray, arraySize);
+                            auto newSymbol = make_shared<ConstantArray>(vars, containedArray, ConstantType::FLOAT, arraySize);
                             nodeToExpr[ opInst ] = newSymbol;
-                            newSymbols.push_back(newSymbol); 
+                            newSymbols.push_back(newSymbol);
+                            constants[con] = newSymbol;
                             free(containedArray);
                         }
                     }

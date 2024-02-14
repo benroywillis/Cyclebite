@@ -376,7 +376,8 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     {
                         // the pointer's allocation is not large enough, thus there is no collection that will represent it
                         // we still need this value in our expression, whatever it may be, so just make a constant symbol for it
-                        auto newSymbol = make_shared<ConstantSymbol<int>>(0);
+                        int constantVal = 0;
+                        auto newSymbol = make_shared<ConstantSymbol>(&constantVal, ConstantType::INT);
                         nodeToExpr[ opInst ] = newSymbol;
                         newSymbols.push_back(newSymbol); 
                     }
@@ -611,13 +612,14 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
     {
         if( con->getType()->isIntegerTy() )
         {
-            newSymbols.push_back(make_shared<ConstantSymbol<int64_t>>(*con->getUniqueInteger().getRawData()));
+            newSymbols.push_back(make_shared<ConstantSymbol>( con->getUniqueInteger().getRawData(), ConstantType::INT64));
         }
         else if( con->getType()->isFloatTy() )
         {
             if( const auto& conF = llvm::dyn_cast<llvm::ConstantFP>(con) )
             {
-                newSymbols.push_back(make_shared<ConstantSymbol<float>>( conF->getValueAPF().convertToFloat() ));
+                float val = conF->getValueAPF().convertToFloat();
+                newSymbols.push_back(make_shared<ConstantSymbol>( &val, ConstantType::FLOAT));
             }
             else
             {
@@ -628,7 +630,8 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
         {
             if( const auto& conD = llvm::dyn_cast<llvm::ConstantFP>(con) )
             {
-                newSymbols.push_back(make_shared<ConstantSymbol<double>>( conD->getValueAPF().convertToDouble() ));
+                double val = conD->getValueAPF().convertToDouble();
+                newSymbols.push_back(make_shared<ConstantSymbol>( &val, ConstantType::DOUBLE));
             }
             else
             {
@@ -650,13 +653,14 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             {
                 if( convec->getOperand(i)->getType()->isIntegerTy() )
                 {
-                    newSymbols.push_back(make_shared<ConstantSymbol<int64_t>>(*convec->getOperand(i)->getUniqueInteger().getRawData()));
+                    newSymbols.push_back(make_shared<ConstantSymbol>( convec->getOperand(i)->getUniqueInteger().getRawData(), ConstantType::INT64));
                 }
                 else if( convec->getOperand(i)->getType()->isFloatTy() )
                 {
                     if( const auto& conF = llvm::dyn_cast<llvm::ConstantFP>(convec->getOperand(i)) )
                     {
-                        newSymbols.push_back(make_shared<ConstantSymbol<float>>( conF->getValueAPF().convertToFloat() ));
+                        float val = conF->getValueAPF().convertToFloat();
+                        newSymbols.push_back(make_shared<ConstantSymbol>( &val, ConstantType::FLOAT));
                     }
                     else
                     {
@@ -667,7 +671,8 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                 {
                     if( const auto& conD = llvm::dyn_cast<llvm::ConstantFP>(convec->getOperand(i)) )
                     {
-                        newSymbols.push_back(make_shared<ConstantSymbol<double>>( conD->getValueAPF().convertToDouble() ));
+                        double val = conD->getValueAPF().convertToDouble();
+                        newSymbols.push_back(make_shared<ConstantSymbol>( &val, ConstantType::DOUBLE));
                     }
                     else
                     {

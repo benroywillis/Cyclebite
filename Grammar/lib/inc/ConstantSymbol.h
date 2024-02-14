@@ -4,22 +4,55 @@
 //==------------------------------==//
 #pragma once
 #include "Symbol.h"
+#include "Util/Exceptions.h"
 
 namespace Cyclebite::Grammar
 {
-    template <typename T>
+    enum class ConstantType
+    {
+        SHORT,
+        INT,
+        FLOAT,
+        DOUBLE,
+        INT64,
+        UNKNOWN
+    };
+    extern std::map<ConstantType, std::string> TypeToString;
+    void initTypeToString();
+
     class ConstantSymbol : public Symbol
     {
     public:
-        ConstantSymbol(T b) : Symbol("const") , bits(b) {}
+        ConstantSymbol( const void* a, ConstantType type ) : Symbol("const")
+        {
+            initTypeToString();
+            t = type;
+            // interpret the void* input
+            switch(t)
+            {
+                case ConstantType::SHORT : bits.s = *(short*)a; break;
+                case ConstantType::INT   : bits.i = *(int*)a; break;
+                case ConstantType::FLOAT : bits.f = *(float*)a; break;
+                case ConstantType::DOUBLE: bits.d = *(double*)a; break;
+                case ConstantType::INT64 : bits.l = *(long*)a; break;
+                default: throw CyclebiteException("Cannot yet support "+TypeToString.at(t)+" in a ConstantSymbol!");
+            }
+        }
         std::string dump() const;
         std::string dumpHalide( const std::map<std::shared_ptr<Dimension>, std::shared_ptr<ReductionVariable>>& dimToRV ) const;
-        T getVal() const;
+        virtual std::string dumpC() const;
+        /// @brief Returns the value held in this constant
+        /// @param ret A pointer to a place in memory to store the value (the allocation of this pointer must be at least 8 bytes)
+        /// @return The type held by the constant. Interpret the value placed into the pointer with this type.
+        ConstantType getVal(void* ret) const;
     protected:
-        T bits;
+        union {
+            short s;
+            int i;
+            float f;
+            double d;
+            int64_t l;
+        } bits;
+        ConstantType t;
     };
-    template class ConstantSymbol<int>;
-    template class ConstantSymbol<int64_t>;
-    template class ConstantSymbol<float>;
-    template class ConstantSymbol<double>;
 } // namespace Cyclebite::Grammar

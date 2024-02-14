@@ -29,13 +29,14 @@ void DisectConstant( vector<shared_ptr<Symbol>>& vec, const llvm::Constant* con)
 {
     if( con->getType()->isIntegerTy() )
     {
-        vec.push_back(make_shared<ConstantSymbol<int64_t>>(*con->getUniqueInteger().getRawData()));
+        vec.push_back(make_shared<ConstantSymbol>(con->getUniqueInteger().getRawData(), ConstantType::INT64));
     }
     else if( con->getType()->isFloatTy() )
     {
         if( const auto& conF = llvm::dyn_cast<llvm::ConstantFP>(con) )
         {
-            vec.push_back(make_shared<ConstantSymbol<float>>( conF->getValueAPF().convertToFloat() ));
+            float val = conF->getValueAPF().convertToFloat();
+            vec.push_back(make_shared<ConstantSymbol>( &val, ConstantType::FLOAT ));
         }
         else
         {
@@ -46,7 +47,8 @@ void DisectConstant( vector<shared_ptr<Symbol>>& vec, const llvm::Constant* con)
     {
         if( const auto& conD = llvm::dyn_cast<llvm::ConstantFP>(con) )
         {
-            vec.push_back(make_shared<ConstantSymbol<double>>( conD->getValueAPF().convertToDouble() ));
+            double val = conD->getValueAPF().convertToDouble();
+            vec.push_back(make_shared<ConstantSymbol>( &val, ConstantType::DOUBLE ));
         }
         else
         {
