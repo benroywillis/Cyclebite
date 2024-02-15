@@ -502,17 +502,6 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
                     halideGenerator += ");\n";
                 }
             }
-            halideGenerator += "\t\tFunc "+expr->getName()+"(\""+expr->getName()+"\");\n";
-            halideGenerator += "\t\t"+expr->dumpHalideReference(Symbol2Symbol);
-            if( !expr->getRVs().empty() )
-            {
-                // assume its accumulate for now
-                halideGenerator += "+= ";
-            }
-            else
-            {
-                halideGenerator += "= ";
-            }
             // 5c map the producers of this task to the input collections of this task
             // for now, we only support one input because the mapping between collections is ambiguous (scaling technique: record which memory slabs are touched in the epoch profile and map the sigMemInst's to their memory slab - this will indicate which collections are touching the same memory)
             vector<shared_ptr<Expression>> producerExprs;
@@ -540,11 +529,67 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             auto inputMin = producerExprs.size() < exprInputs.size() ? producerExprs.size() : exprInputs.size();
             for( unsigned i = 0; i < inputMin; i++ )
             {
-                spdlog::info( exprInputs[i]->getName()+ " -> "+producerExprs[i]->getName() );
-                Symbol2Symbol[ exprInputs[i] ] = producerExprs[i];
+                if( !Symbol2Symbol.contains( exprInputs[i] ) )
+                {
+                    Symbol2Symbol[ exprInputs[i] ] = producerExprs[i];
+                }
+                // next, map the dimensions that are used in the producer expression to the dimensions that are used in the exprInput expression
+                // this maps the dimensions of the producer onto the consumer
+                vector<shared_ptr<InductionVariable>> producerDims;
+                vector<shared_ptr<InductionVariable>> consumerDims;
+                for( const auto& dim : producerExprs[i]->getOutputDimensions() )
+                {
+                    if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
+                    {
+                        producerDims.push_back(iv);
+                    }
+                }
+                for( const auto& dim : exprInputs[i]->getDimensions() )
+                {
+                    if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
+                    {
+                        // the consumer might be a reduction, in which the dimensions that map to the reductions need to be removed from the dimensions that map to the producer
+                        if( !RDomDims.contains(iv) )
+                        {
+                            consumerDims.push_back(iv);
+                        }
+                    }
+                }
+                if( producerDims.size() == consumerDims.size() )
+                {
+                    // there is a 1:1 mapping between consumerdims and producerDims, so we trivially map producer dims to consumer dims
+                    // if the consumerDims have already been mapped to something else, we map the producer dims to that too
+                    // keep in mind that this my be overwriting a previous mapping (say, from the previous step), so after this step the Symbol2Symbol map is case-specific to this expression
+                    for( unsigned i = 0; i  < producerDims.size(); i++ )
+                    {
+                        if( Symbol2Symbol.contains(consumerDims[i])  )
+                        {
+                            Symbol2Symbol[producerDims[i]] = Symbol2Symbol[consumerDims[i]];
+                        }
+                        else
+                        {
+                            Symbol2Symbol[consumerDims[i]] = producerDims[i];
+                        }
+                    }
+                }
+                else
+                {
+                    spdlog::warn("Expression "+expr->getName()+" consumed over dimensions that did not match its producer dimensions.");
+                }
             }
 
             // finally, generate the expression string
+            halideGenerator += "\t\tFunc "+expr->getName()+"(\""+expr->getName()+"\");\n";
+            halideGenerator += "\t\t"+expr->dumpHalideReference(Symbol2Symbol);
+            if( !expr->getRVs().empty() )
+            {
+                // assume its accumulate for now
+                halideGenerator += "+= ";
+            }
+            else
+            {
+                halideGenerator += "= ";
+            }
             halideGenerator += expr->dumpHalide(Symbol2Symbol)+";\n\n";
         }
     }

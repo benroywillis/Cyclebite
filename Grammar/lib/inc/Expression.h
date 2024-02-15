@@ -53,6 +53,8 @@ namespace Cyclebite::Grammar
         /// - in some cases, the expression is stored in a memory address. Thus, it may be used in a future computation somewhere
         /// @retval Either a Collection or TaskRegister that this expression is stored to after its evaluation. If the expression is not stored, nullptr is returned.
         const std::shared_ptr<Symbol>& getOutput() const;
+        /// @brief Returns the dimensions of the expression output, if any
+        const std::vector<std::shared_ptr<Dimension>> getOutputDimensions() const;
         std::string dump() const override;
         std::string dumpHalide( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const override;
         std::string dumpHalideReference( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const;

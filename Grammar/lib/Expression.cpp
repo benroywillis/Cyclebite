@@ -144,7 +144,7 @@ string Expression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>
 
 string Expression::dumpHalideReference( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
-    vector<shared_ptr<InductionVariable>> exprDims;
+    vector<shared_ptr<Symbol>> exprDims;
     // 5b.2 enumerate all vars used in the expression
     if( const auto& outputColl = dynamic_pointer_cast<Collection>(output) )
     {
@@ -163,10 +163,24 @@ string Expression::dumpHalideReference( const map<shared_ptr<Symbol>, shared_ptr
     string ref = name+"(";
     if( exprDims.size() )
     {
-        ref += exprDims.front()->dumpHalide(symbol2Symbol);
+        if( symbol2Symbol.contains(exprDims.front()) )
+        {
+            ref += symbol2Symbol.at(exprDims.front())->dumpHalide(symbol2Symbol);
+        }
+        else
+        {
+            ref += exprDims.front()->dumpHalide(symbol2Symbol);
+        }
         for( auto it = next(exprDims.begin()); it != exprDims.end(); it++ )
         {
-            ref += ", "+(*it)->dumpHalide(symbol2Symbol);
+            if( symbol2Symbol.contains(*it) )
+            {
+                ref += ", "+symbol2Symbol.at(*it)->dumpHalide(symbol2Symbol);
+            }
+            else
+            {
+                ref += ", "+(*it)->dumpHalide(symbol2Symbol);
+            }
         }
     }
     ref += ") ";
@@ -298,6 +312,19 @@ const set<shared_ptr<Symbol>>& Expression::getInputs() const
 const shared_ptr<Symbol>& Expression::getOutput() const
 {
     return output;
+}
+
+const vector<shared_ptr<Dimension>> Expression::getOutputDimensions() const
+{
+    vector<shared_ptr<Dimension>> dims;
+    if( const auto& coll = dynamic_pointer_cast<Collection>(output) )
+    {
+        for( const auto& d : coll->getDimensions() )
+        {
+            dims.push_back(d);
+        }
+    }
+    return dims;
 }
 
 /// @brief Recursively builds an expression out of an LLVM instruction

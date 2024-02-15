@@ -664,9 +664,10 @@ string InductionVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<S
 {
     for( const auto& dim : symbol2Symbol )
     {
-        if( dim.first.get() == this )
+        if( (dim.first.get() == this) && (dim.second != dim.first) )
         {
-            return dim.second->getName();
+            // implementing this recursively allows us to follow arbitrary amounts of mappings through the symbol2Symbol structure
+            return dim.second->dumpHalide(symbol2Symbol);
         }
     }
     return name;
