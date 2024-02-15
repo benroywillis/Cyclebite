@@ -142,6 +142,37 @@ string Expression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>
     return expr;
 }
 
+string Expression::dumpHalideReference( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
+{
+    vector<shared_ptr<InductionVariable>> exprDims;
+    // 5b.2 enumerate all vars used in the expression
+    if( const auto& outputColl = dynamic_pointer_cast<Collection>(output) )
+    {
+        for( const auto& dim : outputColl->getDimensions() )
+        {
+            if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
+            {
+                exprDims.push_back(iv);
+            }
+        }
+    }
+    else
+    {
+        throw CyclebiteException("Cannot print a task that doesn't have a collection as output!");
+    }
+    string ref = name+"(";
+    if( exprDims.size() )
+    {
+        ref += exprDims.front()->dumpHalide(symbol2Symbol);
+        for( auto it = next(exprDims.begin()); it != exprDims.end(); it++ )
+        {
+            ref += ", "+(*it)->dumpHalide(symbol2Symbol);
+        }
+    }
+    ref += ") ";
+    return ref;
+}
+
 const vector<shared_ptr<Symbol>>& Expression::getSymbols() const
 {
     return symbols;

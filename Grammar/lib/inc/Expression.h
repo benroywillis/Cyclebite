@@ -55,6 +55,7 @@ namespace Cyclebite::Grammar
         const std::shared_ptr<Symbol>& getOutput() const;
         std::string dump() const override;
         std::string dumpHalide( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const override;
+        std::string dumpHalideReference( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const;
     protected:
         /// the task in which the expression is derived
         std::shared_ptr<Task> t;

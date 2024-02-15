@@ -9,6 +9,7 @@
 #include "Graph/inc/IO.h"
 #include "BasePointer.h"
 #include "Task.h"
+#include "Expression.h"
 #include "Util/Print.h"
 #include "IO.h"
 #include <deque>
@@ -153,6 +154,18 @@ string Collection::dump() const
 
 string Collection::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
+    for( const auto& s : symbol2Symbol )
+    {
+        if( s.first.get() == this )
+        {
+            // check to see if it is an expression, then we just dump a reference to it
+            if( const auto& e = dynamic_pointer_cast<Expression>(s.second) )
+            {
+                return e->dumpHalideReference( symbol2Symbol );
+            }
+            return s.second->dumpHalide(symbol2Symbol);
+        }
+    }
     string expr = name;
     if( !vars.empty() )
     {

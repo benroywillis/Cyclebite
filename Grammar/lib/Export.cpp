@@ -489,6 +489,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
                         Symbol2Symbol[iv] = rv;
                     }
                 }
+                // print the RDoms if we found any
                 if( !RDomDims.empty() )
                 {
                     vector<shared_ptr<InductionVariable>> ivs(RDomDims.begin(), RDomDims.end());
@@ -501,33 +502,8 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
                     halideGenerator += ");\n";
                 }
             }
-            vector<shared_ptr<InductionVariable>> exprDims;
-            // 5b.2 enumerate all vars used in the expression
-            if( const auto& outputColl = dynamic_pointer_cast<Collection>(expr->getOutput()) )
-            {
-                for( const auto& dim : outputColl->getDimensions() )
-                {
-                    if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
-                    {
-                        exprDims.push_back(iv);
-                    }
-                }
-            }
-            else
-            {
-                throw CyclebiteException("Cannot print a task that doesn't have a collection as output!");
-            }
             halideGenerator += "\t\tFunc "+expr->getName()+"(\""+expr->getName()+"\");\n";
-            halideGenerator += "\t\t"+expr->getName()+"(";
-            if( exprDims.size() )
-            {
-                halideGenerator += exprDims.front()->dumpHalide(Symbol2Symbol);
-                for( auto it = next(exprDims.begin()); it != exprDims.end(); it++ )
-                {
-                    halideGenerator += ", "+(*it)->dumpHalide(Symbol2Symbol);
-                }
-            }
-            halideGenerator += ") ";
+            halideGenerator += "\t\t"+expr->dumpHalideReference(Symbol2Symbol);
             if( !expr->getRVs().empty() )
             {
                 // assume its accumulate for now
@@ -537,6 +513,38 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             {
                 halideGenerator += "= ";
             }
+            // 5c map the producers of this task to the input collections of this task
+            // for now, we only support one input because the mapping between collections is ambiguous (scaling technique: record which memory slabs are touched in the epoch profile and map the sigMemInst's to their memory slab - this will indicate which collections are touching the same memory)
+            vector<shared_ptr<Expression>> producerExprs;
+            for( const auto& pred : t->getPredecessors() )
+            {
+                for( const auto& predExpr : taskToExpr.at( static_pointer_cast<Task>(pred->getSrc()) ) )
+                {
+                    producerExprs.push_back(predExpr);
+                }
+            }
+            if( expr->getInputs().size() != producerExprs.size() )
+            {
+                spdlog::warn("Halide export only supports mapping producers to consumers whose communication pattern is statically determinable. Communication between tasks may be incorrect.");
+            }
+            // for expressions in which there is exactly one input and one output, this works well
+            // otherwise, everything will be jumbled up
+            vector<shared_ptr<Collection>> exprInputs;
+            for( const auto& in : expr->getInputs() )
+            {
+                if( const auto& coll = dynamic_pointer_cast<Collection>(in) )
+                {
+                    exprInputs.push_back(coll);
+                }
+            }
+            auto inputMin = producerExprs.size() < exprInputs.size() ? producerExprs.size() : exprInputs.size();
+            for( unsigned i = 0; i < inputMin; i++ )
+            {
+                spdlog::info( exprInputs[i]->getName()+ " -> "+producerExprs[i]->getName() );
+                Symbol2Symbol[ exprInputs[i] ] = producerExprs[i];
+            }
+
+            // finally, generate the expression string
             halideGenerator += expr->dumpHalide(Symbol2Symbol)+";\n\n";
         }
     }
