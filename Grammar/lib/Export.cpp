@@ -356,46 +356,8 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     // this will allow us to refer to our producers when we generate halide expressions
     // [2024-01-26] for now we take the task graph and enumerate it according to its producer-consumer relationships
     // - this does not take into account multiple task instances
-    vector<shared_ptr<Task>> exprOrder;
+    auto exprOrder = instanceOrder;
     set<shared_ptr<Task>> pipelineInputs;
-    //set<shared_ptr<Task>> pipelineOutputs;
-    exprOrder.reserve(taskToExpr.size());
-    // thus, we first must find the input task(s), and find each stage in the pipeline that follows them
-    for( const auto& t : taskToExpr )
-    {
-#ifdef DEBUG
-        if( t.first->getPredecessors().empty() && t.first->getSuccessors().empty() )
-        {
-            spdlog::warn("Task "+to_string(t.first->getID())+" order position is ambiguous");
-        }
-#endif
-        if( t.first->getPredecessors().empty() )
-        {
-            exprOrder.push_back(t.first);
-        }
-    }
-    // if we didn't find any starting tasks throw an error, we can't handle this yet
-    if( exprOrder.empty() )
-    {
-        throw CyclebiteException("Cannot yet export an application to Halide that doesn't have at least one starting task!");
-    }
-    // now we build out the order by adding to the list until we have touched all the tasks
-    {
-        auto taskIt = exprOrder.begin();
-        while( taskIt != exprOrder.end() )
-        {
-            auto current = *taskIt;
-            for( const auto& succ : (current)->getSuccessors() )
-            {
-                if( taskToExpr.contains( static_pointer_cast<Task>(succ->getSnk()) ) )
-                {
-                    exprOrder.push_back( static_pointer_cast<Task>(succ->getSnk()) );
-                }
-            }
-            auto currentSpot = std::find(exprOrder.begin(), exprOrder.end(), current);
-            taskIt = next(currentSpot);
-        }
-    }
     // some post-processing of the pipeline
     // 1. Get rid of the input tasks
     for( const auto& entry : exprOrder )

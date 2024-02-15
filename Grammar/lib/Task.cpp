@@ -10,6 +10,8 @@
 using namespace std;
 using namespace Cyclebite::Grammar;
 
+vector<shared_ptr<Task>> Cyclebite::Grammar::instanceOrder;
+
 const set<shared_ptr<Cycle>>& Task::getCycles() const
 {
     return cycles;
@@ -195,6 +197,12 @@ set<shared_ptr<Task>, TaskIDCompare> Cyclebite::Grammar::getTasks(const nlohmann
             }
         }
     }
-
+    if( instanceJson.contains("Instance Order") )
+    {
+        for( const auto& id : instanceJson["Instance Order"].get<vector<uint64_t>>() )
+        {
+            instanceOrder.push_back( *tasks.find(id) );
+        }
+    }
     return tasks;
 }

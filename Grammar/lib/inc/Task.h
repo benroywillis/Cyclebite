@@ -9,6 +9,10 @@
 namespace Cyclebite::Grammar
 {
     class Cycle;
+    /// @brief Holds the instance order of the tasks (as read from the instance file)
+    ///
+    /// The instance order is useful for when constructing the Halide file - the tasks are dumped in the order their instances appeared
+    extern std::vector<std::shared_ptr<class Task>> instanceOrder;
     std::set<std::shared_ptr<class Task>, struct TaskIDCompare> getTasks(const nlohmann::json& instanceJson, 
                                                    const nlohmann::json& kernelJson, 
                                                    const std::map<int64_t, const llvm::BasicBlock*>& IDToBlock);
