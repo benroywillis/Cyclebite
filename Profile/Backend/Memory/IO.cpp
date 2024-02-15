@@ -562,6 +562,18 @@ namespace Cyclebite::Profile::Backend::Memory
                 output["Instruction Tuples"].[to_string(value.first)].push_back( pair(tuple.base, tuple.base+tuple.offset) );
             }*/
         }
+        vector<int> instanceOrder;
+        for( const auto& e : epochs )
+        {
+            if( e->kernel )
+            {
+                if( hotKernels.contains(e->kernel) )
+                {
+                    instanceOrder.push_back(e->kernel->kid);
+                }
+            }
+        }
+        output["Instance Order"] = instanceOrder;
 
         string OutputFileName = "instance.json";
         if( getenv("INSTANCE_FILE") )
