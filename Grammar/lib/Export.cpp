@@ -466,9 +466,12 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     {
         halideGenerator += "\t\tVar "+var->getName()+"(\""+var->getName()+"\");\n";
     }
-    // maps dimensions to the RDoms they are represented by
+    // maps symbols to other symbols when printing
+    // currently this serves two purposes
+    // 1. When index variables need to become reductions (during reductions)
+    // 2. When collections need to become other tasks (to facilitate task communicatoin)
     // the keys in this map will be replaced by their values when the halide expressions are generated
-    map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>> DimToRDom;
+    map<shared_ptr<Symbol>, shared_ptr<Symbol>> Symbol2Symbol;
     // 5b. print the expressions
     for( const auto& t : exprOrder )
     {
@@ -483,7 +486,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
                     if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
                     {
                         RDomDims.insert(iv);
-                        DimToRDom[iv] = rv;
+                        Symbol2Symbol[iv] = rv;
                     }
                 }
                 if( !RDomDims.empty() )
@@ -518,10 +521,10 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             halideGenerator += "\t\t"+expr->getName()+"(";
             if( exprDims.size() )
             {
-                halideGenerator += exprDims.front()->dumpHalide(DimToRDom);
+                halideGenerator += exprDims.front()->dumpHalide(Symbol2Symbol);
                 for( auto it = next(exprDims.begin()); it != exprDims.end(); it++ )
                 {
-                    halideGenerator += ", "+(*it)->dumpHalide(DimToRDom);
+                    halideGenerator += ", "+(*it)->dumpHalide(Symbol2Symbol);
                 }
             }
             halideGenerator += ") ";
@@ -534,7 +537,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             {
                 halideGenerator += "= ";
             }
-            halideGenerator += expr->dumpHalide(DimToRDom)+";\n\n";
+            halideGenerator += expr->dumpHalide(Symbol2Symbol)+";\n\n";
         }
     }
     // 5c. Assign the last pipestage to "out"
@@ -559,10 +562,10 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
         string varString = "";
         if( outputDims.size() )
         {
-            varString += outputDims.front()->dumpHalide(DimToRDom);
+            varString += outputDims.front()->dumpHalide(Symbol2Symbol);
             for( auto it = next(outputDims.begin()); it != outputDims.end(); it++ )
             {
-                varString += ", "+(*it)->dumpHalide(DimToRDom);
+                varString += ", "+(*it)->dumpHalide(Symbol2Symbol);
             }
         }
         halideGenerator += varString+") = "+expr->getName()+"("+varString+");\n";

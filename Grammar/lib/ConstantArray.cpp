@@ -31,15 +31,15 @@ int ConstantArray::getArraySize() const
     return arraySize;
 }
 
-string ConstantArray::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+string ConstantArray::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
     if( !vars.empty() )
     {
-        string dump = name+"("+vars.front()->dumpHalide( dimToRV );
+        string dump = name+"("+vars.front()->dumpHalide( symbol2Symbol );
         auto varIt = next(vars.begin());
         while( varIt != vars.end() )
         {
-            dump += ", "+(*varIt)->dumpHalide(dimToRV);
+            dump += ", "+(*varIt)->dumpHalide(symbol2Symbol);
             varIt = next(varIt);
         }
         dump += ")";

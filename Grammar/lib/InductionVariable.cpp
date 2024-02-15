@@ -660,9 +660,9 @@ string InductionVariable::dump() const
     return name;
 }
 
-string InductionVariable::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+string InductionVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
-    for( const auto& dim : dimToRV )
+    for( const auto& dim : symbol2Symbol )
     {
         if( dim.first.get() == this )
         {

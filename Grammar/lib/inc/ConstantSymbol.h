@@ -41,7 +41,7 @@ namespace Cyclebite::Grammar
         }
         const llvm::Constant* getConstant() const;
         std::string dump() const;
-        std::string dumpHalide( const std::map<std::shared_ptr<Dimension>, std::shared_ptr<ReductionVariable>>& dimToRV ) const;
+        std::string dumpHalide( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const;
         virtual std::string dumpC() const;
         /// @brief Returns the value held in this constant
         /// @param ret A pointer to a place in memory to store the value (the allocation of this pointer must be at least 8 bytes)

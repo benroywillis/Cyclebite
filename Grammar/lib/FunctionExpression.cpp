@@ -41,7 +41,7 @@ const llvm::Function* FunctionExpression::getFunction() const
     return f;
 }
 
-string FunctionExpression::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+string FunctionExpression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
     string expr = "";
     if( f->getName().find("llvm.fmuladd") != f->getName().npos )
@@ -51,7 +51,7 @@ string FunctionExpression::dumpHalide( const map<shared_ptr<Dimension>, shared_p
         // 1. the first two operands get multiplied ( arg0*arg1 )
         //    - the reduction arg (arg2) is implicit in the expression (from the +=), so it is omitted entirely
         // 2. the reduction dimension in the arg needs to be changed to the reduction variable
-        expr += args.front()->dumpHalide(dimToRV) + " * " + (*next(args.begin()))->dumpHalide(dimToRV);
+        expr += args.front()->dumpHalide(symbol2Symbol) + " * " + (*next(args.begin()))->dumpHalide(symbol2Symbol);
     }
     return expr;
 }

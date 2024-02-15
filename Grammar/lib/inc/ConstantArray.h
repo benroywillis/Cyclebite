@@ -83,7 +83,7 @@ namespace Cyclebite::Grammar
                 case ConstantType::UNKNOWN: break;
             }
         }
-        std::string dumpHalide( const std::map<std::shared_ptr<Dimension>, std::shared_ptr<ReductionVariable>>& dimToRV ) const override;
+        std::string dumpHalide( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const override;
         std::string dumpC() const override;
         const std::vector<std::shared_ptr<IndexVariable>>& getVars() const;
         ConstantType getArray(void** ret) const;

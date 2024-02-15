@@ -44,7 +44,7 @@ namespace Cyclebite::Grammar
         /// @return All dimensions that overlap between the two. Set entries are guaranteed to be dimensions
         std::set<std::shared_ptr<IndexVariable>> overlaps( const std::shared_ptr<Collection>& coll ) const;
         std::string dump() const override;
-        std::string dumpHalide( const std::map<std::shared_ptr<Dimension>, std::shared_ptr<ReductionVariable>>& dimToRV ) const override;
+        std::string dumpHalide( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const override;
     protected:
         std::vector<std::shared_ptr<IndexVariable>> vars;
         /// indexBP is the base pointer this collection loads from

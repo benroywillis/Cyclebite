@@ -151,7 +151,7 @@ string Collection::dump() const
     return expr;
 }
 
-string Collection::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+string Collection::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
     string expr = name;
     if( !vars.empty() )
@@ -162,7 +162,7 @@ string Collection::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Reduc
         string symbolText = "";
         while( symbolText.empty() && (v != vars.end()) )
         {
-            symbolText = (*v)->dumpHalide(dimToRV);
+            symbolText = (*v)->dumpHalide(symbol2Symbol);
             if( !symbolText.empty() )
             {
                 expr += symbolText;
@@ -172,7 +172,7 @@ string Collection::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Reduc
         symbolText.clear();
         while ( v != vars.end() )
         {
-            symbolText = (*v)->dumpHalide(dimToRV);
+            symbolText = (*v)->dumpHalide(symbol2Symbol);
             if( !symbolText.empty() )
             {
                 expr += ", "+symbolText;

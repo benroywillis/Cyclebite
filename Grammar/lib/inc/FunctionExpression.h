@@ -13,7 +13,7 @@ namespace Cyclebite::Grammar
     public:
         FunctionExpression(const std::shared_ptr<Task>& ta, const llvm::Function* f, const std::vector<std::shared_ptr<Symbol>>& args, const std::shared_ptr<Symbol>& out = nullptr ) : OperatorExpression( ta, Cyclebite::Graph::Operation::call, args, out), f(f) {}
         std::string dump() const override;
-        std::string dumpHalide( const std::map<std::shared_ptr<Dimension>, std::shared_ptr<ReductionVariable>>& dimToRV ) const override;
+        std::string dumpHalide( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const override;
         const llvm::Function* getFunction() const;
     private:
         const llvm::Function* f;

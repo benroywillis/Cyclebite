@@ -123,18 +123,18 @@ string Expression::dump() const
     return expr;
 }
 
-string Expression::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+string Expression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
     string expr = "";
     if( !symbols.empty() )
     {
         auto b = symbols.begin();
         auto o = ops.begin();
-        expr += " "+(*b)->dumpHalide(dimToRV);
+        expr += " "+(*b)->dumpHalide(symbol2Symbol);
         b = next(b);
         while( b != symbols.end() )
         {
-            expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+(*b)->dumpHalide(dimToRV );
+            expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+(*b)->dumpHalide(symbol2Symbol);
             b = next(b);
             o = next(o);
         }

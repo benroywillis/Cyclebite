@@ -16,7 +16,7 @@ namespace Cyclebite::Grammar
         Cyclebite::Graph::Operation getOp() const;
         const std::vector<std::shared_ptr<Symbol>>& getArgs() const;
         std::string dump() const override;
-        std::string dumpHalide( const std::map<std::shared_ptr<Dimension>, std::shared_ptr<ReductionVariable>>& dimToRV ) const override;
+        std::string dumpHalide( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const override;
     private:
         Cyclebite::Graph::Operation op;
     protected:

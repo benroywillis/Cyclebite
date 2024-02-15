@@ -60,7 +60,7 @@ string OperatorExpression::dump() const
     return expr;
 }
 
-string OperatorExpression::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+string OperatorExpression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
     string expr = "";
     bool flip = false;
@@ -69,7 +69,7 @@ string OperatorExpression::dumpHalide( const map<shared_ptr<Dimension>, shared_p
         flip = true;
         if( output )
         {
-            expr += output->dumpHalide(dimToRV) + " <- ";
+            expr += output->dumpHalide(symbol2Symbol) + " <- ";
         }
     }
     expr += Graph::OperationToString.at(op) + string(" (");
@@ -77,11 +77,11 @@ string OperatorExpression::dumpHalide( const map<shared_ptr<Dimension>, shared_p
     if( !args.empty() )
     {
         auto arg = args.begin();
-        expr += (*arg++)->dumpHalide(dimToRV);
+        expr += (*arg++)->dumpHalide(symbol2Symbol);
         while( arg != args.end() )
         {
             expr += ", ";
-            expr += (*arg++)->dumpHalide(dimToRV);
+            expr += (*arg++)->dumpHalide(symbol2Symbol);
         }
     }
     expr += " )";

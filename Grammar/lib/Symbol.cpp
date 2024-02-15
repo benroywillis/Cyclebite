@@ -34,7 +34,7 @@ string Symbol::dump() const
     return name;
 }
 
-string Symbol::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+string Symbol::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
     return name;
 }

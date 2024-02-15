@@ -143,7 +143,7 @@ string IndexVariable::dump() const
     return name;
 }
 
-string IndexVariable::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<ReductionVariable>>& dimToRV ) const
+string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
     // we are interested in printing the index variable in terms of its dimension
     // in this case we are interested in finding the child-most dimension in the indexVariable tree, then print that dimension plus any offset this indexVariable does to it
@@ -156,7 +156,7 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Re
         childMostDim = *exclusives.begin();
         if( const auto& iv = dynamic_pointer_cast<InductionVariable>(*exclusives.begin()) )
         {
-            return iv->dumpHalide(dimToRV);
+            return iv->dumpHalide(symbol2Symbol);
         }
     }
     else if( exclusives.empty() )
@@ -223,7 +223,7 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Re
                 spdlog::warn("Could not determine the offset of a var");
                 offset.coefficient = 0;
             }
-            return static_pointer_cast<InductionVariable>(childMostDim)->dumpHalide(dimToRV) + Graph::OperationToString.at(Graph::GetOp(bin->getOpcode()))+to_string(offset.coefficient);
+            return static_pointer_cast<InductionVariable>(childMostDim)->dumpHalide(symbol2Symbol) + Graph::OperationToString.at(Graph::GetOp(bin->getOpcode()))+to_string(offset.coefficient);
         }
         else if( node == childMostDim->getNode() )
         {
@@ -307,9 +307,9 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Dimension>, shared_ptr<Re
         }
         // with the operation to combine them, we can now make the print
         string print = "";
-        print += (*vars.begin())->dumpHalide(dimToRV);
+        print += (*vars.begin())->dumpHalide(symbol2Symbol);
         print += string(Cyclebite::Graph::OperationToString.at(Cyclebite::Graph::GetOp(combiner->getOpcode())));
-        print += (*next(vars.begin()))->dumpHalide(dimToRV);
+        print += (*next(vars.begin()))->dumpHalide(symbol2Symbol);
         return print;
     }
     return name;
