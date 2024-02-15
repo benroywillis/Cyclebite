@@ -327,7 +327,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     //      --- task instances are on the same input, same implementation, same iterator space
     //          ---- enumerate each instance in the Halide file
     //          ---- e.g., stencil stencil stencil stencil stencil [StencilChain]
-    //      --- task instances are on the same input, same implementation, different iterator space (e.g., tiles)
+    //      --- task instances are on the same input, same implementation, different iterator space (e.g., a tiled and blocked implementation of GEMM)
     //          ---- re-roll these cases, only enumerate a single instance
     //               ----- lets the Halide scheduler design the tiles
     //          ---- e.g., stencil stencil stencil stencil stencil [OpenCV]
@@ -346,11 +346,6 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     //             ---- doesn't produce anything: 
     //                  ----- consumes something: probably an output task, delete from the pipeline
     //                  ----- doesn't consume anything: it is a "dead" task... be skeptical of these, did something go wrong in EP? If not, delete from the pipeline
-    // 4. Pipeline parameters (GeneratorParams)
-    //    - values that come from "outside" the pipeline
-    //      -- they cannot be explained by any task's produced data
-    //         --- this starts from the first task in the program ie if a given task in the program has a param that is not explained by any of its producers, that is a GeneratorParam
-    //      -- sometimese these values are explained by non-task code; this can be a useful measure for which tasks need a header
 
     // before anything happens, we need to organize the pipeline in its producer-consumer order
     // this will allow us to refer to our producers when we generate halide expressions
