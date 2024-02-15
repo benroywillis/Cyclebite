@@ -18,6 +18,15 @@ namespace Cyclebite::Grammar
         Symbol() = delete;
         virtual ~Symbol() = default;
         virtual std::string dump() const;
+        /// @brief Recursively implements the dump function for each symbol object specifically for halide
+        ///
+        /// Each symbol object must override this method.
+        /// In each implementation, the function is recursive to the symbol2Symbol map
+        /// - this allows arbitrary numbers of mappings to be followed in the map
+        ///   -- e.g., { var 0 -> var1, var1 -> var2 } will result in var0 -> var2
+        /// Thus, it is best to avoid circular references in the symbol2Symbol map (e.g., {var0 -> var0} results in an infinite recursion)
+        /// @param symbol2Symbol A map of transformations (e.g., {var0 -> var1}). This map shall not contain circular references (e.g., {var0 -> var0})
+        /// @return A string representing a valid halide expression for the object
         virtual std::string dumpHalide( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const;
         std::string getName() const;
     protected:
