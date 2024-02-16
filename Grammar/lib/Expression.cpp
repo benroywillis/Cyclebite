@@ -183,7 +183,7 @@ string Expression::dumpHalideReference( const map<shared_ptr<Symbol>, shared_ptr
             }
         }
     }
-    ref += ") ";
+    ref += ")";
     return ref;
 }
 

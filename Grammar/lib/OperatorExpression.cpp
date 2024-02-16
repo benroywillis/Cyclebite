@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
 #include "OperatorExpression.h"
+#include "Util/Exceptions.h"
 #include <spdlog/spdlog.h>
 
 using namespace std;
@@ -63,17 +64,24 @@ string OperatorExpression::dump() const
 string OperatorExpression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
     string expr = "";
-    bool flip = false;
-    if( !printedName )
+    switch(op)
     {
-        flip = true;
-        if( output )
-        {
-            expr += output->dumpHalide(symbol2Symbol) + " <- ";
-        }
+        // we only care about cast operations for now
+        case Cyclebite::Graph::Operation::trunc        : expr += "Halide::trunc("; break;
+        case Cyclebite::Graph::Operation::zext         : expr += "Halide::cast<uint64_t>("; break; // zero extend just adds bits to the front of an int
+        case Cyclebite::Graph::Operation::sext         : expr += "Halide::cast<int64_t>("; break; // sign extend makes the extended integer signed
+        case Cyclebite::Graph::Operation::fptoui       : expr += "Halide::cast<uint32_t>("; break;
+        case Cyclebite::Graph::Operation::fptosi       : expr += "Halide::cast<int>("; break;
+        case Cyclebite::Graph::Operation::uitofp       : expr += "Halide::cast<float>("; break;
+        case Cyclebite::Graph::Operation::sitofp       : expr += "Halide::cast<float>("; break;
+        case Cyclebite::Graph::Operation::fptrunc      : expr += "Halide::trunc("; break;
+        case Cyclebite::Graph::Operation::fpext        : expr += "Halide::cast<double>("; break;
+        case Cyclebite::Graph::Operation::ptrtoint     : expr += "Halide::cast<int>("; break;
+        case Cyclebite::Graph::Operation::inttoptr     : expr += "Halide::cast<uint64_t>("; break;
+        case Cyclebite::Graph::Operation::bitcast      : expr += "Halide::cast<void*>("; break;
+        case Cyclebite::Graph::Operation::addrspacecast: expr += "Halide::cast<void*>("; break;
+        default: throw CyclebiteException("Cannot yet handle a non-cast operator inside operator expressions yet! (Operation is a "+string(Cyclebite::Graph::OperationToString.at(op))+")");
     }
-    expr += Graph::OperationToString.at(op) + string(" (");
-    printedName = true;
     if( !args.empty() )
     {
         auto arg = args.begin();
@@ -84,7 +92,6 @@ string OperatorExpression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<
             expr += (*arg++)->dumpHalide(symbol2Symbol);
         }
     }
-    expr += " )";
-    printedName = flip ? !printedName : printedName;
+    expr += ")";
     return expr;
 }

@@ -591,11 +591,11 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             if( !expr->getRVs().empty() )
             {
                 // assume its accumulate for now
-                halideGenerator += "+= ";
+                halideGenerator += " += ";
             }
             else
             {
-                halideGenerator += "= ";
+                halideGenerator += " = ";
             }
             halideGenerator += expr->dumpHalide(Symbol2Symbol)+";\n\n";
         }
