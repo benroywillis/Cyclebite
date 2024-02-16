@@ -399,11 +399,14 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     string halideGenerator = "";
     halideGenerator += "#include <Halide.h>\n\nusing Halide::Generator;\n\n";
     // print any globals we need to declare for all tasks
-    for( const auto& con : constants )
+    if( !constants.empty()  )
     {
-        halideGenerator += con.second->dumpC()+";\n";
+        for( const auto& con : constants )
+        {
+            halideGenerator += con.second->dumpC()+";\n";
+        }
+        halideGenerator += "\n";
     }
-    halideGenerator += "\n\n";
     // now start the generator definition
     halideGenerator += "class "+pipelineName+" : public Generator<"+pipelineName+"> {\npublic:\n";
     // 2. inject GeneratorParam(s) 
@@ -507,9 +510,13 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             vector<shared_ptr<Expression>> producerExprs;
             for( const auto& pred : t->getPredecessors() )
             {
-                for( const auto& predExpr : taskToExpr.at( static_pointer_cast<Task>(pred->getSrc()) ) )
+                // if your producer is a pipeline input, ignore it
+                if( !pipelineInputs.contains( static_pointer_cast<Task>(pred->getSrc()) ) )
                 {
-                    producerExprs.push_back(predExpr);
+                    for( const auto& predExpr : taskToExpr.at( static_pointer_cast<Task>(pred->getSrc()) ) )
+                    {
+                        producerExprs.push_back(predExpr);
+                    }
                 }
             }
             if( expr->getInputs().size() != producerExprs.size() )
