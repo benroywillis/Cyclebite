@@ -154,6 +154,7 @@ string Collection::dump() const
 
 string Collection::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
+    string expr = "";
     for( const auto& s : symbol2Symbol )
     {
         if( s.first.get() == this )
@@ -161,12 +162,14 @@ string Collection::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>
             // check to see if it is an expression, then we just dump a reference to it
             if( const auto& e = dynamic_pointer_cast<Expression>(s.second) )
             {
-                return e->dumpHalideReference( symbol2Symbol );
+                expr += e->getName();
             }
-            return s.second->dumpHalide(symbol2Symbol);
         }
     }
-    string expr = name;
+    if( expr.empty() )
+    {
+        expr += name;
+    }
     if( !vars.empty() )
     {
         expr += "(";
