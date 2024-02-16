@@ -224,7 +224,6 @@ const vector<shared_ptr<IndexVariable>> findContainedArrayVars( const llvm::Cons
     covered.insert(a);
     while( !Q.empty() )
     {
-        Cyclebite::Util::PrintVal(Q.front());
         if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
         {
             // the gep will indicate which index variables are used here

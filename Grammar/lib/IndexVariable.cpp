@@ -156,7 +156,19 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
         childMostDim = *exclusives.begin();
         if( const auto& iv = dynamic_pointer_cast<InductionVariable>(*exclusives.begin()) )
         {
-            return iv->dumpHalide(symbol2Symbol);
+            if( symbol2Symbol.contains(iv) )
+            {
+                return symbol2Symbol.at(iv)->dumpHalide(symbol2Symbol);
+            }
+            else
+            {
+                return iv->dumpHalide(symbol2Symbol);
+            }
+        }
+        else
+        {
+            Cyclebite::Util::PrintVal(node->getInst());
+            throw CyclebiteException("Cannot yet support dumping non-induction-variables to Halide");
         }
     }
     else if( exclusives.empty() )
@@ -191,20 +203,21 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
         {
             if( getDimensions().empty() )
             {
+                // this can be caused by base pointers being indexed from an anonymous structure created by LLVM for lambda function arguments, so just ignore it
+                //Cyclebite::Util::PrintVal(node->getInst());
+                ///throw CyclebiteException("Found an index variable that has zero dimensions underneath it!");
                 return "";
             }
             else
             {
                 Cyclebite::Util::PrintVal(node->getInst());
-                spdlog::warn("Could not find dimension for index variable dump");
-                return name;
+                throw CyclebiteException("Could not find dimension for index variable dump");
             }
         }
         else if( dynamic_pointer_cast<InductionVariable>(childMostDim) == nullptr )
         {
             Cyclebite::Util::PrintVal(node->getInst());
-            spdlog::warn("idxVar dimension was not an induction variable. Can't support printing this yet.");
-            return name;
+            throw CyclebiteException("Cannot yet support dumping non-induction-variables to Halide");
         }
         
         // to generate the offset to the dimension expression, we evaluate the instruction that lies underneath this indexVariable
@@ -220,10 +233,21 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
             auto offset = getOffset();
             if( offset.coefficient == static_cast<int>(STATIC_VALUE::UNDETERMINED) )
             {
-                spdlog::warn("Could not determine the offset of a var");
+                spdlog::warn("Could not determine the offset of index variable "+name);
                 offset.coefficient = 0;
             }
-            return static_pointer_cast<InductionVariable>(childMostDim)->dumpHalide(symbol2Symbol) + Graph::OperationToString.at(Graph::GetOp(bin->getOpcode()))+to_string(offset.coefficient);
+            // BW 2024-02-16 this breaks in IIRBlur/Naive when the row blur multiplies the row index of the array (the binary instructions is a multiply, we actually want the add offset, which comes in a later instruction
+            string ret = "";
+            if( symbol2Symbol.contains( static_pointer_cast<InductionVariable>(childMostDim) ) )
+            {
+                ret += symbol2Symbol.at( static_pointer_cast<InductionVariable>(childMostDim) )->dumpHalide(symbol2Symbol);
+            } 
+            else
+            {
+                ret += static_pointer_cast<InductionVariable>(childMostDim)->dumpHalide(symbol2Symbol);
+            }
+            ret += Graph::OperationToString.at(Graph::GetOp(bin->getOpcode()))+to_string(offset.coefficient);
+            return ret;
         }
         else if( node == childMostDim->getNode() )
         {
@@ -259,7 +283,7 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
             {
                 if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(op) )
                 {
-                    // this is the operator we are seaarching for
+                    // this is the operator we are searching for
                     // confirm it is the one by confirming both operands are our exclusive dimensions
                     set<shared_ptr<InductionVariable>, DimensionSort> toEliminate;
                     for( const auto& op : bin->operands() )
@@ -307,9 +331,23 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
         }
         // with the operation to combine them, we can now make the print
         string print = "";
-        print += (*vars.begin())->dumpHalide(symbol2Symbol);
+        if( symbol2Symbol.contains(*vars.begin()) )
+        {
+            print += symbol2Symbol.at(*vars.begin())->dumpHalide(symbol2Symbol);
+        }
+        else
+        {
+            print += (*vars.begin())->dumpHalide(symbol2Symbol);
+        }
         print += string(Cyclebite::Graph::OperationToString.at(Cyclebite::Graph::GetOp(combiner->getOpcode())));
-        print += (*next(vars.begin()))->dumpHalide(symbol2Symbol);
+        if( symbol2Symbol.contains( *next(vars.begin()) ) )
+        {
+            print += symbol2Symbol.at(*next(vars.begin()))->dumpHalide(symbol2Symbol);
+        }
+        else
+        {
+            print += (*next(vars.begin()))->dumpHalide(symbol2Symbol);
+        }
         return print;
     }
     return name;
