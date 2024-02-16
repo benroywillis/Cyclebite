@@ -12,6 +12,7 @@
 #include "Util/Annotate.h"
 #include "BasePointer.h"
 #include "InductionVariable.h"
+#include "ReductionVariable.h"
 #include <llvm/IR/Instructions.h>
 #include "Util/Exceptions.h"
 #include "Util/Print.h"
@@ -334,6 +335,33 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
         if( symbol2Symbol.contains(*vars.begin()) )
         {
             print += symbol2Symbol.at(*vars.begin())->dumpHalide(symbol2Symbol);
+            if( const auto& rv = dynamic_pointer_cast<ReductionVariable>(symbol2Symbol.at(*vars.begin())) )
+            {
+                if( rv->getDimensions().size() > 1 )
+                {
+                    // we need to get the position of this dimension in the reduction and add the appropriate Halide suffix 
+                    unsigned dimPosition = 0;
+                    for( const auto& dim : rv->getDimensions() )
+                    {
+                        if( dim == *vars.begin() )
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            dimPosition++;
+                        }
+                    }
+                    switch(dimPosition)
+                    {
+                        case 0: print += ".x"; break;
+                        case 1: print += ".y"; break;
+                        case 2: print += ".z"; break;
+                        case 3: print += ".w"; break;
+                        default: throw CyclebiteException("Cannot handle a reduction that is greater than four dimensions!");
+                    }
+                }
+            }
         }
         else
         {
@@ -343,6 +371,33 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
         if( symbol2Symbol.contains( *next(vars.begin()) ) )
         {
             print += symbol2Symbol.at(*next(vars.begin()))->dumpHalide(symbol2Symbol);
+            if( const auto& rv = dynamic_pointer_cast<ReductionVariable>(symbol2Symbol.at(*next(vars.begin()))) )
+            {
+                if( rv->getDimensions().size() > 1 )
+                {
+                    // we need to get the position of this dimension in the reduction and add the appropriate Halide suffix 
+                    unsigned dimPosition = 0;
+                    for( const auto& dim : rv->getDimensions() )
+                    {
+                        if( dim == *next(vars.begin()) )
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            dimPosition++;
+                        }
+                    }
+                    switch(dimPosition)
+                    {
+                        case 0: print += ".x"; break;
+                        case 1: print += ".y"; break;
+                        case 2: print += ".z"; break;
+                        case 3: print += ".w"; break;
+                        default: throw CyclebiteException("Cannot handle a reduction that is greater than four dimensions!");
+                    }
+                }
+            }
         }
         else
         {
