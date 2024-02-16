@@ -347,6 +347,20 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     //                  ----- consumes something: probably an output task, delete from the pipeline
     //                  ----- doesn't consume anything: it is a "dead" task... be skeptical of these, did something go wrong in EP? If not, delete from the pipeline
 
+    // Some scaling problems to worry about (in the near future)
+    // 1. How do you map dimensions together?
+    //    - when dimensions are not trivially mappable together, there needs to be a criteria in which one dimension matches to another
+    //      -- trivially mappable: there are two pairs of dimensions, how do you know which pairs map together when they have the same iteration space?
+    //         --- what happens when their iteration space is non-deterministic?
+    // 2. How do you map collections together?
+    //    - memory slab ID
+    //      -- in the epoch profile, each significant memory inst needs to have its memory slab identified
+    //         --- this may require rolling up memory tuples that are not contiguous
+    //             ---- two cases:
+    //                  ----- [easy] the tuples are not contiguous but have consistent stride (like an array of structs in which only one member is accessed)
+    //                  ----- [hard] the tuples are not contiguous and don't have consistent stride (then how do you name all of them?)
+    //             ---- both cases will require refactoring what it means to be able to merge tuples together, and how they should be sorted
+    
     // before anything happens, we need to organize the pipeline in its producer-consumer order
     // this will allow us to refer to our producers when we generate halide expressions
     // [2024-01-26] for now we take the task graph and enumerate it according to its producer-consumer relationships
