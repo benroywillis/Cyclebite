@@ -273,6 +273,11 @@ set<shared_ptr<ConstantSymbol>> Cyclebite::Grammar::getConstants( const shared_p
                     {
                         if( const auto& con = llvm::dyn_cast<llvm::Constant>(op) )
                         {
+                            if( constants.contains(con) )
+                            {
+                                cons.insert( constants.at(con) );
+                                break;
+                            }
                             // this may be loading from a constant global structure
                             // in that case we are interested in finding out which value we are pulling from the structure
                             // this may or may not be possible, if the indices are or aren't statically determinable
