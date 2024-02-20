@@ -198,7 +198,17 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
         childMostDim = *exclusives.begin();
         if( const auto& iv = dynamic_pointer_cast<InductionVariable>(*exclusives.begin()) )
         {
-            return printIdxVar( symbol2Symbol, iv );
+            auto foo = getOffset();
+            auto print = printIdxVar( symbol2Symbol, iv );
+            // the offset is necessary to add when our operation is not a multiply or divide
+            if( foo.op != Cyclebite::Graph::Operation::mul && foo.op != Cyclebite::Graph::Operation::sdiv && foo.op != Cyclebite::Graph::Operation::udiv )
+            {
+                if( foo.coefficient != static_cast<int>(STATIC_VALUE::INVALID) && foo.coefficient != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+                {
+                    print += "+"+to_string(foo.coefficient);
+                }
+            }
+            return print;
         }
         else
         {
@@ -368,6 +378,7 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
         string print = printIdxVar( symbol2Symbol, *vars.begin() );
         print += string(Cyclebite::Graph::OperationToString.at(Cyclebite::Graph::GetOp(combiner->getOpcode())));
         print += printIdxVar( symbol2Symbol, *next(vars.begin()) );
+        volatile auto foo = getOffset();
         return print;
     }
     return name;
