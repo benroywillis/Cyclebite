@@ -19,7 +19,7 @@ using namespace std;
 using namespace Cyclebite::Grammar;
 
 // instantiation of the map that holds the globals for export
-map<const llvm::Constant*, shared_ptr<ConstantSymbol>> Cyclebite::Grammar::constants;
+map<const llvm::Constant*, set<shared_ptr<ConstantSymbol>>> Cyclebite::Grammar::constants;
 
 string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vector<int> outputDimensions, bool reduction, int reductionDimensions, bool inPlace, bool parallel )
 {
@@ -417,7 +417,10 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     {
         for( const auto& con : constants )
         {
-            halideGenerator += con.second->dumpC()+";\n";
+            for( const auto& s : con.second )
+            {
+                halideGenerator += s->dumpC()+";\n";
+            }
         }
         halideGenerator += "\n";
     }

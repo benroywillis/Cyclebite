@@ -40,11 +40,26 @@ string ConstantArray::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
 {
     if( !vars.empty() )
     {
-        string dump = name+"("+vars.front()->dumpHalide( symbol2Symbol );
+        string dump = "";
+        if( symbol2Symbol.contains(vars.front()) )
+        {
+            dump = name+"("+symbol2Symbol.at(vars.front())->dumpHalide( symbol2Symbol );
+        }
+        else
+        {
+            dump = name+"("+vars.front()->dumpHalide( symbol2Symbol );
+        }
         auto varIt = next(vars.begin());
         while( varIt != vars.end() )
         {
-            dump += ", "+(*varIt)->dumpHalide(symbol2Symbol);
+            if( symbol2Symbol.contains( *varIt ) )
+            {
+                dump += ", "+symbol2Symbol.at((*varIt))->dumpHalide(symbol2Symbol);
+            }
+            else
+            {
+                dump += ", "+(*varIt)->dumpHalide(symbol2Symbol);
+            }
             varIt = next(varIt);
         }
         dump += ")";
@@ -385,11 +400,13 @@ set<shared_ptr<ConstantSymbol>> Cyclebite::Grammar::getConstants( const shared_p
                     {
                         if( const auto& con = llvm::dyn_cast<llvm::Constant>(op) )
                         {
-                            if( constants.contains(con) )
+                            /*if( constants.contains(con) )
                             {
+                                // there already exists a constant initializer for this value, but this use case has its own idxVars
+                                // so we need to make a copy of this global with the same name as the existing one
                                 cons.insert( constants.at(con) );
                                 break;
-                            }
+                            }*/
                             // this may be loading from a constant global structure
                             // in that case we are interested in finding out which value we are pulling from the structure
                             // this may or may not be possible, if the indices are or aren't statically determinable
@@ -418,7 +435,7 @@ set<shared_ptr<ConstantSymbol>> Cyclebite::Grammar::getConstants( const shared_p
                                                     float* containedArray = getContainedArray<float>(conArray, arraySize);
                                                     auto vars = findContainedArrayVars(conArray, idxVars);
                                                     auto newCon = make_shared<ConstantArray>(con, vars, containedArray, ConstantType::FLOAT, dims);
-                                                    constants[con] = newCon;
+                                                    constants[con].insert( newCon );
                                                     cons.insert(newCon);
                                                     free(containedArray);
                                                 }
