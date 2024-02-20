@@ -144,6 +144,47 @@ string IndexVariable::dump() const
     return name;
 }
 
+string printIdxVar(const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol, const shared_ptr<InductionVariable>& var )
+{
+    string print = "";
+    if( symbol2Symbol.contains(var) )
+    {
+        print += symbol2Symbol.at(var)->dumpHalide(symbol2Symbol);
+        if( const auto& rv = dynamic_pointer_cast<ReductionVariable>(symbol2Symbol.at(var)) )
+        {
+            if( rv->getDimensions().size() > 1 )
+            {
+                // we need to get the position of this dimension in the reduction and add the appropriate Halide suffix 
+                unsigned dimPosition = 0;
+                for( const auto& dim : rv->getDimensions() )
+                {
+                    if( dim == var )
+                    {
+                        break;
+                    }
+                    else
+                    {
+                        dimPosition++;
+                    }
+                }
+                switch(dimPosition)
+                {
+                    case 0: print += ".x"; break;
+                    case 1: print += ".y"; break;
+                    case 2: print += ".z"; break;
+                    case 3: print += ".w"; break;
+                    default: throw CyclebiteException("Cannot handle a reduction that is greater than four dimensions!");
+                }
+            }
+        }
+    }
+    else
+    {
+        print += var->dumpHalide(symbol2Symbol);
+    }
+    return print;
+}
+
 string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
     // we are interested in printing the index variable in terms of its dimension
@@ -157,14 +198,7 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
         childMostDim = *exclusives.begin();
         if( const auto& iv = dynamic_pointer_cast<InductionVariable>(*exclusives.begin()) )
         {
-            if( symbol2Symbol.contains(iv) )
-            {
-                return symbol2Symbol.at(iv)->dumpHalide(symbol2Symbol);
-            }
-            else
-            {
-                return iv->dumpHalide(symbol2Symbol);
-            }
+            return printIdxVar( symbol2Symbol, iv );
         }
         else
         {
@@ -331,78 +365,9 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
             throw CyclebiteException("Could not combine a multi-dimensional idxVar into a cohesive expression!");
         }
         // with the operation to combine them, we can now make the print
-        string print = "";
-        if( symbol2Symbol.contains(*vars.begin()) )
-        {
-            print += symbol2Symbol.at(*vars.begin())->dumpHalide(symbol2Symbol);
-            if( const auto& rv = dynamic_pointer_cast<ReductionVariable>(symbol2Symbol.at(*vars.begin())) )
-            {
-                if( rv->getDimensions().size() > 1 )
-                {
-                    // we need to get the position of this dimension in the reduction and add the appropriate Halide suffix 
-                    unsigned dimPosition = 0;
-                    for( const auto& dim : rv->getDimensions() )
-                    {
-                        if( dim == *vars.begin() )
-                        {
-                            break;
-                        }
-                        else
-                        {
-                            dimPosition++;
-                        }
-                    }
-                    switch(dimPosition)
-                    {
-                        case 0: print += ".x"; break;
-                        case 1: print += ".y"; break;
-                        case 2: print += ".z"; break;
-                        case 3: print += ".w"; break;
-                        default: throw CyclebiteException("Cannot handle a reduction that is greater than four dimensions!");
-                    }
-                }
-            }
-        }
-        else
-        {
-            print += (*vars.begin())->dumpHalide(symbol2Symbol);
-        }
+        string print = printIdxVar( symbol2Symbol, *vars.begin() );
         print += string(Cyclebite::Graph::OperationToString.at(Cyclebite::Graph::GetOp(combiner->getOpcode())));
-        if( symbol2Symbol.contains( *next(vars.begin()) ) )
-        {
-            print += symbol2Symbol.at(*next(vars.begin()))->dumpHalide(symbol2Symbol);
-            if( const auto& rv = dynamic_pointer_cast<ReductionVariable>(symbol2Symbol.at(*next(vars.begin()))) )
-            {
-                if( rv->getDimensions().size() > 1 )
-                {
-                    // we need to get the position of this dimension in the reduction and add the appropriate Halide suffix 
-                    unsigned dimPosition = 0;
-                    for( const auto& dim : rv->getDimensions() )
-                    {
-                        if( dim == *next(vars.begin()) )
-                        {
-                            break;
-                        }
-                        else
-                        {
-                            dimPosition++;
-                        }
-                    }
-                    switch(dimPosition)
-                    {
-                        case 0: print += ".x"; break;
-                        case 1: print += ".y"; break;
-                        case 2: print += ".z"; break;
-                        case 3: print += ".w"; break;
-                        default: throw CyclebiteException("Cannot handle a reduction that is greater than four dimensions!");
-                    }
-                }
-            }
-        }
-        else
-        {
-            print += (*next(vars.begin()))->dumpHalide(symbol2Symbol);
-        }
+        print += printIdxVar( symbol2Symbol, *next(vars.begin()) );
         return print;
     }
     return name;
