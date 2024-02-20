@@ -28,6 +28,11 @@ ConstantType ConstantArray::getArray(void** ret) const
 
 int ConstantArray::getArraySize() const
 {
+    int arraySize = 1;
+    for( auto entry : dims )
+    {
+        arraySize *= entry;
+    }
     return arraySize;
 }
 
@@ -53,24 +58,125 @@ string ConstantArray::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
 
 string ConstantArray::dumpC() const
 {
-    string cArray = "const "+TypeToString.at(t)+" "+name+"["+to_string(arraySize)+"] = { ";
-    for( unsigned i = 0; i < (unsigned)arraySize; i++ )
+    string cArray = "const "+TypeToString.at(t)+" "+name+"[";
+    cArray += to_string(*dims.begin())+"]";
+    auto it = next(dims.begin());
+    while( it != dims.end() )
     {
-        if( i > 0 )
+        cArray += "["+to_string(*it)+"]";
+        it = next(it);
+    }
+    cArray += " = ";
+    if( dims.size() == 1 )
+    {
+        cArray += "{ ";
+        for( unsigned i = 0; i < dims[0]; i++ )
         {
-            cArray += ", ";
+            if( i > 0 )
+            {
+                cArray += ", ";
+            }
+            // the global array index is the sum of products (index*dimSize)
+            switch(t)
+            {
+                case ConstantType::SHORT : cArray += to_string( ((short*)array)[i] ); break;
+                case ConstantType::INT   : cArray += to_string( ((int*)array)[i] ); break;
+                case ConstantType::FLOAT : cArray += to_string( ((float*)array)[i] )+"f"; break;
+                case ConstantType::DOUBLE: cArray += to_string( ((double*)array)[i] ); break;
+                case ConstantType::INT64 : cArray += to_string( ((int64_t*)array)[i] ); break;
+                default                  : cArray += "";
+            }
         }
-        switch(t)
+        cArray += " }";
+    }
+    else
+    {
+        // this algorithm recursively implements each of the dimensions in the dims array
+        // the recursion ends when a dimension has been exhausted
+        // once a dimension is exhausted, we recurse back up until a non-exhausted dimension is encountered
+        // the algorithm ends when all dimensions have been exhausted
+        // the indices vector holds the position of each iterator
+        auto indices = vector<unsigned>(dims.size(), 0);
+        deque<unsigned> Q;
+        // to prime the queue, push all dimension boundaries into it
+        for( auto it = dims.begin(); it != dims.end(); it++ )
         {
-            case ConstantType::SHORT : cArray += to_string( ((short*)array)[i] ); break;
-            case ConstantType::INT   : cArray += to_string( ((int*)array)[i] ); break;
-            case ConstantType::FLOAT : cArray += to_string( ((float*)array)[i] )+"f"; break;
-            case ConstantType::DOUBLE: cArray += to_string( ((double*)array)[i] ); break;
-            case ConstantType::INT64 : cArray += to_string( ((int64_t*)array)[i] ); break;
-            default                  : cArray += "";
+            Q.push_front(*it);
+            // we also need to initiate these dimensions in the string to
+            cArray += "{ ";
+            if( it == dims.begin() )
+            {
+                cArray += "\n\t";
+            }
+        }
+        while( !Q.empty() )
+        {
+            unsigned globalOffset = 0;
+            unsigned idx = 0;
+            while( idx < dims.size()-(unsigned)1 )
+            {
+                unsigned dim_weight = 1;
+                for( unsigned i = idx+1; i < dims.size(); i++ )
+                {
+                    dim_weight *= dims[i];
+                }
+                // now that we have the size coefficient of the current dimension (idx), multiply by its current index and accumulate it to the globalIndex
+                globalOffset += dim_weight*indices[idx];
+                idx++;
+            }
+            // now globalIndex points to the start of the next set of child-most entries in the array
+            for( unsigned i = 0; i < Q.front(); i++ )
+            {
+                if( i > 0 )
+                {
+                    cArray += ", ";
+                }
+                // the global array index is the sum of products (index*dimSize)
+                switch(t)
+                {
+                    case ConstantType::SHORT : cArray += to_string( ((short*)array)[globalOffset+i] ); break;
+                    case ConstantType::INT   : cArray += to_string( ((int*)array)[globalOffset+i] ); break;
+                    case ConstantType::FLOAT : cArray += to_string( ((float*)array)[globalOffset+i] )+"f"; break;
+                    case ConstantType::DOUBLE: cArray += to_string( ((double*)array)[globalOffset+i] ); break;
+                    case ConstantType::INT64 : cArray += to_string( ((int64_t*)array)[globalOffset+i] ); break;
+                    default                  : cArray += "";
+                }
+            }
+            cArray += " }";
+            // we have exhausted this dimension, record that by bubbling up an iterator increment through all dimension levels
+            int dimIndex = (int)dims.size()-2;
+            while( dimIndex >= 0 )
+            {
+                indices[ (unsigned)dimIndex ]++;
+                if( indices[(unsigned)dimIndex] == dims[(unsigned)dimIndex] )
+                {
+                    // we have exhausted this dimension, go to the parent
+                    dimIndex--;
+                    cArray += " }";
+                }
+                else
+                {
+                    // we have not yet exhausted this dimension, so don't go to the parent
+                    cArray += ",\n\t";
+                    break;
+                }
+            }
+            // if dimIndex went below 0, then all dimension iterator spaces have been satisfied, we are done
+            if( dimIndex < 0 )
+            {
+                break;
+            }
+            // dimIndex is now at the parent-most iterator increment, set all its child loop iterators to 0 and do it all again
+            dimIndex++;
+            while( dimIndex < (int)dims.size() )
+            {
+                Q.push_front(dims[(unsigned)dimIndex]);
+                indices[(unsigned)dimIndex] = 0;
+                cArray += "{ ";
+                dimIndex++;
+            }
         }
     }
-    cArray += " }";
     return cArray;
 }
 
@@ -79,10 +185,15 @@ string getArrayType(const llvm::Constant* ptr)
     return Cyclebite::Util::PrintVal( Cyclebite::Util::getContainedType(ptr), false );
 }
 
-unsigned getArraySize(const llvm::ArrayType* t)
+/// @brief Gets the dimensions of the constant array being analyzed
+///
+/// Both the size and the configuration of memory is acquired in this method
+/// @param t A pointer to the llvm::ArrayType that should be analyzed
+/// @param dims An empty vector that will store the dimensions of the array. Each entry in the vector is a dimension, and the value of that entry is the number of elements in that dimension
+/// @return The total number of entries in the array (that is, the permutation of each entry in dims)
+unsigned getArraySize(const llvm::ArrayType* t, vector<unsigned>& dims)
 {
     // arrays can contain multiple dimensions of stuff, so we recur through them here, each time permuting the sizes that are found
-    vector<unsigned> depths;
     deque<const llvm::Type*> Q;
     set<const llvm::Type*> covered;
     Q.push_front(t);
@@ -91,7 +202,7 @@ unsigned getArraySize(const llvm::ArrayType* t)
     {
         if( const auto& at = llvm::dyn_cast<llvm::ArrayType>(Q.front()) )
         {
-            depths.push_back((unsigned)at->getNumElements());
+            dims.push_back((unsigned)at->getNumElements());
             for( unsigned i = 0; i < at->getNumContainedTypes(); i++ )
             {
                 Q.push_back(at->getContainedType(i));
@@ -99,7 +210,7 @@ unsigned getArraySize(const llvm::ArrayType* t)
         }
         else if( const auto& vt = llvm::dyn_cast<llvm::VectorType>(Q.front()) )
         {
-            depths.push_back((unsigned)vt->getArrayNumElements());
+            dims.push_back((unsigned)vt->getArrayNumElements());
             for( unsigned i = 0; i < vt->getNumContainedTypes(); i++ )
             {
                 Q.push_back(vt->getContainedType(i));
@@ -109,9 +220,9 @@ unsigned getArraySize(const llvm::ArrayType* t)
     }
     // now we permute the sizes of the dimensions of the array together to get its total size
     unsigned elems = 1;
-    for( unsigned i = 0; i < depths.size(); i++ )
+    for( unsigned i = 0; i < dims.size(); i++ )
     {
-        elems *= depths[i];
+        elems *= dims[i];
     }
     return elems;
 }
@@ -163,6 +274,7 @@ void recurThroughArray( T* array, const llvm::ConstantArray* a, unsigned scale, 
         if( const auto& at = llvm::dyn_cast<llvm::ArrayType>(a->getAggregateElement(i)->getType()) )
         {
             // if it contains yet more arrays, we look through one more level to see if we have found the base type yet
+            // this allows us to structure the types easily within the array, since the array parameters are present at the second-to-last recurrence level
             for( unsigned j = 0; j < at->getNumElements(); j++ )
             {
                 if( a->getAggregateElement(i)->getAggregateElement(j)->getType()->isFloatTy() )
@@ -206,7 +318,7 @@ template <typename T>
 T* getContainedArray( const llvm::ConstantArray* a, unsigned arraySize )
 {
     T* containedArray = new T[arraySize];
-    // to capture multi-dimensionall arrays we need to recur through the types in the array
+    // to capture multi-dimensional arrays we need to recur through the types in the array
     recurThroughArray( containedArray, a, 1, 0);
     return containedArray;
 }
@@ -298,13 +410,14 @@ set<shared_ptr<ConstantSymbol>> Cyclebite::Grammar::getConstants( const shared_p
                                                 // implement a method to recur through the layers of the array
                                                 // - find the base type
                                                 // - find the permutation of entries (in this case 5 * 5)
-                                                unsigned arraySize = getArraySize(conArray->getType());
+                                                vector<unsigned> dims;
+                                                unsigned arraySize = getArraySize(conArray->getType(), dims);
                                                 auto at = getBaseType(conArray->getType());
                                                 if( at->isFloatTy() )
                                                 {
                                                     float* containedArray = getContainedArray<float>(conArray, arraySize);
                                                     auto vars = findContainedArrayVars(conArray, idxVars);
-                                                    auto newCon = make_shared<ConstantArray>(con, vars, containedArray, ConstantType::FLOAT, arraySize);
+                                                    auto newCon = make_shared<ConstantArray>(con, vars, containedArray, ConstantType::FLOAT, dims);
                                                     constants[con] = newCon;
                                                     cons.insert(newCon);
                                                     free(containedArray);
@@ -324,7 +437,7 @@ set<shared_ptr<ConstantSymbol>> Cyclebite::Grammar::getConstants( const shared_p
                                 else if( const auto& intTy    = llvm::dyn_cast<llvm::IntegerType>( Cyclebite::Util::getFirstContainedType(con) ) )
                                 {
                                     // call the method to build a ConstantSymbol<int>
-
+                                    throw CyclebiteException("Cannot yet support building constant integer aggregates!");
                                 }
                             }
                         }

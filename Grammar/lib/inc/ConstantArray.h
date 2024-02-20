@@ -19,8 +19,13 @@ namespace Cyclebite::Grammar
         /// @param idxVars  The index variables that index this constant array, if any. 
         /// @param a        A pointer to the array that contains the constant values of the constant array
         /// @param size     The number of elements in the input array
-        ConstantArray( const llvm::Constant* c, const std::vector<std::shared_ptr<IndexVariable>>& idxVars, void* a, ConstantType type, int size) : ConstantSymbol(c, a, type), vars(idxVars), arraySize(size) 
+        ConstantArray( const llvm::Constant* c, const std::vector<std::shared_ptr<IndexVariable>>& idxVars, void* a, ConstantType type, std::vector<unsigned>& D) : ConstantSymbol(c, a, type), vars(idxVars), dims(D) 
         {
+            unsigned size = 1;
+            for( auto entry : dims )
+            {
+                size *= entry;
+            }
             switch(t)
             {
                 case ConstantType::SHORT: 
@@ -94,7 +99,7 @@ namespace Cyclebite::Grammar
         /// A pointer to the array of constant values held by this constant
         void* array;
         /// The number of entries in the array
-        int arraySize;
+        std::vector<unsigned> dims;
     };
 
     std::string getArrayType(const llvm::Constant* ptr);
