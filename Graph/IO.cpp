@@ -2017,6 +2017,13 @@ void Cyclebite::Graph::BuildDFG( set<std::shared_ptr<ControlBlock>, p_GNCompare>
                                 graph.addNode(newCon);
                             }
                         }
+                        // each index in a gep may now become an indexVariable, thus if the parent instruction is a gep, we capture all its constants
+                        else if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(inst) )
+                        {
+                            auto newCon = make_shared<DataValue>(con);
+                            DNIDMap.insert( pair<const llvm::Value*, const shared_ptr<DataValue>>(con, newCon) );
+                            graph.addNode(newCon);
+                        }
                     }
                     // you can only communicate with globals via ld/st in LLVM IR
                     // thus, all we have to do is look at instruction operands to find their uses (ie an instruction cannot be used directly by a global)
