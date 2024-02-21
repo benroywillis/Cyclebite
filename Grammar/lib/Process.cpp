@@ -160,7 +160,7 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tas
             {
                 string dimension = "";
                 dimension = "(dimension "+to_string(idx->getDimensionIndex())+") ";
-                spdlog::info(dimension+idx->dump()+" -> "+Cyclebite::Util::PrintVal(idx->getNode()->getInst(), false));
+                spdlog::info(dimension+idx->dump()+" -> "+Cyclebite::Util::PrintVal(idx->getNode()->getVal(), false)+" ("+Cyclebite::Util::PrintVal(idx->getInst()->getInst(), false)+")");
             }
 #endif
             // gather constants that are important to the expression of our task

@@ -122,7 +122,7 @@ string Cyclebite::Grammar::PrintIdxVarTree( const set<shared_ptr<IndexVariable>>
     string dotString = "digraph{\n\trankdir=\"BT\";\n";
     for( const auto& idx : idxVars )
     {
-        dotString += getInstName(idx->getNode()->ID(), idx->getNode()->getInst());
+        dotString += getInstName(idx->getID(), idx->getNode()->getVal());
         for( const auto& iv : idx->getDimensions() )
         {
             dotString += getInstName(iv->getNode()->ID(), iv->getNode()->getVal());
@@ -132,11 +132,11 @@ string Cyclebite::Grammar::PrintIdxVarTree( const set<shared_ptr<IndexVariable>>
     {
         for( const auto& p : idx->getParents() )
         {
-            dotString += "\t"+to_string(idx->getNode()->ID())+" -> "+to_string(p->getNode()->ID())+";\n";
+            dotString += "\t"+to_string(idx->getID())+" -> "+to_string(p->getID())+";\n";
         }
         for( const auto& iv : idx->getDimensions() )
         {
-            dotString += "\t"+to_string(iv->getNode()->ID())+" -> "+to_string(idx->getNode()->ID())+" [style=dotted];\n";
+            dotString += "\t"+to_string(iv->getNode()->ID())+" -> "+to_string(idx->getID())+" [style=dotted];\n";
         }
     }
     dotString += "}";
@@ -149,7 +149,7 @@ string Cyclebite::Grammar::VisualizeCollection( const shared_ptr<Collection>& co
     dotString += getInstName(coll->getBP()->getNode()->ID(), coll->getBP()->getNode()->getVal());
     for( const auto& idx : coll->getIndices() )
     {
-        dotString += getInstName(idx->getNode()->ID(), idx->getNode()->getInst());
+        dotString += getInstName(idx->getNode()->ID(), idx->getNode()->getVal());
         for( const auto& iv : idx->getDimensions() )
         {
             dotString += getInstName(iv->getNode()->ID(), iv->getNode()->getVal());

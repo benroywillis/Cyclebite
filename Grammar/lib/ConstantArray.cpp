@@ -40,25 +40,49 @@ string ConstantArray::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
 {
     if( !vars.empty() )
     {
-        string dump = "";
-        if( symbol2Symbol.contains(vars.front()) )
-        {
-            dump = name+"("+symbol2Symbol.at(vars.front())->dumpHalide( symbol2Symbol );
-        }
-        else
-        {
-            dump = name+"("+vars.front()->dumpHalide( symbol2Symbol );
-        }
+        string dump = name+"(";
         auto varIt = next(vars.begin());
+        string s = "start";
+        while( varIt != vars.end() )
+        {
+            if( symbol2Symbol.contains(vars.front()) )
+            {
+                s = symbol2Symbol.at(vars.front())->dumpHalide( symbol2Symbol );
+                if( !s.empty() )
+                {
+                    dump += s;
+                    break;
+                }
+            }
+            else
+            {
+                s = (*varIt)->dumpHalide( symbol2Symbol );
+                if( !s.empty() )
+                {
+                    dump += s;
+                    break;
+                }
+            }
+            varIt = next(varIt);
+        }
+        varIt = next(varIt);
         while( varIt != vars.end() )
         {
             if( symbol2Symbol.contains( *varIt ) )
             {
-                dump += ", "+symbol2Symbol.at((*varIt))->dumpHalide(symbol2Symbol);
+                auto s = symbol2Symbol.at((*varIt))->dumpHalide(symbol2Symbol);
+                if( !s.empty() )
+                {
+                    dump += ", "+s;
+                }
             }
             else
             {
-                dump += ", "+(*varIt)->dumpHalide(symbol2Symbol);
+                auto s = (*varIt)->dumpHalide(symbol2Symbol);
+                if( !s.empty() )
+                {
+                    dump += ", "+s;
+                }
             }
             varIt = next(varIt);
         }
@@ -360,7 +384,7 @@ const vector<shared_ptr<IndexVariable>> findContainedArrayVars( const llvm::Cons
                 {
                     for( const auto& idxVar : idxVars )
                     {
-                        if( idxVar->getNode()->getInst() == idx.get() )
+                        if( idxVar->getNode()->getVal() == idx.get() )
                         {
                             vars.push_back(idxVar);
                             break;

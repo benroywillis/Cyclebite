@@ -18,20 +18,35 @@ namespace Cyclebite::Grammar
         int coefficient;
     };
 
+    /// @brief This class represents accesses into memory
+    ///
+    /// There are generally two ways that memory accesses are modeled within LLVM IR
+    /// 1. A constant integer is used within a gep instruction
+    ///    - commonly used to index into statically-defined structures
+    /// 2. An affine transformation of a dimension
+    ///    - consider the case where an index variable is used to index memory
+    ///      -- e.g., for i on I, x[i] = y[i]
+    ///    - then if we wanted to take every other it would be
+    ///      -- for i on I/2, x[i] = y[i*2]
+    ///    - an index variable would model i*2 for its transform of the dimension i, thus modeling the memory access pattern of that expression
+    /// Both of these cases have their own implications, and must be accounted for when identifying this index variable uniquely (see descriptions on the node and inst class memebers)
     class IndexVariable : public Symbol
     {
     public:
-        IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n,
+        IndexVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n,
+                       const std::shared_ptr<Cyclebite::Graph::Inst>& i,
                        const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& p = std::set<std::shared_ptr<IndexVariable>>(), 
                        const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c = std::set<std::shared_ptr<IndexVariable>>() );
-        IndexVariable( const std::shared_ptr<Cyclebite::Graph::Inst>& n,
+        IndexVariable( const std::shared_ptr<Cyclebite::Graph::DataValue>& n,
+                       const std::shared_ptr<Cyclebite::Graph::Inst>& i,
                        const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p, 
                        const std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>>& c = std::set<std::shared_ptr<IndexVariable>>() );
         void addParent( const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& p);
         void addChild( const std::shared_ptr<Cyclebite::Grammar::IndexVariable>& c);
         void addDimension( const std::shared_ptr<Cyclebite::Grammar::Dimension>& iv);
         void addOffsetBP( const std::shared_ptr<Cyclebite::Grammar::BasePointer>& p );
-        const std::shared_ptr<Cyclebite::Graph::Inst>& getNode() const;
+        const std::shared_ptr<Cyclebite::Graph::DataValue>& getNode() const;
+        const std::shared_ptr<Cyclebite::Graph::Inst>& getInst() const;
         /// @brief Method returns gep(s) the indexVariable is used within
         ///
         /// When an IndexVariable maps to a binary operator, it may be used in one or more geps to offset a base pointer
@@ -60,7 +75,7 @@ namespace Cyclebite::Grammar
         /// 2. Another index variable has been hit
         /// Thus, this method will not return true if the input argument is the use of one of the index variable's children. The input argument must be a "direct" use of the index variable.
         /// @return True if the given value is the index variable or a transformed version of it (for example, casted). False otherwise.
-        bool isValueOrTransformedValue(const llvm::Value* v) const;
+        bool isValueOrTransformedValue( const llvm::Instruction* i, const llvm::Value* v) const;
         /// @brief Returns whether these two index variables overlap in their dimension
         ///
         /// When two index variables index the same dimension of the base pointer, this has implications on what they do
@@ -77,7 +92,15 @@ namespace Cyclebite::Grammar
         /// @return A non-negative integer if the dimension index is valid. If invalid, a negative integer.
         int getDimensionIndex() const;
     protected:
-        std::shared_ptr<Cyclebite::Graph::Inst> node;
+        /// @brief The node is the value that this index variable refers to
+        /// If this index variable represents a constant within a gep, this is the constant
+        /// If this index variable represents an affine transform of a dimension, this is that affine transform instruction (and thus node and inst are the same thing)
+        std::shared_ptr<Cyclebite::Graph::DataValue> node;
+        /// @brief The inst represents the instruction having to do with the index variable
+        ///
+        /// If the index variable models a constant within a gep, this is the gep
+        /// If the index variable models an affine transform of a dimension, this that affine transform instruction (thus node and inst will be the same thing)
+        std::shared_ptr<Cyclebite::Graph::Inst> inst;
         /// Index variable makes a metaphorical edge between this index variable and the control space (which is useful for constructing a polyhedral space)
         std::set<std::shared_ptr<Dimension>> dims;
         /// Base pointer that yields the value we offset our BP with
@@ -88,6 +111,9 @@ namespace Cyclebite::Grammar
         std::set<std::shared_ptr<Cyclebite::Grammar::IndexVariable>> children;        
         /// the affine dimensions of this index
         PolySpace space;
+    private:
+        /// Helper function that needs access to class members
+        std::string printIdxVar(const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol, const std::shared_ptr<InductionVariable>& var ) const;
     };
 
     // sorts idxVars in hierarchical order (parent-most first, child-most last)

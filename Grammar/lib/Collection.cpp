@@ -109,7 +109,7 @@ const llvm::LoadInst* Collection::getLoad() const
         Cyclebite::Util::PrintVal(indexBP->getNode()->getVal());
         for( const auto& var : vars )
         {
-            Cyclebite::Util::PrintVal(var->getNode()->getInst());
+            Cyclebite::Util::PrintVal(var->getNode()->getVal());
         }
         for( const auto& ld : lds )
         {
@@ -331,21 +331,13 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 // to do this, we go through each index in the gep, map each one to a unique idx var, then push it to the set (that is sorted automatically)
                 // find the idxVar(s) that map to this gep
                 // the gep itself might be an idxVar so check it
-                for( const auto& i : idxVars )
-                {
-                    if( i->isValueOrTransformedValue(gep) )
-                    {
-                        vars.insert(i);
-                        break;
-                    }
-                }
                 for( const auto& idx : gep->indices() )
                 {
                     // find an idxVar for it
                     shared_ptr<IndexVariable> idxVar = nullptr;
                     for( const auto& i : idxVars )
                     {
-                        if( i->isValueOrTransformedValue(idx) )
+                        if( i->isValueOrTransformedValue(gep, idx) )
                         {
 #ifdef DEBUG
                             if( idxVar )
@@ -354,8 +346,8 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                                 {
                                     Cyclebite::Util::PrintVal(gep);
                                     Cyclebite::Util::PrintVal(idx);
-                                    Cyclebite::Util::PrintVal(i->getNode()->getInst());
-                                    Cyclebite::Util::PrintVal(idxVar->getNode()->getInst());
+                                    Cyclebite::Util::PrintVal(i->getNode()->getVal());
+                                    Cyclebite::Util::PrintVal(idxVar->getNode()->getVal());
                                     throw CyclebiteException("Found more than one idxVar for this dimension of a gep!");
                                 }
                             }
@@ -364,6 +356,30 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                             idxVar = i;
                             break;
 #endif
+                        }
+                        else if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(idx) )
+                        {
+                            if( i->isValueOrTransformedValue(inst, inst) )
+                            {
+#ifdef DEBUG
+                                if( idxVar )
+                                {
+                                    if( idxVar != i )
+                                    {
+                                        Cyclebite::Util::PrintVal(gep);
+                                        Cyclebite::Util::PrintVal(idx);
+                                        Cyclebite::Util::PrintVal(i->getNode()->getVal());
+                                        Cyclebite::Util::PrintVal(idxVar->getNode()->getVal());
+                                        throw CyclebiteException("Found more than one idxVar for this dimension of a gep!");
+                                    }
+                                }
+                                idxVar = i;
+    #else
+                                idxVar = i;
+                                break;
+    #endif
+                                idxVar = i;
+                            }
                         }
                     }
                     if( idxVar )
@@ -458,7 +474,7 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                 shared_ptr<IndexVariable> idx = nullptr;
                 for( const auto& i : idxVars )
                 {
-                    if( i->isValueOrTransformedValue(bin) )
+                    if( i->isValueOrTransformedValue(bin, bin) )
                     {
 #ifdef DEBUG
                         if( idx )
@@ -466,8 +482,8 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
                             if( idx != i )
                             {
                                 Cyclebite::Util::PrintVal(bin);
-                                Cyclebite::Util::PrintVal(i->getNode()->getInst());
-                                Cyclebite::Util::PrintVal(idx->getNode()->getInst());
+                                Cyclebite::Util::PrintVal(i->getNode()->getVal());
+                                Cyclebite::Util::PrintVal(idx->getNode()->getVal());
                                 throw CyclebiteException("Found more than one idxVar for this dimension of a gep!");
                             }
                         }

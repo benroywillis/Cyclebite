@@ -398,10 +398,10 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                         Cyclebite::Util::PrintVal(ld);
                         Cyclebite::Util::PrintVal(coll->getBP()->getNode()->getVal());
                         Cyclebite::Util::PrintVal(coll->getLoad());
-                        Cyclebite::Util::PrintVal(coll->getIndices().back()->getNode()->getInst());
+                        Cyclebite::Util::PrintVal(coll->getIndices().back()->getNode()->getVal());
                         Cyclebite::Util::PrintVal(found->getBP()->getNode()->getVal());
                         Cyclebite::Util::PrintVal(found->getLoad());
-                        Cyclebite::Util::PrintVal(found->getIndices().back()->getNode()->getInst());
+                        Cyclebite::Util::PrintVal(found->getIndices().back()->getNode()->getVal());
                         throw CyclebiteException("Mapped more than one collection to a load value!");
                     }
                     else
@@ -451,7 +451,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     Cyclebite::Util::PrintVal(coll->getBP()->getNode()->getVal());
                     for( const auto& idx : coll->getIndices() )
                     {
-                        Cyclebite::Util::PrintVal(idx->getNode()->getInst());
+                        Cyclebite::Util::PrintVal(idx->getNode()->getVal());
                     }
                     if( coll->getLoad() )
                     {
