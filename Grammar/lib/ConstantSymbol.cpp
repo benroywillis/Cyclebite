@@ -26,7 +26,7 @@ string ConstantSymbol::dump() const
     {
         case ConstantType::SHORT : return to_string(bits.s);
         case ConstantType::INT   : return to_string(bits.i);
-        case ConstantType::FLOAT : return to_string(bits.f);
+        case ConstantType::FLOAT : return to_string(bits.f)+"f";
         case ConstantType::DOUBLE: return to_string(bits.d);
         case ConstantType::INT64 : return to_string(bits.l);
         default                  : return "0";
