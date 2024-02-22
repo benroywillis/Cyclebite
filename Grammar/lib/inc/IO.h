@@ -26,4 +26,5 @@ namespace Cyclebite::Grammar
     void OMPAnnotateSource( const std::set<std::shared_ptr<Cycle>>& parallelSpots, const std::set<std::shared_ptr<Cycle>>& vectorSpots );
     // print tasks with specialInstructions highlighted
     void PrintDFGs(const std::set<std::shared_ptr<Task>, TaskIDCompare>& tasks);
+    void OutputJson( const std::unique_ptr<llvm::Module>& SourceBitcode, const std::set<std::shared_ptr<Task>, TaskIDCompare>& tasks, std::string OutputFile );
 } // namespace Cyclebite::Grammar

@@ -961,8 +961,6 @@ vector<shared_ptr<Expression>> Cyclebite::Grammar::getExpressions( const shared_
         throw CyclebiteException("Function group is empty!");
     }
     // step2: for each store, walk backward through the function group until the function group runs out
-    // function groups are sorted in reverse-order (the last instruction in the sequence is stored first)
-    set<vector<shared_ptr<Graph::Inst>>> functionGroups;
     for( const auto& storeNode : functionStores )
     {
         deque<shared_ptr<Cyclebite::Graph::Inst>> Q;
@@ -991,6 +989,37 @@ vector<shared_ptr<Expression>> Cyclebite::Grammar::getExpressions( const shared_
             Q.pop_front();
         }
         FGTs.push_back( constructExpression(t, group, rvs, colls, cons, vars) );
+    }
+    // analyze the expressions to see if they all feed into the same output collection
+    // this implies a reduction
+    set<shared_ptr<Collection>> outputCollections;
+    for( const auto& expr : FGTs )
+    {
+        if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
+        {
+            outputCollections.insert(coll);
+        }
+    }
+    if( FGTs.size() > 1 && outputCollections.size() == 1 )
+    {
+        // we have found a case where all expressions feed into the same collection
+        // then this was a reduction that was unrolled by the user (perhaps to apply specific weights to each constituent, like in an image gray algorithm)
+        // then we create a new expression that combines all the constituents together and map them to a single expression
+        vector<shared_ptr<Symbol>> inputs;
+        vector<Cyclebite::Graph::Operation> ops;
+        for( const auto& expr : FGTs )
+        {
+            // and add the reduction op between each one
+            // for now we just assume this is an add
+            if( expr != *FGTs.begin() )
+            {
+                ops.push_back(Cyclebite::Graph::Operation::add);
+            }
+            inputs.push_back(expr);
+        }
+        auto combinedExpr = make_shared<Expression>(t, inputs, ops, *outputCollections.begin());
+        FGTs.clear();
+        FGTs.push_back(combinedExpr);
     }
     return FGTs;
 }

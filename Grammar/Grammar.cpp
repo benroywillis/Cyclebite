@@ -14,6 +14,7 @@
 #include "Process.h"
 #include "Task.h"
 #include "IO.h"
+#include "Export.h"
 #include <fstream>
 #include <iostream>
 #include <iomanip>
@@ -30,7 +31,10 @@ cl::opt<string> KernelFile("k", cl::desc("Specify input kernel json filename"), 
 cl::opt<string> BitcodeFileName("b", cl::desc("Specify input bitcode filename"), cl::value_desc("bitcode filename"));
 cl::opt<string> BlockInfoFilename("bi", cl::desc("Specify input BlockInfo filename"), cl::value_desc("BlockInfo filename"));
 cl::opt<string> ProfileFileName("p", cl::desc("Specify input profile filename"), cl::value_desc("profile filename"));
-cl::opt<string> OutputFile("o", cl::desc("Specify output json filename"), cl::value_desc("json filename"));
+cl::opt<bool> LabelTasks("label", cl::desc("Enable task label assignment"), cl::value_desc("Enable task labels"), cl::init(true));
+cl::opt<bool> OutputOMP("omp", cl::desc("Enable OMP code generation. Each source file (including headers) used in the input application will be annotated with OMP pragmas where parallel tasks were found."), cl::value_desc("Enable task labels"), cl::init(true));
+cl::opt<bool> OutputHalide("halide", cl::desc("Enable automatic Halide generation"), cl::value_desc("Enable halide generation"), cl::init(true));
+cl::opt<string> OutputFile("o", cl::desc("Specify output json filename"), cl::value_desc("json filename"), cl::init("KernelGrammar.json"));
 
 int main(int argc, char *argv[])
 {
@@ -86,83 +90,10 @@ int main(int argc, char *argv[])
     // print for everyone to see
     PrintDFGs(tasks);
     // interpret the tasks in the DFG
-    Process(tasks);
-
+    auto taskToExpr = Process(tasks);
+    // finally, export the processed tasks
+    Export(taskToExpr, OutputFile, LabelTasks, OutputOMP, OutputHalide);
     // output json file with special instruction information
-    uint64_t staticInstructions  = 0;
-    uint64_t dynamicInstructions = 0;
-    uint64_t kernelInstructions  = 0;
-    uint64_t labeledInstructions = 0;
-    for( auto f = SourceBitcode->begin(); f != SourceBitcode->end(); f++ )
-    {
-        for( auto b = f->begin(); b != f->end(); b++ )
-        {
-            uint64_t blockInstCount = 0;
-            for( auto i = b->begin(); i != b->end(); i++ )
-            {
-                blockInstCount++;
-            }
-            staticInstructions += blockInstCount;
-            if( BBCBMap.contains(llvm::cast<BasicBlock>(b)) )
-            {
-                dynamicInstructions += blockInstCount;
-            }
-        }
-    }
-    for( const auto& t : tasks )
-    {
-        for( const auto& c : t->getCycles() )
-        {
-            for( const auto& b : c->getBody() )
-            {
-                for( const auto& i : b->getInstructions() )
-                {
-                    kernelInstructions++;
-                    if( i->isFunction() || i->isMemory() || i->isState() )
-                    {
-                        labeledInstructions++;
-                    }
-                }
-            }
-        }
-    }
-    nlohmann::json output;
-    output["Statistics"]["StaticInstCount"]  = staticInstructions;
-    output["Statistics"]["DynamicInstCount"] = dynamicInstructions;
-    output["Statistics"]["KernelInstCount"]  = kernelInstructions;
-    output["Statistics"]["LabeledInstCount"] = labeledInstructions;
-    
-    // kernel function histogram
-    map<string, uint64_t> hist;
-    for( const auto& t : tasks )
-    {
-        for( const auto& c : t->getCycles() )
-        {
-            for( const auto& b : c->getBody() )
-            {
-                for( const auto& i : b->getInstructions() )
-                {
-                    if( i->isFunction() )
-                    {
-                        try
-                        {
-                            hist[Cyclebite::Graph::OperationToString.at(i->getOp())]++;
-                        }
-                        catch( exception& e )
-                        {
-                            spdlog::critical("OpToString map failed on the following instruction: ");
-                            Cyclebite::Util::PrintVal(i->getInst());
-                        }
-                    }
-                }
-            }
-        }
-    }
-    output["Statistics"]["FunctionHistogram"] = hist;
-
-    ofstream oStream(OutputFile);
-    oStream << setw(4) << output;
-    oStream.close();
-
+    OutputJson(SourceBitcode, tasks, OutputFile);
     return 0;
 }

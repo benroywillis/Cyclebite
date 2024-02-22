@@ -17,7 +17,6 @@
 #include "Task.h"
 #include "Graph/inc/Dijkstra.h"
 #include "BasePointer.h"
-#include "Export.h"
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <deque>
@@ -112,7 +111,7 @@ vector<shared_ptr<InductionVariable>> getOrdering( const llvm::GetElementPtrInst
     return order;
 }
 
-void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tasks)
+map<shared_ptr<Task>, vector<shared_ptr<Expression>>> Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tasks)
 {
     // each expression maps 1:1 with tasks from the cartographer
     map<shared_ptr<Task>, vector<shared_ptr<Expression>>> taskToExpr;
@@ -201,5 +200,5 @@ void Cyclebite::Grammar::Process(const set<shared_ptr<Task>, TaskIDCompare>& tas
         }
         taskToExpr[t] = exprs;
     }
-    Export(taskToExpr);
+    return taskToExpr;
 }

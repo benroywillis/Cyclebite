@@ -347,3 +347,81 @@ void Cyclebite::Grammar::PrintDFGs(const set<shared_ptr<Task>, TaskIDCompare>& t
         DFGDot.close();
     }
 }
+
+void Cyclebite::Grammar::OutputJson( const unique_ptr<llvm::Module>& SourceBitcode, const set<shared_ptr<Task>, TaskIDCompare>& tasks, string OutputFile )
+{
+    uint64_t staticInstructions  = 0;
+    uint64_t dynamicInstructions = 0;
+    uint64_t kernelInstructions  = 0;
+    uint64_t labeledInstructions = 0;
+    for( auto f = SourceBitcode->begin(); f != SourceBitcode->end(); f++ )
+    {
+        for( auto b = f->begin(); b != f->end(); b++ )
+        {
+            uint64_t blockInstCount = 0;
+            for( auto i = b->begin(); i != b->end(); i++ )
+            {
+                blockInstCount++;
+            }
+            staticInstructions += blockInstCount;
+            if( Cyclebite::Graph::BBCBMap.contains(llvm::cast<llvm::BasicBlock>(b)) )
+            {
+                dynamicInstructions += blockInstCount;
+            }
+        }
+    }
+    for( const auto& t : tasks )
+    {
+        for( const auto& c : t->getCycles() )
+        {
+            for( const auto& b : c->getBody() )
+            {
+                for( const auto& i : b->getInstructions() )
+                {
+                    kernelInstructions++;
+                    if( i->isFunction() || i->isMemory() || i->isState() )
+                    {
+                        labeledInstructions++;
+                    }
+                }
+            }
+        }
+    }
+    nlohmann::json output;
+    output["Statistics"]["StaticInstCount"]  = staticInstructions;
+    output["Statistics"]["DynamicInstCount"] = dynamicInstructions;
+    output["Statistics"]["KernelInstCount"]  = kernelInstructions;
+    output["Statistics"]["LabeledInstCount"] = labeledInstructions;
+    
+    // kernel function histogram
+    map<string, uint64_t> hist;
+    for( const auto& t : tasks )
+    {
+        for( const auto& c : t->getCycles() )
+        {
+            for( const auto& b : c->getBody() )
+            {
+                for( const auto& i : b->getInstructions() )
+                {
+                    if( i->isFunction() )
+                    {
+                        try
+                        {
+                            hist[Cyclebite::Graph::OperationToString.at(i->getOp())]++;
+                        }
+                        catch( exception& e )
+                        {
+                            spdlog::critical("OpToString map failed on the following instruction: ");
+                            Cyclebite::Util::PrintVal(i->getInst());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    output["Statistics"]["FunctionHistogram"] = hist;
+
+    ofstream oStream(OutputFile);
+    oStream << setw(4) << output;
+    oStream.close();
+}

@@ -308,9 +308,9 @@ set<shared_ptr<Cycle>> VectorizeExpression( const shared_ptr<Expression>& expr )
     return reductionCycles;
 }
 
-void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& taskToExpr, const map<shared_ptr<Task>, set<string>>& taskLabels )
+void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& taskToExpr, const map<shared_ptr<Task>, set<string>>& taskLabels, string name )
 {
-    string pipelineName = "CyclebiteGEMM";
+    string pipelineName = name.substr(0, name.find("."));
     // Things to dwell on
     // 1. Non-task code
     //    - non-task code doesn't split tasks
@@ -824,8 +824,15 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     }
 }
 
-void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& taskToExpr )
+void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& taskToExpr, string name, bool Labels, bool OMP, bool Halide )
 {
+    // the output name should be simple
+    size_t slashPos = 0;
+    while( name.find("/", slashPos+1) != string::npos )
+    {
+        slashPos = name.find("/", slashPos+1);
+    }
+    string filteredOutputName = name.substr( slashPos+1, name.find(".", slashPos+1)-slashPos-1 );
     try
     {
         // first, task name
@@ -849,13 +856,13 @@ void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<E
                 auto vectorSpots   = VectorizeExpression( expr );
                 auto exprLabel = MapTaskToName(expr, parallelSpots);
                 taskToLabel[t.first].insert(exprLabel);
-                spdlog::info("Cyclebite-Template Label: Task"+to_string(t.first->getID())+" -> "+exprLabel);
-                OMPAnnotateSource(parallelSpots, vectorSpots);
+                if( Labels ) spdlog::info("Cyclebite-Template Label: Task"+to_string(t.first->getID())+" -> "+exprLabel);
+                if( OMP ) OMPAnnotateSource(parallelSpots, vectorSpots);
                 cout << endl;
             }
         }
         // third, export Halide
-        exportHalide(taskToExpr, taskToLabel);
+        if( Halide ) exportHalide(taskToExpr, taskToLabel, filteredOutputName);
     }
     catch ( CyclebiteException& e )
     {
