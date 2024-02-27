@@ -85,11 +85,25 @@ string OperatorExpression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<
     if( !args.empty() )
     {
         auto arg = args.begin();
-        expr += (*arg++)->dumpHalide(symbol2Symbol);
+        if( symbol2Symbol.contains(*arg) )
+        {
+            expr += symbol2Symbol.at(*arg++)->dumpHalide(symbol2Symbol);
+        }
+        else
+        {
+            expr += (*arg++)->dumpHalide(symbol2Symbol);
+        }
         while( arg != args.end() )
         {
             expr += ", ";
-            expr += (*arg++)->dumpHalide(symbol2Symbol);
+            if( symbol2Symbol.contains(*arg) )
+            {
+                expr += symbol2Symbol.at(*arg++)->dumpHalide(symbol2Symbol);
+            }
+            else
+            {
+                expr += (*arg++)->dumpHalide(symbol2Symbol);
+            }
         }
     }
     expr += ")";

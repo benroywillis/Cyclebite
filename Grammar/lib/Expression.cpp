@@ -130,11 +130,25 @@ string Expression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>
     {
         auto b = symbols.begin();
         auto o = ops.begin();
-        expr += " "+(*b)->dumpHalide(symbol2Symbol);
+        if( symbol2Symbol.contains(*b) )
+        {
+            expr += " "+symbol2Symbol.at(*b)->dumpHalide(symbol2Symbol);
+        }
+        else
+        {
+            expr += " "+(*b)->dumpHalide(symbol2Symbol);
+        }
         b = next(b);
         while( b != symbols.end() )
         {
-            expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+(*b)->dumpHalide(symbol2Symbol);
+            if( symbol2Symbol.contains(*b) )
+            {
+                expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+symbol2Symbol.at(*b)->dumpHalide(symbol2Symbol);
+            }
+            else
+            {
+                expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+(*b)->dumpHalide(symbol2Symbol);
+            }
             b = next(b);
             o = next(o);
         }

@@ -360,7 +360,13 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     //                  ----- [easy] the tuples are not contiguous but have consistent stride (like an array of structs in which only one member is accessed)
     //                  ----- [hard] the tuples are not contiguous and don't have consistent stride (then how do you name all of them?)
     //             ---- both cases will require refactoring what it means to be able to merge tuples together, and how they should be sorted
-    
+
+    // maps symbols to other symbols when printing
+    // currently this serves two purposes
+    // 1. When index variables need to become reductions (during reductions)
+    // 2. When collections need to become other tasks (to facilitate task communicatoin)
+    // the keys in this map will be replaced by their values when the halide expressions are generated
+    map<shared_ptr<Symbol>, shared_ptr<Symbol>> Symbol2Symbol;
     // before anything happens, we need to organize the pipeline in its producer-consumer order
     // this will allow us to refer to our producers when we generate halide expressions
     // [2024-01-26] for now we take the task graph and enumerate it according to its producer-consumer relationships
@@ -520,15 +526,11 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     // 5c. Bound the input(s) for good measure - the default behavior is repeat edge e.g. aaa | abc | ccc
     for( const auto& in : inputs )
     {
-        halideGenerator += "\t\tFunc "+in->getBoundedName()+"(\""+in->getBoundedName()+"\") = Halide::BoundaryConditions::repeat_edge("+in->getName()+");\n";
+        auto bounded = make_shared<Collection>(in->getIndices(), in->getBP(), in->getElementPointers());
+        Symbol2Symbol[in] = bounded;
+        halideGenerator += "\t\tFunc "+bounded->getName()+"(\""+bounded->getName()+"\") = Halide::BoundaryConditions::repeat_edge("+in->getName()+");\n";
     }
     if( !inputs.empty() ) halideGenerator += "\n";
-    // maps symbols to other symbols when printing
-    // currently this serves two purposes
-    // 1. When index variables need to become reductions (during reductions)
-    // 2. When collections need to become other tasks (to facilitate task communicatoin)
-    // the keys in this map will be replaced by their values when the halide expressions are generated
-    map<shared_ptr<Symbol>, shared_ptr<Symbol>> Symbol2Symbol;
     // 5d. print the expressions
     for( const auto& t : exprOrder )
     {
@@ -620,7 +622,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
                 {
                     // there is a 1:1 mapping between consumerdims and producerDims, so we trivially map producer dims to consumer dims
                     // if the consumerDims have already been mapped to something else, we map the producer dims to that too
-                    // keep in mind that this my be overwriting a previous mapping (say, from the previous step), so after this step the Symbol2Symbol map is case-specific to this expression
+                    // keep in mind that this may be overwriting a previous mapping (say, from the previous step), so after this step the Symbol2Symbol map is case-specific to this expression
                     for( unsigned i = 0; i  < producerDims.size(); i++ )
                     {
                         if( Symbol2Symbol.contains(consumerDims[i])  )

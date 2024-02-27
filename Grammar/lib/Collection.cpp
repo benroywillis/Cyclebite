@@ -169,6 +169,12 @@ string Collection::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>
             {
                 expr += e->getName();
             }
+            else if( const auto& c = dynamic_pointer_cast<Collection>(s.second) )
+            {
+                // dump the mapped collection method
+                expr += s.second->dumpHalide(symbol2Symbol);
+                return expr;
+            }
         }
     }
     if( expr.empty() )
