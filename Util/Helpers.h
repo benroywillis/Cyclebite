@@ -11,7 +11,7 @@ namespace Cyclebite::Util
     /// If the input value is not a pointer, its type is returned (whatever that happens to be)
     /// @param 
     /// @retval A constant pointer to the relevant llvm type
-    inline const llvm::Type* getFirstContainedType( const llvm::Value* val )
+    inline const llvm::Type* getFirstContainedType( const llvm::Value* val, const llvm::Value** foundValue = nullptr )
     {
         // llvm no longer supports contained types in their class definition - types are inferred from the instructions
         // thus, to find the contained primitive type of this base pointer, we have to walk the DFG looking for geps
@@ -28,6 +28,10 @@ namespace Cyclebite::Util
             {
                 if( !llvm::isa<llvm::PointerType>(gep->getSourceElementType()) && !llvm::isa<llvm::TypedPointerType>(gep->getSourceElementType()) )
                 {
+                    if( foundValue )
+                    {
+                        *foundValue = gep;
+                    }
                     return gep->getSourceElementType();
                 }
                 else
@@ -47,6 +51,10 @@ namespace Cyclebite::Util
                 // check the returned type of the load
                 if( !llvm::isa<llvm::PointerType>(ld->getType()) && !llvm::isa<llvm::TypedPointerType>(ld->getType()) )
                 {
+                    if( foundValue )
+                    {
+                        *foundValue = gep;
+                    }
                     return ld->getType();
                 }
                 else
@@ -87,6 +95,10 @@ namespace Cyclebite::Util
             }
             Q.pop_front();
         }
+        if( foundValue )
+        {
+            *foundValue = val;
+        }
         return val->getType();
     }
 
@@ -99,18 +111,42 @@ namespace Cyclebite::Util
     /// @return 
     inline const llvm::Type* getContainedType(const llvm::Value* val)
     {
-        const auto foundTy = getFirstContainedType(val);
-        if( const auto& ar = llvm::dyn_cast<llvm::ArrayType>(foundTy) )
+        const llvm::Value* foundValue = nullptr;
+        const auto foundType = getFirstContainedType(val, &foundValue);
+        if( const auto& ar = llvm::dyn_cast<llvm::ArrayType>(foundType) )
         {
-            return ar->getArrayElementType();
+            if( foundValue != val )
+            {
+                if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(foundValue) )
+                {
+                    for( const auto& user : gep->users() )
+                    {
+                        return getContainedType(user);
+                    }
+                }
+                else
+                {
+                    return getContainedType(foundValue);
+                }
+            }
         }
-        else if( const auto& vt = llvm::dyn_cast<llvm::VectorType>(foundTy) )
+        else if( const auto& vt = llvm::dyn_cast<llvm::VectorType>(foundType) )
         {
-            return vt->getElementType();
+            if( foundValue != val )
+            {
+                if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(foundValue) )
+                {
+                    for( const auto& user : gep->users() )
+                    {
+                        return getContainedType(user);
+                    }
+                }
+                else
+                {
+                    return getContainedType(foundValue);
+                }
+            }
         }
-        else
-        {
-            return foundTy;
-        }
+        return foundType;
     }
 } // namespace Cyclebite::Util
