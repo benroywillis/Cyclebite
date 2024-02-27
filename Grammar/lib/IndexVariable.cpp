@@ -242,6 +242,24 @@ string IndexVariable::printIdxVar(const map<shared_ptr<Symbol>, shared_ptr<Symbo
     return print;
 }
 
+string printOffset( DimensionOffset offset )
+{
+    string print = "";
+    // the offset is necessary to add when our operation is not a multiply or divide
+    if( offset.op != Cyclebite::Graph::Operation::mul && 
+        offset.op != Cyclebite::Graph::Operation::sdiv && 
+        offset.op != Cyclebite::Graph::Operation::udiv && 
+        offset.op != Cyclebite::Graph::Operation::sl &&
+        offset.op != Cyclebite::Graph::Operation::sr )
+    {
+        if( offset.coefficient != static_cast<int>(STATIC_VALUE::INVALID) && offset.coefficient != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+        {
+            print += Cyclebite::Graph::OperationToString.at(offset.op)+to_string(offset.coefficient);
+        }
+    }
+    return print;
+}
+
 string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
     // we are interested in printing the index variable in terms of its dimension
@@ -255,17 +273,7 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
         childMostDim = *exclusives.begin();
         if( const auto& iv = dynamic_pointer_cast<InductionVariable>(*exclusives.begin()) )
         {
-            auto foo = getOffset();
-            auto print = printIdxVar( symbol2Symbol, iv );
-            // the offset is necessary to add when our operation is not a multiply or divide
-            if( foo.op != Cyclebite::Graph::Operation::mul && foo.op != Cyclebite::Graph::Operation::sdiv && foo.op != Cyclebite::Graph::Operation::udiv )
-            {
-                if( foo.coefficient != static_cast<int>(STATIC_VALUE::INVALID) && foo.coefficient != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
-                {
-                    print += "+"+to_string(foo.coefficient);
-                }
-            }
-            return print;
+            return printIdxVar( symbol2Symbol, iv ) + printOffset( getOffset() );
         }
         else
         {
@@ -364,7 +372,7 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
             {
                 ret += static_pointer_cast<InductionVariable>(childMostDim)->dumpHalide(symbol2Symbol);
             }
-            ret += Graph::OperationToString.at(Graph::GetOp(bin->getOpcode()))+to_string(offset.coefficient);
+            ret += printOffset(offset);
             return ret;
         }
         else if( node == childMostDim->getNode() )
