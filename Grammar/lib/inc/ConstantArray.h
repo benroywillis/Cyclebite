@@ -88,17 +88,19 @@ namespace Cyclebite::Grammar
                 case ConstantType::UNKNOWN: break;
             }
         }
+        std::string getBufferName() const;
         std::string dumpHalide( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const override;
         std::string dumpC() const override;
         const std::vector<std::shared_ptr<IndexVariable>>& getVars() const;
         ConstantType getArray(void** ret) const;
+        const std::vector<unsigned>& getDims() const;
         int getArraySize() const;
     private:
         /// The index variables that index the constant array, if any
         std::vector<std::shared_ptr<IndexVariable>> vars;
         /// A pointer to the array of constant values held by this constant
         void* array;
-        /// The number of entries in the array
+        /// The length of the vector is the number of dimensions in the array (in hierarchical order), and the entry is the size of that dimension
         std::vector<unsigned> dims;
     };
 

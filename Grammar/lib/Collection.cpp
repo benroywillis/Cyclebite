@@ -41,6 +41,11 @@ Collection::Collection( const std::vector<std::shared_ptr<IndexVariable>>& v, co
     }
 }
 
+string Collection::getBoundedName() const
+{
+    return name+"_bounded";
+}
+
 const set<shared_ptr<Dimension>, DimensionSort> Collection::getDimensions() const
 {
     set<shared_ptr<Dimension>, DimensionSort> dims;

@@ -16,6 +16,7 @@ namespace Cyclebite::Grammar
         /// @param e    The memory primitive(s) that are produced by this collection. This represents the loaded or stored values or places this collection facilitates.
         Collection( const std::vector<std::shared_ptr<IndexVariable>>& v, const std::shared_ptr<BasePointer>& p, const std::set<const llvm::Value*>& e );
         ~Collection() = default;
+        std::string getBoundedName() const;
         uint32_t getNumDims() const;
         /// Returns the index variables belonging to this collection that are dimensions of the underlying base pointer
         const std::set<std::shared_ptr<Dimension>, DimensionSort> getDimensions() const;

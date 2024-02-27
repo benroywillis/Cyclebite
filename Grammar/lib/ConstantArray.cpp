@@ -15,6 +15,11 @@
 using namespace Cyclebite::Grammar;
 using namespace std;
 
+string ConstantArray::getBufferName() const
+{
+    return name+"_buffer";
+}
+
 const vector<shared_ptr<IndexVariable>>& ConstantArray::getVars() const
 {
     return vars;
@@ -36,11 +41,16 @@ int ConstantArray::getArraySize() const
     return arraySize;
 }
 
+const vector<unsigned>& ConstantArray::getDims() const
+{
+    return dims;
+}
+
 string ConstantArray::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
     if( !vars.empty() )
     {
-        string dump = name+"(";
+        string dump = getBufferName()+"(";
         auto varIt = next(vars.begin());
         string s = "start";
         while( varIt != vars.end() )
@@ -91,13 +101,13 @@ string ConstantArray::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
     }
     else
     {
-        return name;
+        return getBufferName();
     }
 }
 
 string ConstantArray::dumpC() const
 {
-    string cArray = "const "+TypeToString.at(t)+" "+name+"[";
+    string cArray = TypeToString.at(t)+" "+name+"[";
     cArray += to_string(*dims.begin())+"]";
     auto it = next(dims.begin());
     while( it != dims.end() )
@@ -219,7 +229,7 @@ string ConstantArray::dumpC() const
     return cArray;
 }
 
-string getArrayType(const llvm::Constant* ptr)
+string Cyclebite::Grammar::getArrayType(const llvm::Constant* ptr)
 {
     return Cyclebite::Util::PrintVal( Cyclebite::Util::getContainedType(ptr), false );
 }
