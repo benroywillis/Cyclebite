@@ -51,7 +51,23 @@ string FunctionExpression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<
         // 1. the first two operands get multiplied ( arg0*arg1 )
         //    - the reduction arg (arg2) is implicit in the expression (from the +=), so it is omitted entirely
         // 2. the reduction dimension in the arg needs to be changed to the reduction variable
-        expr += args.front()->dumpHalide(symbol2Symbol) + " * " + (*next(args.begin()))->dumpHalide(symbol2Symbol);
+        if( symbol2Symbol.contains(args.front()) )
+        {
+            expr += symbol2Symbol.at(args.front())->dumpHalide(symbol2Symbol);
+        }
+        else
+        {
+            expr += args.front()->dumpHalide(symbol2Symbol);
+        }
+        expr += " * ";
+        if( symbol2Symbol.contains( *next(args.begin()) ) )
+        {
+            expr += symbol2Symbol.at(*next(args.begin()))->dumpHalide(symbol2Symbol);
+        }
+        else
+        {
+            expr += (*next(args.begin()))->dumpHalide(symbol2Symbol);
+        }
     }
     return expr;
 }
