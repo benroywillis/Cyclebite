@@ -10,12 +10,13 @@
 namespace Cyclebite::Grammar
 {
     class Task;
+    class FunctionCallArgs;
     /// @brief Sets the threshold, in bytes, that a memory allocation must make in order to be considered a base pointer
     constexpr uint64_t ALLOC_THRESHOLD = 128;
     /// @brief Decides whether this function allocates memory
     /// @param call     The call instruction
     /// @return The number of bytes allocated by the call. If the call instruction does not allocate memory, it returns 0.
-    uint32_t isAllocatingFunction(const llvm::CallBase* call);
+    uint32_t isAllocatingFunction(const llvm::CallBase* call, const llvm::Function* parent = nullptr, const FunctionCallArgs* args = nullptr );
     /// @brief Finds the source of a pointer operand
     /// @param ptr      The pointer to be investigated
     /// @return The source of the pointer. If no source could be determined, the input arg is returned;

@@ -18,7 +18,8 @@ file(GLOB SOURCES BasePointer.cpp
                   TaskParameter.cpp
                   Export.cpp
                   Dimension.cpp
-                  Counter.cpp)
+                  Counter.cpp
+                  FunctionCallArgs.cpp)
 
 add_library(Grammar SHARED ${SOURCES})
 set_target_properties(

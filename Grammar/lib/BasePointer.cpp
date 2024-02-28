@@ -9,11 +9,13 @@
 #include "BasePointer.h"
 #include "IO.h"
 #include "Task.h"
+#include "FunctionCallArgs.h"
 #include "Graph/inc/IO.h"
 #include <deque>
 
 using namespace Cyclebite::Grammar;
 using namespace Cyclebite::Graph;
+using namespace Cyclebite::Util;
 using namespace std;
 
 const std::shared_ptr<DataValue>& BasePointer::getNode() const
@@ -198,11 +200,160 @@ const string BasePointer::getContainedTypeString() const
     return Cyclebite::Util::PrintVal( Cyclebite::Util::getContainedType(node->getVal()), false );
 }
 
-uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
+/// @brief Recursively searches the static call graph for dynamic memory allocation functions
+///
+/// The first allocation function found is the one whose allocation size is returned. 
+/// If it uses a dynamically-determined allocation size, a size of 0 is returned.
+/// The allocation functions currently supported are
+/// malloc, calloc, "new" operator (C++), and posix_memalign
+/// @param call CallBase to investigate. The called function within this instruction will be recursed into if no allocating function is found within it
+/// @param parent The parent function that "owns" the call parameter (it is a call instruction within parent's body). The parent's args map to determined values inside "args"
+/// @param args     Determined values that map to arguments in the "parent" function. These determined values are mapped to their uses in the parent function's body, which may include arguments in the function called by "call".
+/// @return The size in bytes of the found dynamic memory allocation function. If no allocation function could be found, or if the allocation used a dynamically-determined size, 0 is returned.
+uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call, const llvm::Function* parent, const FunctionCallArgs* args )
 {
+    map<const llvm::Value*, pair<FunctionCallArgs::member, FunctionCallArgs::T_member>> determinables;
+    if( parent && args )
+    {
+        for( unsigned i = 0; i < args->args.size(); i++ )
+        {
+            // the determinable value we put into "determinables" may be changed by the instructions in the function
+            // to reflect those changes, we have a global value that we initialize to the arg value
+            // if any changes are applied to it, this value is updated, and ultimately written to "determinables" with the time comes
+            FunctionCallArgs::member determined;
+            determined.h = 0;
+            FunctionCallArgs::T_member determinedType = FunctionCallArgs::T_member::INT64_T;
+            switch( args->types[i] )
+            {
+                case FunctionCallArgs::T_member::INT8_T : determined.h = (int64_t)args->args[i].b; break;
+                case FunctionCallArgs::T_member::INT16_T: determined.h = (int64_t)args->args[i].d; break;
+                case FunctionCallArgs::T_member::INT32_T: determined.h = (int64_t)args->args[i].f; break;
+                case FunctionCallArgs::T_member::INT64_T: determined.h = (int64_t)args->args[i].h; break;
+                case FunctionCallArgs::T_member::SHORT  : determined.h = (int64_t)args->args[i].i; break;
+                case FunctionCallArgs::T_member::FLOAT  : determined.h = (int64_t)args->args[i].j; break;
+                case FunctionCallArgs::T_member::DOUBLE : determined.h = (int64_t)args->args[i].k; break;
+                default                                 : throw CyclebiteException("Type of determinable value is undetermined!");
+            }
+            // walk the DFG starting from the arguments of this function until we map all llvm::Values that are determinable by them
+            for( unsigned j = 0; j < parent->arg_size(); j++ )
+            {
+                auto arg = parent->getArg(j);
+                deque<const llvm::Value*> Q;
+                set<const llvm::Value*> covered;
+                Q.push_front(arg);
+                covered.insert(arg);
+                while( !Q.empty() )
+                {
+                    for( const auto& use : Q.front()->users() )
+                    {
+                        if( const auto& st = llvm::dyn_cast<llvm::StoreInst>(use) )
+                        {
+                            // if the arg is being put into a pointer we need to follow the pointer
+                            if( st->getValueOperand() == arg )
+                            {
+                                if( !covered.contains(st->getPointerOperand()) )
+                                {
+                                    Q.push_back(st->getPointerOperand());
+                                    covered.insert(st->getPointerOperand());
+                                }
+                            }
+                        }
+                        else if( const auto& bin = llvm::dyn_cast<llvm::BinaryOperator>(use) )
+                        {
+                            // determinable values can be combined with other determinables, changing that value to something interesting
+                            // first, see if the other operand is determinable
+                            llvm::Value* other = nullptr;
+                            for( const auto& op : bin->operands() )
+                            {
+                                if( op != Q.front() )
+                                {
+                                    other = op;
+                                    break;
+                                }
+                            }
+                            if( other )
+                            {
+                                int64_t otherOpValue = 0;
+                                if( const auto& con = llvm::dyn_cast<llvm::Constant>(other) )
+                                {
+                                    otherOpValue = (int64_t)*con->getUniqueInteger().getRawData();
+                                }
+                                else if( const auto& arg = llvm::dyn_cast<llvm::Argument>(other) )
+                                {
+                                    // this maps to another argument in the parent function, see if it is determinable
+                                    for( unsigned k = 0; k < parent->arg_size(); k++ )
+                                    {
+                                        if( arg == parent->getArg(k) )
+                                        {
+                                            if( args->args.size() > k )
+                                            {
+                                                // we have determined the "other" value of the binary operator, put it into otherOpValue
+                                                switch( args->types[k] )
+                                                {
+                                                    case FunctionCallArgs::T_member::INT8_T : otherOpValue = (int64_t)args->args[k].b; break;
+                                                    case FunctionCallArgs::T_member::INT16_T: otherOpValue = (int64_t)args->args[k].d; break;
+                                                    case FunctionCallArgs::T_member::INT32_T: otherOpValue = (int64_t)args->args[k].f; break;
+                                                    case FunctionCallArgs::T_member::INT64_T: otherOpValue = (int64_t)args->args[k].h; break;
+                                                    case FunctionCallArgs::T_member::SHORT  : otherOpValue = (int64_t)args->args[k].i; break;
+                                                    case FunctionCallArgs::T_member::FLOAT  : otherOpValue = (int64_t)args->args[k].j; break;
+                                                    case FunctionCallArgs::T_member::DOUBLE : otherOpValue = (int64_t)args->args[k].k; break;
+                                                    default                                 : throw CyclebiteException("Type of determinable value is undetermined!");
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                // now combine the two operands like the instruction is doing
+                                // but don't overwrite determined.h if otherOpValue is undetermined
+                                if( otherOpValue )
+                                {
+                                    switch( Cyclebite::Graph::GetOp(bin->getOpcode()) )
+                                    {
+                                        case Cyclebite::Graph::Operation::mul: determined.h = determined.h * otherOpValue; break;
+                                        case Cyclebite::Graph::Operation::add: determined.h += otherOpValue; break;
+                                        default                              : throw CyclebiteException("Cannot yet support this operation when transforming determined function arguments!");
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                throw CyclebiteException("Could not ascertain how determinable value was transformed by a binary operator!");
+                            }
+                            if( !covered.contains(use) )
+                            {
+                                Q.push_back(use);
+                                covered.insert(use);
+                            }
+                        }
+                        // we are particularly interested in uses that happen in function calls (like alloc functions)
+                        else if( const auto& c = llvm::dyn_cast<llvm::CallBase>(use) )
+                        {
+                            for( unsigned k = 0; k < c->arg_size(); k++ )
+                            {
+                                if( c->getArgOperand(k) == Q.front() )
+                                {
+                                    determinables[Q.front()] = pair( determined, determinedType );
+                                }
+                            }
+                        }
+                        else if( !covered.contains(use) )
+                        {
+                            Q.push_back(use);
+                            covered.insert(use);
+                        }
+                    }
+                    Q.pop_front();
+                }
+            }
+        }
+    }
     if( call->getCalledFunction() )
     {
-        if( (call->getCalledFunction()->getName() == "malloc") || (call->getCalledFunction()->getName() == "calloc") || (call->getCalledFunction()->getName() == "_Znam") || (call->getCalledFunction()->getName() == "_Znwm") )
+        if( (call->getCalledFunction()->getName() == "malloc") || 
+            (call->getCalledFunction()->getName() == "calloc") || 
+            (call->getCalledFunction()->getName() == "_Znam") || 
+            (call->getCalledFunction()->getName() == "_Znwm") ||
+            (call->getCalledFunction()->getName() == "posix_memalign"))
         {
             // return its allocation size
             // the functions identified above have a single argument - their allocation in size
@@ -213,6 +364,20 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
                 {
                     return (uint32_t)*con->getUniqueInteger().getRawData();
                 }
+                else if( determinables.contains( call->getArgOperand(0)) )
+                {
+                    switch( determinables.at(call->getArgOperand(0)).second )
+                    {
+                        case FunctionCallArgs::T_member::INT8_T : return (uint32_t)determinables.at( call->getArgOperand(0) ).first.b;
+                        case FunctionCallArgs::T_member::INT16_T: return (uint32_t)determinables.at( call->getArgOperand(0) ).first.d;
+                        case FunctionCallArgs::T_member::INT32_T: return (uint32_t)determinables.at( call->getArgOperand(0) ).first.f;
+                        case FunctionCallArgs::T_member::INT64_T: return (uint32_t)determinables.at( call->getArgOperand(0) ).first.h;
+                        case FunctionCallArgs::T_member::SHORT  : return (uint32_t)determinables.at( call->getArgOperand(0) ).first.i;
+                        case FunctionCallArgs::T_member::FLOAT  : return (uint32_t)determinables.at( call->getArgOperand(0) ).first.j;
+                        case FunctionCallArgs::T_member::DOUBLE : return (uint32_t)determinables.at( call->getArgOperand(0) ).first.k;
+                        default                                 : throw CyclebiteException("Type of determinable value is undetermined!");
+                    }
+                }
             }
             else if( call->arg_size() == 2 )
             {
@@ -222,6 +387,63 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
                 if( conSize && conAllo )
                 {
                     return (uint32_t)*conSize->getUniqueInteger().getRawData() * (uint32_t)*conAllo->getUniqueInteger().getRawData();
+                }
+                else 
+                {
+                    uint32_t first = 0;
+                    if( determinables.contains( call->getArgOperand(0)) )
+                    {
+                        switch( determinables.at(call->getArgOperand(0)).second )
+                        {
+                            case FunctionCallArgs::T_member::INT8_T : first = (uint32_t)determinables.at( call->getArgOperand(0) ).first.b; break;
+                            case FunctionCallArgs::T_member::INT16_T: first = (uint32_t)determinables.at( call->getArgOperand(0) ).first.d; break;
+                            case FunctionCallArgs::T_member::INT32_T: first = (uint32_t)determinables.at( call->getArgOperand(0) ).first.f; break;
+                            case FunctionCallArgs::T_member::INT64_T: first = (uint32_t)determinables.at( call->getArgOperand(0) ).first.h; break;
+                            case FunctionCallArgs::T_member::SHORT  : first = (uint32_t)determinables.at( call->getArgOperand(0) ).first.i; break;
+                            case FunctionCallArgs::T_member::FLOAT  : first = (uint32_t)determinables.at( call->getArgOperand(0) ).first.j; break;
+                            case FunctionCallArgs::T_member::DOUBLE : first = (uint32_t)determinables.at( call->getArgOperand(0) ).first.k; break;
+                            default                                 : throw CyclebiteException("Type of determinable value is undetermined!");
+                        }
+                    }
+                    uint32_t second = 0;
+                    if( determinables.contains( call->getArgOperand(1)) )
+                    {
+                        switch( determinables.at(call->getArgOperand(1)).second )
+                        {
+                            case FunctionCallArgs::T_member::INT8_T : second = (uint32_t)determinables.at( call->getArgOperand(1) ).first.b; break;
+                            case FunctionCallArgs::T_member::INT16_T: second = (uint32_t)determinables.at( call->getArgOperand(1) ).first.d; break;
+                            case FunctionCallArgs::T_member::INT32_T: second = (uint32_t)determinables.at( call->getArgOperand(1) ).first.f; break;
+                            case FunctionCallArgs::T_member::INT64_T: second = (uint32_t)determinables.at( call->getArgOperand(1) ).first.h; break;
+                            case FunctionCallArgs::T_member::SHORT  : second = (uint32_t)determinables.at( call->getArgOperand(1) ).first.i; break;
+                            case FunctionCallArgs::T_member::FLOAT  : second = (uint32_t)determinables.at( call->getArgOperand(1) ).first.j; break;
+                            case FunctionCallArgs::T_member::DOUBLE : second = (uint32_t)determinables.at( call->getArgOperand(1) ).first.k; break;
+                            default                                 : throw CyclebiteException("Type of determinable value is undetermined!");
+                        }
+                    }
+                    return first*second;
+                }
+            }
+            else if( call->arg_size() == 3 )
+            {
+                // posix_memalign( void** memptr, size_t alignment, size_t size )
+                const auto conSize = llvm::dyn_cast<llvm::Constant>(call->getArgOperand(2));
+                if( conSize )
+                {
+                    return (uint32_t)*conSize->getUniqueInteger().getRawData();
+                }
+                else if( determinables.contains( call->getArgOperand(2)) )
+                {
+                    switch( determinables.at(call->getArgOperand(2)).second )
+                    {
+                        case FunctionCallArgs::T_member::INT8_T : return (uint32_t)determinables.at( call->getArgOperand(2) ).first.b;
+                        case FunctionCallArgs::T_member::INT16_T: return (uint32_t)determinables.at( call->getArgOperand(2) ).first.d;
+                        case FunctionCallArgs::T_member::INT32_T: return (uint32_t)determinables.at( call->getArgOperand(2) ).first.f;
+                        case FunctionCallArgs::T_member::INT64_T: return (uint32_t)determinables.at( call->getArgOperand(2) ).first.h;
+                        case FunctionCallArgs::T_member::SHORT  : return (uint32_t)determinables.at( call->getArgOperand(2) ).first.i;
+                        case FunctionCallArgs::T_member::FLOAT  : return (uint32_t)determinables.at( call->getArgOperand(2) ).first.j;
+                        case FunctionCallArgs::T_member::DOUBLE : return (uint32_t)determinables.at( call->getArgOperand(2) ).first.k;
+                        default                                 : throw CyclebiteException("Type of determinable value is undetermined!");
+                    }
                 }
             }
             else
@@ -315,6 +537,34 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call)
             }
             return 0;
         }
+        else
+        {
+            // there may be API-specific memory allocation functions that themselves make a unique dynamic allocation
+            // ex. polybench_alloc_data (which hides a posix_memalign call)
+            // here we search the function for any calls like that
+            // naturally this needs to be recursive, since the dynamic allocation we're searching for can be arbitrarily deep in the call graph
+
+            for( auto b = call->getCalledFunction()->begin(); b != call->getCalledFunction()->end(); b++ )
+            {
+                auto callArgs = FunctionCallArgs(call);
+                for( auto i = b->begin(); i != b->end(); i++ )
+                {
+                    if( const auto& c = llvm::dyn_cast<llvm::CallBase>(i) )
+                    {
+                        // construct a representation for the function call args of the current call
+                        auto size = isAllocatingFunction(c, call->getCalledFunction(), &callArgs);
+                        if( size )
+                        {
+                            return size;
+                        } 
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        throw CyclebiteException("Found an indirect function call when trying to discover base pointers!");
     }
     return 0;
 }
