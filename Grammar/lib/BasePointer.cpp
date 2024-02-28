@@ -200,16 +200,6 @@ const string BasePointer::getContainedTypeString() const
     return Cyclebite::Util::PrintVal( Cyclebite::Util::getContainedType(node->getVal()), false );
 }
 
-/// @brief Recursively searches the static call graph for dynamic memory allocation functions
-///
-/// The first allocation function found is the one whose allocation size is returned. 
-/// If it uses a dynamically-determined allocation size, a size of 0 is returned.
-/// The allocation functions currently supported are
-/// malloc, calloc, "new" operator (C++), and posix_memalign
-/// @param call CallBase to investigate. The called function within this instruction will be recursed into if no allocating function is found within it
-/// @param parent The parent function that "owns" the call parameter (it is a call instruction within parent's body). The parent's args map to determined values inside "args"
-/// @param args     Determined values that map to arguments in the "parent" function. These determined values are mapped to their uses in the parent function's body, which may include arguments in the function called by "call".
-/// @return The size in bytes of the found dynamic memory allocation function. If no allocation function could be found, or if the allocation used a dynamically-determined size, 0 is returned.
 uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call, const llvm::Function* parent, const FunctionCallArgs* args )
 {
     map<const llvm::Value*, pair<FunctionCallArgs::member, FunctionCallArgs::T_member>> determinables;
@@ -852,6 +842,72 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
     if( bpCandidates.empty() )
     {
         throw CyclebiteException("Could not find any base pointers in this task!");
+    }
+    // do some pre-processing on the base pointer candidates we found
+    // 1. If the candidate points to a user-defined structure, walk the DFG until we find a primitive type (ideally a pointer)
+    auto oldCandidates = bpCandidates;
+    set<const llvm::Value*> toRemove;
+    set<const llvm::Value*> toAdd;
+    for( const auto& o : oldCandidates )
+    {
+        if( Cyclebite::Util::getFirstContainedType(o)->isStructTy() )
+        {
+            // this is actually a structure that may contain multiple base pointers in it
+            toRemove.insert(o);
+            // we want to walk forward in the DFG until we find pointers that contain at least an aggregate type
+            deque<const llvm::Value*> Q;
+            set<const llvm::Value*> covered;
+            Q.push_front(o);
+            covered.insert(o);
+            while( !Q.empty() )
+            {
+                if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
+                {
+                    if( gep->getSourceElementType()->isStructTy() )
+                    {
+                        // confirm it doesn't have only pointer constituents in it
+                        bool onlyPointers = true;
+                        for( unsigned i = 0; i < llvm::cast<llvm::StructType>(gep->getSourceElementType())->getStructNumElements(); i++ )
+                        {
+                            if( !llvm::cast<llvm::StructType>(gep->getSourceElementType())->getStructElementType(i)->isPointerTy() )
+                            {
+                                onlyPointers = false;
+                                break;
+                            }
+                        }
+                        if( !onlyPointers )
+                        {
+                            toAdd.insert(gep->getPointerOperand());
+                            Q.pop_front();
+                            continue;
+                        }
+                    }
+                    else if( !gep->getSourceElementType()->isPointerTy() )
+                    {
+                        toAdd.insert(gep->getPointerOperand());
+                        Q.pop_front();
+                        continue;
+                    }
+                }
+                for( const auto& use : Q.front()->users() )
+                {
+                    if( !covered.contains(use) )
+                    {
+                        Q.push_back(use);
+                        covered.insert(use);
+                    }
+                }
+                Q.pop_front();
+            }
+        }
+    }
+    for( const auto& r : toRemove )
+    {
+        bpCandidates.erase(r);
+    }
+    for( const auto& a : toAdd )
+    {
+        bpCandidates.insert(a);
     }
     // now turn all base pointers into objects
     set<shared_ptr<BasePointer>> bps;

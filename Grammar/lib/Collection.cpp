@@ -411,6 +411,29 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
             }
             else if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
             {
+                // load instructions may be base pointers (if they are being loaded from a user-defined structure)
+                bool found = false;
+                for( const auto& bp : bps )
+                {
+                    if( bp->getNode()->getVal() == ld )
+                    {
+                        collBPs.insert(bp);
+                        found = true;
+                    }
+                }
+                // if this is load is not a bp, it may be storing one
+                // thus we must walk forward to find the store that puts the bp into this alloc
+                if( !found )
+                {
+                    for( const auto& use : ld->users() )
+                    {
+                        if( !covered.contains(use) )
+                        {
+                            Q.push_front(use);
+                            covered.insert(use);
+                        }
+                    }
+                }
                 // the pointer of this load may lead us to more geps
                 if( !covered.contains(ld->getPointerOperand()) )
                 {
