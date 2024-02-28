@@ -2009,13 +2009,17 @@ void Cyclebite::Graph::BuildDFG( set<std::shared_ptr<ControlBlock>, p_GNCompare>
                         // we are interested in constantAggregates, which may be used like static arrays in the code
                         if( const auto& glob = dyn_cast<GlobalVariable>(con) )
                         {
-                            if( const auto& conArray = dyn_cast<ConstantAggregate>(glob->getInitializer()) )
+                            if( glob->hasInitializer() )
                             {
-                                // we have found a constant worthy of the DNIDMap, so map it
-                                auto newCon = make_shared<DataValue>(con);
-                                DNIDMap.insert( pair<const llvm::Value*, const shared_ptr<DataValue>>(con, newCon) );
-                                graph.addNode(newCon);
+                                if( const auto& conArray = dyn_cast<ConstantAggregate>(glob->getInitializer()) )
+                                {
+                                    // we have found a constant worthy of the DNIDMap, so map it
+                                    auto newCon = make_shared<DataValue>(con);
+                                    DNIDMap.insert( pair<const llvm::Value*, const shared_ptr<DataValue>>(con, newCon) );
+                                    graph.addNode(newCon);
+                                }
                             }
+                            // else there is no deterministic value to capture here
                         }
                         // each index in a gep may now become an indexVariable, thus if the parent instruction is a gep, we capture all its constants
                         else if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(inst) )
