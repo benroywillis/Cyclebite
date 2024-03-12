@@ -528,7 +528,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     {
         auto bounded = make_shared<Collection>(in->getIndices(), in->getBP(), in->getElementPointers());
         Symbol2Symbol[in] = bounded;
-        halideGenerator += "\t\tFunc "+bounded->getName()+"(\""+bounded->getName()+"\") = Halide::BoundaryConditions::repeat_edge("+in->getName()+");\n";
+        halideGenerator += "\t\tFunc "+bounded->getName()+"(\""+bounded->getName()+"\");\n\t\t"+bounded->getName()+" = Halide::BoundaryConditions::repeat_edge("+in->getName()+");\n";
     }
     if( !inputs.empty() ) halideGenerator += "\n";
     // 5d. print the expressions
@@ -844,7 +844,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
                             }
                         }
                     }
-                    halideDriver += ");\n\tinput"+to_string(inputId++)+".allocate();\n";
+                    halideDriver += " );\n\tinput"+to_string(inputId++)+".allocate();\n";
                 }
         }
     }
@@ -953,7 +953,8 @@ void Cyclebite::Grammar::Export( const map<shared_ptr<Task>, vector<shared_ptr<E
     {
         slashPos = name.find("/", slashPos+1);
     }
-    string filteredOutputName = name.substr( slashPos+1, name.find(".", slashPos+1)-slashPos-1 );
+    // for some reason this statement works well with -DCMAKE_BUILD_TYPE=relwithdebinfo (-O2) but not -DCMAKE_BUILD_TYPE=Debug (-O0).. so we just live with debug's bad result
+    string filteredOutputName = name.substr( slashPos, name.find(".", slashPos+1)-slashPos );
     try
     {
         // first, task name
