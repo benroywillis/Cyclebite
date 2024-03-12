@@ -24,6 +24,9 @@ namespace Cyclebite::Grammar
     class ConstantSymbol : public Symbol
     {
     public:
+        /// @param c    Pointer to the llvm::Constant - this must be pre-allocated
+        /// @param a    Pointer to the value of the constant - this does not have to be pre-allocated, it's a pointer so it can be passed as any type
+        /// @param type Tells the constructor how to interpret param "a" - "a" is casted using this type and put into the appropriate member of a union
         ConstantSymbol( const llvm::Constant* c, const void* a, ConstantType type ) : Symbol("const"), c(c)
         {
             initTypeToString();

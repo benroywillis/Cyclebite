@@ -487,8 +487,17 @@ set<shared_ptr<ConstantSymbol>> Cyclebite::Grammar::getConstants( const shared_p
                                 }
                                 else if( const auto& intTy    = llvm::dyn_cast<llvm::IntegerType>( Cyclebite::Util::getFirstContainedType(con) ) )
                                 {
-                                    // call the method to build a ConstantSymbol<int>
-                                    throw CyclebiteException("Cannot yet support building constant integer aggregates!");
+                                    if( const auto& glob = llvm::dyn_cast<llvm::GlobalVariable>(con) )
+                                    {
+                                        int val = static_cast<int>(STATIC_VALUE::UNDETERMINED);
+                                        if( glob->hasInitializer() )
+                                        {
+                                            val = (int)*glob->getInitializer()->getUniqueInteger().getRawData();
+                                        }
+                                        auto newCon = make_shared<ConstantSymbol>(glob, &val, Cyclebite::Grammar::ConstantType::INT);
+                                        constants[con].insert(newCon);
+                                        cons.insert(newCon);
+                                    }
                                 }
                             }
                         }
