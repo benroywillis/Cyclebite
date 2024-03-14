@@ -140,6 +140,11 @@ const set<shared_ptr<Dimension>> IndexVariable::getExclusiveDimensions() const
     {
         for( const auto& p : Q.front()->getParents() )
         {
+            // corner case: the idxVar is its own parent (from polybench/linear-algebra/solvers/lu Task 2 (BB8 %31 = gep -> %26 is used in both positions of the gep))
+            if( p == Q.front() )
+            {
+                continue;
+            }
             for( const auto& dim : p->getDimensions() )
             {
                 exclusive.erase(dim);
@@ -301,7 +306,11 @@ string IndexVariable::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbo
                 }
                 else
                 {
-                    Q.push_back(p);
+                    if( !covered.contains(p) )
+                    {
+                        covered.insert(p);
+                        Q.push_back(p);
+                    }
                 }
             }
             if( childMostDim )
