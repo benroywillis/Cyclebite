@@ -55,8 +55,25 @@ namespace Cyclebite::Grammar
         const std::shared_ptr<Symbol>& getOutput() const;
         /// @brief Returns the dimensions of the expression output, if any
         const std::vector<std::shared_ptr<Dimension>> getOutputDimensions() const;
+        /// @brief Dumps the entire expression recursively, meaning everything is fully inlined
+        ///
+        /// When this method is called, each symbol in the expression is recursively constructed starting with its constituents.
+        /// This is not suitable for Halide since each pipe stage needs to be isolated for proper scheduling.
+        /// @return A string representation of the expression that is readable to humans.
         std::string dump() const override;
+        /// @brief Dumps the entire expression recursively, meaning everything is fully inlined
+        ///
+        /// Not all symbols within the expression are treated equally within this method.
+        /// Expressions: are only printed as a reference. This ensures that expressions within expressions are not fully inlined.
+        /// All other symbols: are fully inlined and mapped within the Symbol2Symbol map.
+        /// @param symbol2Symbol A 2D map that transforms symbols into other symbols. Useful for when transformations on symbols need to occur (for example, bounding the input collections with Halide::BoundaryConditions::repeat_edge).
+        /// @return A string representation of the expression that is compatible with the Halide front-end.
         std::string dumpHalide( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const override;
+        /// @brief Dumps a reference to this expression, including its dimensions
+        ///
+        /// Useful when referring to another expression within an expression. This method does not fully inline the expression, thus isolating the pipestage's work
+        /// @param symbol2Symbol A 2D map that is recursively explored for mapping of symbols within the expression. 
+        /// @return A string representation of the expression compatible with the Halide front-end.
         std::string dumpHalideReference( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const;
     protected:
         /// the task in which the expression is derived

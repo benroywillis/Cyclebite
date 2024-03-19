@@ -53,20 +53,48 @@ string FunctionExpression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<
         // 2. the reduction dimension in the arg needs to be changed to the reduction variable
         if( symbol2Symbol.contains(args.front()) )
         {
-            expr += symbol2Symbol.at(args.front())->dumpHalide(symbol2Symbol);
+            if( const auto& childExpr = dynamic_pointer_cast<Expression>( symbol2Symbol.at(args.front())) )
+            {
+                expr += childExpr->dumpHalideReference(symbol2Symbol);
+            }
+            else
+            {
+                expr += symbol2Symbol.at(args.front())->dumpHalide(symbol2Symbol);
+            }
         }
         else
         {
-            expr += args.front()->dumpHalide(symbol2Symbol);
+            if( const auto& childExpr = dynamic_pointer_cast<Expression>(args.front()) )
+            {
+                expr += args.front()->dumpHalide(symbol2Symbol);
+            }
+            else
+            {
+                expr += args.front()->dumpHalide(symbol2Symbol);
+            }
         }
         expr += " * ";
         if( symbol2Symbol.contains( *next(args.begin()) ) )
         {
-            expr += symbol2Symbol.at(*next(args.begin()))->dumpHalide(symbol2Symbol);
+            if( const auto& childExpr = dynamic_pointer_cast<Expression>( symbol2Symbol.at( *next(args.begin()))) )
+            {
+                expr += childExpr->dumpHalideReference(symbol2Symbol);
+            }
+            else
+            {
+                expr += symbol2Symbol.at(*next(args.begin()))->dumpHalide(symbol2Symbol);
+            }        
         }
         else
         {
-            expr += (*next(args.begin()))->dumpHalide(symbol2Symbol);
+            if( const auto& childExpr = dynamic_pointer_cast<Expression>(args.front()) )
+            {
+                expr += childExpr->dumpHalideReference(symbol2Symbol);
+            }
+            else
+            {
+                expr += (*next(args.begin()))->dumpHalide(symbol2Symbol);
+            }
         }
     }
     return expr;

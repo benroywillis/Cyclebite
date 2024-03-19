@@ -132,22 +132,51 @@ string Expression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>
         auto o = ops.begin();
         if( symbol2Symbol.contains(*b) )
         {
-            expr += " "+symbol2Symbol.at(*b)->dumpHalide(symbol2Symbol);
+            spdlog::info((*b)->getName());
+            if( const auto& childExpr = dynamic_pointer_cast<Expression>( symbol2Symbol.at(*b) ) )
+            {
+                expr += " "+childExpr->dumpHalideReference(symbol2Symbol);
+            }
+            else
+            {
+                expr += " "+symbol2Symbol.at(*b)->dumpHalide(symbol2Symbol);
+            }
         }
         else
         {
-            expr += " "+(*b)->dumpHalide(symbol2Symbol);
+            if( const auto& childExpr = dynamic_pointer_cast<Expression>(*b) )
+            {
+                expr += " "+childExpr->dumpHalideReference(symbol2Symbol);
+            }
+            else
+            {
+                expr += " "+(*b)->dumpHalide(symbol2Symbol);
+            }
         }
         b = next(b);
         while( b != symbols.end() )
         {
             if( symbol2Symbol.contains(*b) )
             {
-                expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+symbol2Symbol.at(*b)->dumpHalide(symbol2Symbol);
+                if( const auto& childExpr = dynamic_pointer_cast<Expression>( symbol2Symbol.at(*b)) )
+                {
+                    expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+childExpr->dumpHalideReference(symbol2Symbol);
+                }
+                else
+                {
+                    expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+symbol2Symbol.at(*b)->dumpHalide(symbol2Symbol);
+                }
             }
             else
             {
-                expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+(*b)->dumpHalide(symbol2Symbol);
+                if( const auto& childExpr = dynamic_pointer_cast<Expression>(*b) )
+                {
+                    expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+childExpr->dumpHalideReference(symbol2Symbol);
+                }
+                else
+                {
+                    expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+(*b)->dumpHalide(symbol2Symbol);
+                }
             }
             b = next(b);
             o = next(o);
@@ -159,7 +188,6 @@ string Expression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>
 string Expression::dumpHalideReference( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
     vector<shared_ptr<Symbol>> exprDims;
-    // 5b.2 enumerate all vars used in the expression
     if( const auto& outputColl = dynamic_pointer_cast<Collection>(output) )
     {
         for( const auto& dim : outputColl->getDimensions() )

@@ -87,23 +87,53 @@ string OperatorExpression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<
         auto arg = args.begin();
         if( symbol2Symbol.contains(*arg) )
         {
-            expr += symbol2Symbol.at(*arg++)->dumpHalide(symbol2Symbol);
+            if( const auto& childExpr = dynamic_pointer_cast<Expression>(symbol2Symbol.at(*arg)) )
+            {
+                expr += childExpr->dumpHalideReference(symbol2Symbol);
+            }
+            else
+            {
+                expr += symbol2Symbol.at(*arg)->dumpHalide(symbol2Symbol);
+            }
         }
         else
         {
-            expr += (*arg++)->dumpHalide(symbol2Symbol);
+            if( const auto& childExpr = dynamic_pointer_cast<Expression>( *arg ) )
+            {
+                expr += childExpr->dumpHalideReference(symbol2Symbol);
+            }
+            else
+            {
+                expr += (*arg)->dumpHalide(symbol2Symbol);
+            }
         }
+        arg++;
         while( arg != args.end() )
         {
             expr += ", ";
             if( symbol2Symbol.contains(*arg) )
             {
-                expr += symbol2Symbol.at(*arg++)->dumpHalide(symbol2Symbol);
+                if( const auto& childExpr = dynamic_pointer_cast<Expression>(*arg) )
+                {
+                    expr += childExpr->dumpHalide(symbol2Symbol);
+                }
+                else
+                {
+                    expr += symbol2Symbol.at(*arg)->dumpHalide(symbol2Symbol);
+                }
             }
             else
             {
-                expr += (*arg++)->dumpHalide(symbol2Symbol);
+                if( const auto& childExpr = dynamic_pointer_cast<Expression>(*arg) )
+                {
+                    expr += childExpr->dumpHalideReference(symbol2Symbol);
+                }
+                else
+                {
+                    expr += (*arg)->dumpHalide(symbol2Symbol);
+                }
             }
+            arg++;
         }
     }
     expr += ")";
