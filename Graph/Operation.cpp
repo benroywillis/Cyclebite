@@ -144,7 +144,7 @@ void Cyclebite::Graph::initOpToString()
         // memory ops
         (Operation::load, "ld")(Operation::store, "st")(Operation::stackpush, "stack")(Operation::gep, "gep")(Operation::atomicrmw, "atomicrmw")
         // binary arithmetic
-        (Operation::fneg, "fneg")(Operation::mul, "x")(Operation::fmul, "fx")(Operation::udiv, "u/")(Operation::sdiv, "s/")(Operation::fdiv, "f/")(Operation::urem, "u%")(Operation::srem, "s%")(Operation::frem, "f%")(Operation::add, "+")(Operation::fadd, "f+")(Operation::sub, "-")(Operation::fsub, "f-")(Operation::gt, ">")(Operation::gte, ">=")(Operation::lt, "<")(Operation::lte, "<=")(Operation::sr, ">>")(Operation::asr, ">>>")(Operation::sl, "<<")(Operation::andop, "&&")(Operation::orop, "||")(Operation::xorop, "XOR")
+        (Operation::fneg, "fneg")(Operation::mul, "*")(Operation::fmul, "f*")(Operation::udiv, "u/")(Operation::sdiv, "s/")(Operation::fdiv, "f/")(Operation::urem, "u%")(Operation::srem, "s%")(Operation::frem, "f%")(Operation::add, "+")(Operation::fadd, "f+")(Operation::sub, "-")(Operation::fsub, "f-")(Operation::gt, ">")(Operation::gte, ">=")(Operation::lt, "<")(Operation::lte, "<=")(Operation::sr, ">>")(Operation::asr, ">>>")(Operation::sl, "<<")(Operation::andop, "&&")(Operation::orop, "||")(Operation::xorop, "XOR")
         // casting
         (Operation::trunc, "trunc")(Operation::sext, "sext")(Operation::zext, "zext")(Operation::fptoui, "fptoui")(Operation::fptosi, "fptosi")(Operation::uitofp, "uitofp")(Operation::sitofp, "sitofp")(Operation::fptrunc, "fptrunc")(Operation::fpext, "fpext")(Operation::ptrtoint, "ptrtoint")(Operation::inttoptr, "inttoptr")(Operation::bitcast, "bitcast")(Operation::addrspacecast, "addrspacecast")
         // comparators

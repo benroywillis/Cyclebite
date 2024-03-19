@@ -255,7 +255,8 @@ string printOffset( DimensionOffset offset )
         offset.op != Cyclebite::Graph::Operation::sdiv && 
         offset.op != Cyclebite::Graph::Operation::udiv && 
         offset.op != Cyclebite::Graph::Operation::sl &&
-        offset.op != Cyclebite::Graph::Operation::sr )
+        offset.op != Cyclebite::Graph::Operation::sr &&
+        offset.op != Cyclebite::Graph::Operation::phi )
     {
         if( offset.coefficient != static_cast<int>(STATIC_VALUE::INVALID) && offset.coefficient != static_cast<int>(STATIC_VALUE::UNDETERMINED) )
         {

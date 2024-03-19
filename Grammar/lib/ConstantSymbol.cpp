@@ -35,7 +35,7 @@ string ConstantSymbol::dump() const
 
 string ConstantSymbol::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>& symbol2Symbol ) const
 {
-    return dump();
+    return "Halide::Expr("+dump()+")";
 }
 
 string ConstantSymbol::dumpC() const
