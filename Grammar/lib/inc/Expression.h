@@ -66,7 +66,7 @@ namespace Cyclebite::Grammar
         /// Not all symbols within the expression are treated equally within this method.
         /// Expressions: are only printed as a reference. This ensures that expressions within expressions are not fully inlined.
         /// All other symbols: are fully inlined and mapped within the Symbol2Symbol map.
-        /// @param symbol2Symbol A 2D map that transforms symbols into other symbols. Useful for when transformations on symbols need to occur (for example, bounding the input collections with Halide::BoundaryConditions::repeat_edge).
+        /// @param symbol2Symbol A 2D map that transforms symbols into other symbols. Useful for when transformations on symbols need to occur (for example, bounding the input collections with Halide::BoundaryConditions::repeat_edge). Any Symbol that is transformed in this map is automatically assumed to be an input to the expression (useful for when the input to an expression comes from the previous pipe stage). Thus, when a subexpression is present in this map, its reference is printed in the Halide expression - otherwise its entire statement is printed.
         /// @return A string representation of the expression that is compatible with the Halide front-end.
         std::string dumpHalide( const std::map<std::shared_ptr<Symbol>, std::shared_ptr<Symbol>>& symbol2Symbol ) const override;
         /// @brief Dumps a reference to this expression, including its dimensions

@@ -144,14 +144,9 @@ string Expression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>
         }
         else
         {
-            if( const auto& childExpr = dynamic_pointer_cast<Expression>(*b) )
-            {
-                expr += " "+childExpr->dumpHalideReference(symbol2Symbol);
-            }
-            else
-            {
-                expr += " "+(*b)->dumpHalide(symbol2Symbol);
-            }
+            // if this symbol is not mapped it is definitely not an input from another pipe stage
+            // so we don't need to worry about printing a reference to it
+            expr += " "+(*b)->dumpHalide(symbol2Symbol);
         }
         b = next(b);
         while( b != symbols.end() )
@@ -169,14 +164,9 @@ string Expression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>
             }
             else
             {
-                if( const auto& childExpr = dynamic_pointer_cast<Expression>(*b) )
-                {
-                    expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+childExpr->dumpHalideReference(symbol2Symbol);
-                }
-                else
-                {
-                    expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+(*b)->dumpHalide(symbol2Symbol);
-                }
+                // if this symbol is not mapped it is definitely not an input from another pipe stage
+                // so we don't need to worry about printing a reference to it
+                expr += " "+string(Cyclebite::Graph::OperationToString.at(*o))+" "+(*b)->dumpHalide(symbol2Symbol);
             }
             b = next(b);
             o = next(o);
