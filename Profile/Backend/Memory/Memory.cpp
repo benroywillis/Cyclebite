@@ -282,12 +282,7 @@ namespace Cyclebite::Profile::Backend::Memory
             mt.type = __TA_MemType::Malloc;
             mt.base = (uint64_t)ptr;
             mt.offset = (uint32_t)offset-1;
-            auto it = basePointers.insert(mt);
-            if( !it.second )
-            {
-                volatile auto ptrcpy = ptr;
-                volatile bool didntPush = true;
-            }
+            basePointers.insert(mt);
             if( currentEpoch )
             {
                 currentEpoch->malloc_ptrs.insert(mt);

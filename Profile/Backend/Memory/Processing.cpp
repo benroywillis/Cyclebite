@@ -300,8 +300,12 @@ namespace Cyclebite::Profile::Backend::Memory
         map<int64_t, set<int64_t>> inst2Footprint;
         for( const auto& inst : instToTuple )
         {
-            for( const auto& t : inst.second )
+            for( auto t : inst.second )
             {
+                // [BW] 2024-03-22
+                // it turns out that each memory tuple "t" is overreaching by 1 byte (added to the offset)
+                // to normalize for this, we subtract from its offset by one - this gives us the correct overlap behavior when comparing to base pointers
+                t.offset = t.offset - 1;
                 for( const auto& bp : basePointers )
                 {
                     auto o = mem_tuple_overlap(bp, t);
