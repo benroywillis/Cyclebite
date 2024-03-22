@@ -39,6 +39,9 @@ namespace Cyclebite::Profile::Backend::Memory
     /// Maps a kernel to its dominators
     /// Dominators are kernels that must happen before a given kernel can execute
     map<shared_ptr<Kernel>, set<int64_t>> dominators;
+    /// Keeps track of base pointers as they are profiled
+    /// Base pointers are used as boundaries between memory footprints when memory tuples are combined (more aggressively) after processing
+    set<int64_t> basePointers;
 
     /// Holds all task candidates that are read from the input kernel file
     std::set<std::shared_ptr<Kernel>, UIDCompare> kernels;
@@ -218,6 +221,7 @@ namespace Cyclebite::Profile::Backend::Memory
 
         void __Cyclebite__Profile__Backend__MemoryCpy(void* ptr_snk, void* ptr_src, uint64_t dataSize)
         {
+            basePointers.insert((uint64_t)ptr_snk);
             MemTuple mt;
             mt.type = __TA_MemType::Memcpy;
             mt.base = (uint64_t)ptr_src;
@@ -237,6 +241,7 @@ namespace Cyclebite::Profile::Backend::Memory
 
         void __Cyclebite__Profile__Backend__MemoryMov(void* ptr_snk, void* ptr_src, uint64_t dataSize)
         {
+            basePointers.insert((uint64_t)ptr_snk);
             MemTuple mt;
             mt.type = __TA_MemType::Memmov;
             mt.base = (uint64_t)ptr_src;
@@ -270,6 +275,7 @@ namespace Cyclebite::Profile::Backend::Memory
 
         void __Cyclebite__Profile__Backend__MemoryMalloc(void* ptr, uint64_t offset)
         {
+            basePointers.insert((uint64_t)ptr);
             if( currentEpoch )
             {
                 MemTuple mt;
@@ -287,6 +293,20 @@ namespace Cyclebite::Profile::Backend::Memory
             {
                 currentEpoch->free_ptrs.insert((int64_t)ptr);
             }
+        }
+
+        void __Cyclebite__Profile__Backend__StaticBasePointer( void* ptr, uint64_t size )
+        {
+            basePointers.insert((uint64_t)ptr);
+            if( currentEpoch )
+            {
+                MemTuple mt;
+                mt.type = __TA_MemType::Malloc;
+                mt.base = (uint64_t)ptr;
+                mt.offset = (uint32_t)size-1;
+                currentEpoch->malloc_ptrs.insert(mt);
+            }
+            updateBittenBytes();
         }
     }
 } // namespace Cyclebite::Backend::BackendMemory

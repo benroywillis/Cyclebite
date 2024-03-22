@@ -44,6 +44,9 @@ namespace Cyclebite::Profile::Backend::Memory
     /// Maps instructions to their working set tuples
     /// These mappings are used in the grammar tool to figure out which load instructions are touching critical pieces of memory
     extern std::map<int64_t, std::set<MemTuple, MTCompare>> instToTuple;
+    /// Keeps track of base pointers as they are profiled
+    /// Base pointers are used as boundaries between memory footprints when memory tuples are combined (more aggressively) after processing
+    extern std::set<int64_t> basePointers;
 
     /// Holds all CodeSections
     /// A code section is a unique set of basic block IDs ie a codesection may map to multiple kernels
