@@ -443,16 +443,59 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     }
     // 3. inject inputs
     set<shared_ptr<Collection>> inputs;
-    for( const auto& expr : taskToExpr.at(exprOrder.front()) )
+    // the front input is the easy case
+    // we also have to check for subsequent pipestages that may have inputs that aren't consumed by anyone else
+    // we do this by checking the inputs of the expression and comparing them to the inputs of the task
+    // - if an input in the expression does not map to a producer of the task, this is a novel input
+    for( const auto& t : exprOrder )
     {
-        for( const auto& in : expr->getInputs() )
+        for( const auto& expr : taskToExpr.at(t) )
         {
-            if( const auto& coll = dynamic_pointer_cast<Collection>(in) )
+            // these are the inputs to "expr" that we know come from its predecessor task(s)
+            set<shared_ptr<Collection>> explainedInputs;
+            for( const auto& predEdge : t->getPredecessors() )
             {
-                inputs.insert(coll);
-                halideGenerator += "\tInput<Buffer<"+coll->getBP()->getContainedTypeString()+">> "+coll->getName()+"{\""+coll->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
+                if( const auto& predT = dynamic_pointer_cast<Task>(predEdge->getSrc()) )
+                {
+                    // we are only concerned with tasks that are in the pipeline still (input tasks have been removed)
+                    if( !pipelineInputs.contains(predT) )
+                    {
+                        for( const auto& predExpr : taskToExpr.at(predT) )
+                        {
+                            if( const auto& outColl = dynamic_pointer_cast<Collection>(predExpr->getOutput()) )
+                            {
+                                explainedInputs.insert(outColl);
+                            }
+                        }
+                    }
+                }
+            }
+            for( const auto& in : expr->getInputs() )
+            {
+                if( const auto& coll = dynamic_pointer_cast<Collection>(in) )
+                {
+                    // search for an explained input that touches the same memory footprint as our input collections
+                    bool match = false;
+                    for( const auto& ex : explainedInputs )
+                    {
+                        if( ex->getBP()->getFootprint() == coll->getBP()->getFootprint() )
+                        {
+                            match = true;
+                            break;
+                        }
+                    }
+                    if( !match )
+                    {
+                        inputs.insert(coll);
+                    }
+                }
             }
         }
+    }
+    for( const auto& coll : inputs )
+    {
+        inputs.insert(coll);
+        halideGenerator += "\tInput<Buffer<"+coll->getBP()->getContainedTypeString()+">> "+coll->getName()+"{\""+coll->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
     }
     // 4. inject output
     shared_ptr<Collection> output = nullptr;
