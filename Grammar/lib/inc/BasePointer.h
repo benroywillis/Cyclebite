@@ -32,14 +32,25 @@ namespace Cyclebite::Grammar
     class BasePointer : public Symbol
     {
     public:
-        BasePointer(const std::shared_ptr<Cyclebite::Graph::DataValue>& n) : Symbol("bp"), node(n) {}
+        BasePointer(const std::shared_ptr<Cyclebite::Graph::DataValue>& n, uint64_t fp = 0, const std::set<uint64_t>& mappedfps = std::set<uint64_t>() ) : Symbol("bp"), 
+                                                                                                                                                           node(n), 
+                                                                                                                                                           footprint(fp), 
+                                                                                                                                                           mappedFootprints(mappedfps) {}
         ~BasePointer() = default;
         const std::shared_ptr<Cyclebite::Graph::DataValue>& getNode() const;
         bool isOffset( const llvm::Value* val ) const;
         const llvm::Type* getContainedType() const;
         const std::string getContainedTypeString() const;
+        uint64_t getFootprint() const;
+        const std::set<uint64_t>& getMappedFootprints() const;
     private:
         std::shared_ptr<Cyclebite::Graph::DataValue> node;
+        /// Footprints are the memory footprints this collection uses
+        /// It should only have one...
+        uint64_t footprint;
+        /// Defines the footprints this base pointer maps to
+        /// A BP can map to other footprints if its footprint is moved or copied to another during program execution
+        std::set<uint64_t> mappedFootprints;
     };
     std::set<std::shared_ptr<BasePointer>> getBasePointers(const std::shared_ptr<Task>& t);
 } // namespace Cyclebite::Grammar

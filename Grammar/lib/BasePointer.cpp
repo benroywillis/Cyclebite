@@ -200,6 +200,16 @@ const string BasePointer::getContainedTypeString() const
     return Cyclebite::Util::PrintVal( Cyclebite::Util::getContainedType(node->getVal()), false );
 }
 
+uint64_t BasePointer::getFootprint() const
+{
+    return footprint;
+}
+
+const set<uint64_t>& BasePointer::getMappedFootprints() const
+{
+    return mappedFootprints;
+}
+
 uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call, const llvm::Function* parent, const FunctionCallArgs* args )
 {
     map<const llvm::Value*, pair<FunctionCallArgs::member, FunctionCallArgs::T_member>> determinables;
@@ -643,7 +653,8 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
     // in order to find base pointers, we introspect all load instructions, and walk backward through the pointer operand of a given load until we find a bedrock load (a load that uses a pointer with no offset - a magic number). The pointer of that load is a "base pointer"
     // base pointers are useful for modeling significant memory chunks. This input data represents an entity that can be used for communication
     // when base pointers are combined with the state variables (induction variables) that index them, Collections are formed (a space of memory in which the access pattern can be understood - a polyhedral space)
-    set<const llvm::Value*> bpCandidates;
+    // maps a bpCandidate to its footprints
+    map<const llvm::Value*, set<uint64_t>> bpCandidates;
     set<const llvm::Value*> covered;
     for( const auto& c : t->getCycles() )
     {
@@ -653,8 +664,9 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
             {
                 if( n->getOp() == Operation::load || n->getOp() == Operation::store )
                 {
-                    if( SignificantMemInst.find( n ) != SignificantMemInst.end() )
+                    if( memInst2Footprint.contains( n ) )
                     {
+                        set<uint64_t> footprints = memInst2Footprint.at(n);
                         deque<const llvm::Value*> Q;
                         covered.insert(n->getVal());
                         Q.push_front(n->getVal());
@@ -723,7 +735,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                     {
                                         if( DNIDMap.contains(alloc) )
                                         {
-                                            bpCandidates.insert(alloc);
+                                            bpCandidates[alloc] = footprints;
                                         }
                                         else
                                         {
@@ -753,9 +765,9 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                     // thankfully we have significant memory instructions to count on
                                     if( Cyclebite::Graph::DNIDMap.contains(alloc) )
                                     {
-                                        if( SignificantMemInst.contains( Cyclebite::Graph::DNIDMap.at(alloc) ) )
+                                        if( memInst2Footprint.contains( static_pointer_cast<Inst>(Cyclebite::Graph::DNIDMap.at(alloc)) ) )
                                         {
-                                            bpCandidates.insert(alloc);
+                                            bpCandidates[alloc] = footprints;
                                             covered.insert(alloc);
                                         }
                                     }
@@ -768,7 +780,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                     if( DNIDMap.contains(call) )
                                     {
                                         // an allocating function is a base pointer
-                                        bpCandidates.insert(call);
+                                        bpCandidates[call] = footprints;
                                     }
                                     else
                                     {
@@ -786,7 +798,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                     if( DNIDMap.contains(arg) )
                                     {
                                         // an allocating function is a base pointer
-                                        bpCandidates.insert(arg);
+                                        bpCandidates[arg] = footprints;
                                     }
                                     else
                                     {
@@ -810,7 +822,7 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                                         if( DNIDMap.contains(glob) )
                                         {
                                             // an allocating function is a base pointer
-                                            bpCandidates.insert(glob);
+                                            bpCandidates[glob] = footprints;
                                         }
                                         else
                                         {
@@ -847,18 +859,18 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
     // 1. If the candidate points to a user-defined structure, walk the DFG until we find a primitive type (ideally a pointer)
     auto oldCandidates = bpCandidates;
     set<const llvm::Value*> toRemove;
-    set<const llvm::Value*> toAdd;
+    set<pair<const llvm::Value*, set<uint64_t>>> toAdd;
     for( const auto& o : oldCandidates )
     {
-        if( Cyclebite::Util::getFirstContainedType(o)->isStructTy() )
+        if( Cyclebite::Util::getFirstContainedType(o.first)->isStructTy() )
         {
             // this is actually a structure that may contain multiple base pointers in it
-            toRemove.insert(o);
+            toRemove.insert(o.first);
             // we want to walk forward in the DFG until we find pointers that contain at least an aggregate type
             deque<const llvm::Value*> Q;
             set<const llvm::Value*> covered;
-            Q.push_front(o);
-            covered.insert(o);
+            Q.push_front(o.first);
+            covered.insert(o.first);
             while( !Q.empty() )
             {
                 if( const auto& gep = llvm::dyn_cast<llvm::GetElementPtrInst>(Q.front()) )
@@ -877,14 +889,14 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
                         }
                         if( !onlyPointers )
                         {
-                            toAdd.insert(gep->getPointerOperand());
+                            toAdd.insert( pair(gep->getPointerOperand(), o.second) );
                             Q.pop_front();
                             continue;
                         }
                     }
                     else if( !gep->getSourceElementType()->isPointerTy() )
                     {
-                        toAdd.insert(gep->getPointerOperand());
+                        toAdd.insert( pair(gep->getPointerOperand(), o.second) );
                         Q.pop_front();
                         continue;
                     }
@@ -913,7 +925,19 @@ set<shared_ptr<BasePointer>> Cyclebite::Grammar::getBasePointers(const shared_pt
     set<shared_ptr<BasePointer>> bps;
     for( const auto& bp : bpCandidates )
     {
-        bps.insert( make_shared<BasePointer>(DNIDMap.at(bp)) );
+        if( bp.second.size() != 1 )
+        {
+            PrintVal(bp.first);
+            throw CyclebiteException("Found a base pointer that has multiple footprints!");
+        }
+        if( bp2bp.contains(*bp.second.begin()) )
+        {
+            bps.insert( make_shared<BasePointer>(DNIDMap.at(bp.first), *bp.second.begin(), bp2bp.at(*bp.second.begin())) );
+        }
+        else
+        {
+            bps.insert( make_shared<BasePointer>(DNIDMap.at(bp.first), *bp.second.begin()) );
+        }
     }
     return bps;
 }
