@@ -56,6 +56,7 @@ namespace Cyclebite::Profile::Passes
     extern Function *MemorySet;
     extern Function *MemoryMalloc;
     extern Function *MemoryFree;
+    extern Function *StaticBasePointer;
     // Precision pass
     extern Function *PrecisionIncrement;
     extern Function *PrecisionLoad;

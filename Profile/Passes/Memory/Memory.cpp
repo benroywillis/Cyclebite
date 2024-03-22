@@ -376,6 +376,7 @@ namespace Cyclebite::Profile::Passes
     static RegisterPass<Memory> Y("Memory", "Injects memory profiling to the binary", true, false);
 } // namespace Cyclebite::Profile::Passes
 */
+
 #include "inc/Memory.h"
 #include "Functions.h"
 #include "Util/Annotate.h"
@@ -397,6 +398,7 @@ llvm::PreservedAnalyses Cyclebite::Profile::Passes::Memory::run(llvm::Module& M,
     MemorySet       = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemorySet", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext())).getCallee());
     MemoryMalloc    = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryMalloc", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext())).getCallee());
     MemoryFree      = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__MemoryFree", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8)).getCallee());
+    StaticBasePointer = cast<Function>(M.getOrInsertFunction("__Cyclebite__Profile__Backend__StaticBasePointer", Type::getVoidTy(M.getContext()), Type::getIntNPtrTy(M.getContext(), 8), Type::getInt64Ty(M.getContext())).getCallee());
     uint64_t blockCount = Util::GetBlockCount(M);
     ConstantInt *i = ConstantInt::get(Type::getInt64Ty(M.getContext()), blockCount);
     new GlobalVariable(M, i->getType(), false, llvm::GlobalValue::LinkageTypes::ExternalLinkage, i, "MarkovBlockCount");
@@ -415,6 +417,8 @@ llvm::PreservedAnalyses Cyclebite::Profile::Passes::Memory::run(llvm::Module& M,
             // skip this if we are in the first block of main
             if (!((F.getName() == "main") && (fi == F.begin())))
             {
+                // inject a memory increment at the beginning of the basic block
+                // memoryIncrement iterates the profiled basic block to the current one
                 Value *idValue = ConstantInt::get(Type::getInt64Ty(BB->getContext()), (uint64_t)blockId);
                 std::vector<Value *> args;
                 args.push_back(idValue);
@@ -535,10 +539,40 @@ llvm::PreservedAnalyses Cyclebite::Profile::Passes::Memory::run(llvm::Module& M,
                     call->setDebugLoc(NULL);
                 }
             }
-            // now inject MemoryMove, MemoryCpy, MemorySet, MemoryMalloc, MemoryFree
+            // next we inject profiling calls at the spots where memory is allocated (these profiling spots ascertain the base pointers of the application)
+            // - the base pointers of the application help us determine where the memory footprints of the application start and end
+            //   -- thus they are useful to acquire when they are allocated - they greatly simplify the problem of understanding communication between tasks            
             for (BasicBlock::iterator BI = fi->begin(), BE = fi->end(); BI != BE; ++BI)
             {
-                if( auto cpy  = llvm::dyn_cast<AnyMemCpyInst>(BI) )
+                // first find static allocations via alloca instructions
+                // we only care about alloca's that have more than the minimum base pointer memory size threshold implied in their allocation size parameters
+                if( const auto& alloca = llvm::dyn_cast<AllocaInst>(BI) )
+                {
+                    if( alloca->getAllocationSize(alloca->getModule()->getDataLayout()).has_value() )
+                    {
+                        if( alloca->getAllocationSize(alloca->getModule()->getDataLayout()) > MIN_MEMORY_OFFSET )
+                        {
+                            // inject backend call here
+                            IRBuilder<> builder(alloca);
+                            std::vector<Value* > values;
+                            // resulting pointer from the alloc
+                            auto ptr = alloca;
+                            auto castCode = CastInst::getCastOpcode(ptr, true, PointerType::get(Type::getInt8PtrTy(fi->getContext()), 0), true);
+                            Value *ptr_cast = builder.CreateCast(castCode, ptr, Type::getInt8PtrTy(fi->getContext()));
+                            values.push_back(ptr_cast);
+                            // size of allocation
+                            auto size = ConstantInt::get(Type::getInt64Ty(M.getContext()), alloca->getAllocationSize(alloca->getModule()->getDataLayout()).value().getFixedValue());
+                            values.push_back( size );
+                            // generate backend call
+                            auto backendCall = builder.CreateCall(StaticBasePointer, values);
+                            backendCall->moveAfter(alloca);
+                            backendCall->setDebugLoc(NULL);
+                        }
+                    }
+                }
+                // now inject at dynamic memory allocation and movement sites
+                // this will include MemoryMove, MemoryCpy, MemorySet, MemoryMalloc, MemoryFree
+                else if( auto cpy  = llvm::dyn_cast<AnyMemCpyInst>(BI) )
                 {
                     IRBuilder<> builder(cpy);
                     std::vector<Value *> values;

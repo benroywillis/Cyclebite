@@ -55,6 +55,7 @@ namespace Cyclebite::Profile::Passes
     Function *MemorySet;
     Function *MemoryMalloc;
     Function *MemoryFree;
+    Function *StaticBasePointer;
     // Precision pass
     Function *PrecisionIncrement;
     Function *PrecisionLoad;

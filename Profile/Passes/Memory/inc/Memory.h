@@ -22,6 +22,8 @@ namespace Cyclebite::Profile::Passes
 
 namespace Cyclebite::Profile::Passes
 {
+    /// Minimum offset a memory tuple must have (in bytes) to be considered a base pointer
+    constexpr uint32_t MIN_MEMORY_OFFSET = 128;
     struct Memory : llvm::PassInfoMixin<Memory> 
     {
         llvm::PreservedAnalyses run(llvm::Module& M, llvm::ModuleAnalysisManager& );
