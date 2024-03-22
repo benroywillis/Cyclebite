@@ -618,12 +618,6 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
                     }
                 }
             }
-            if( expr->getInputs().size() != producerExprs.size() )
-            {
-                spdlog::warn("Halide export only supports mapping producers to consumers whose communication pattern is statically determinable. Communication between tasks may be incorrect.");
-            }
-            // for expressions in which there is exactly one input and one output, this works well
-            // otherwise, everything will be jumbled up
             vector<shared_ptr<Collection>> exprInputs;
             for( const auto& in : expr->getInputs() )
             {
@@ -632,50 +626,64 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
                     exprInputs.push_back(coll);
                 }
             }
-            auto inputMin = producerExprs.size() < exprInputs.size() ? producerExprs.size() : exprInputs.size();
-            for( unsigned i = 0; i < inputMin; i++ )
+            // only the producer's output expression needs to be mapped, so we iterate over them
+            for( const auto& producerExpr : producerExprs )
             {
-                if( !Symbol2Symbol.contains( exprInputs[i] ) )
+                if( const auto& producerColl = dynamic_pointer_cast<Collection>(producerExpr->getOutput()) )
                 {
-                    Symbol2Symbol[ exprInputs[i] ] = producerExprs[i];
+                    // find the consumer input that matches the producer expr's memory footprint
+                    shared_ptr<Collection> matchedInput = nullptr;
+                    for( const auto& in : exprInputs )
+                    {
+                        if( in->getBP()->getFootprint() == producerColl->getBP()->getFootprint() )
+                        {
+                            matchedInput = in;
+                            break;
+                        }
+                    }
+                    if( matchedInput )
+                    {
+                        // we map the subexpression in the consumer to the producer expression (because the consumer needs to refer to the producer)
+                        Symbol2Symbol[matchedInput] = producerExpr;
+                    }
+                    else
+                    {
+                        throw CyclebiteException("Could not match a producer collection to a corresponding subexpression in the consumer!");
+                    }
                 }
                 // next, map the dimensions that are used in the producer expression to the dimensions that are used in the exprInput expression
                 // this maps the dimensions of the producer onto the consumer
                 vector<shared_ptr<InductionVariable>> producerDims;
                 vector<shared_ptr<InductionVariable>> consumerDims;
-                for( const auto& dim : producerExprs[i]->getOutputDimensions() )
+                for( const auto& dim : producerExpr->getOutputDimensions() )
                 {
                     if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
                     {
                         producerDims.push_back(iv);
                     }
                 }
-                for( const auto& dim : exprInputs[i]->getDimensions() )
+                for( const auto& in : exprInputs )
                 {
-                    if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
+                    for( const auto& dim : in->getDimensions() )
                     {
-                        // the consumer might be a reduction, in which the dimensions that map to the reductions need to be removed from the dimensions that map to the producer
-                        if( !RDomDims.contains(iv) )
+                        if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
                         {
-                            consumerDims.push_back(iv);
+                            // the consumer might be a reduction, in which the dimensions that map to the reductions need to be removed from the dimensions that map to the producer
+                            if( !RDomDims.contains(iv) )
+                            {
+                                consumerDims.push_back(iv);
+                            }
                         }
                     }
                 }
                 if( producerDims.size() == consumerDims.size() )
                 {
-                    // there is a 1:1 mapping between consumerdims and producerDims, so we trivially map producer dims to consumer dims
+                    // there is a 1:1 mapping between consumerDims and producerDims, so we trivially map producer dims to consumer dims
                     // if the consumerDims have already been mapped to something else, we map the producer dims to that too
                     // keep in mind that this may be overwriting a previous mapping (say, from the previous step), so after this step the Symbol2Symbol map is case-specific to this expression
                     for( unsigned i = 0; i  < producerDims.size(); i++ )
                     {
-                        if( Symbol2Symbol.contains(consumerDims[i])  )
-                        {
-                            Symbol2Symbol[producerDims[i]] = Symbol2Symbol[consumerDims[i]];
-                        }
-                        else
-                        {
-                            Symbol2Symbol[consumerDims[i]] = producerDims[i];
-                        }
+                        Symbol2Symbol[consumerDims[i]] = producerDims[i];
                     }
                 }
                 else
