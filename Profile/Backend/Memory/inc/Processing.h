@@ -21,4 +21,5 @@ namespace Cyclebite::Profile::Backend::Memory
     /// @brief Implements the algorithm to discover communication between epochs
     /// @return Populates the TaskCommunications global
     void GenerateTaskCommunication();
+    std::map<int64_t, std::set<int64_t>> CombineStridedTuples();
 } // namespace Cyclebite::Profile::Backend::Memory

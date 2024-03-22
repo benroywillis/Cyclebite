@@ -575,6 +575,23 @@ namespace Cyclebite::Profile::Backend::Memory
         }
         output["Instance Order"] = instanceOrder;
 
+        // output inst2MemoryFootprint mappings and bp2bp mappings
+        auto inst2Footprint = CombineStridedTuples();
+        for( const auto& inst : inst2Footprint )
+        {
+            for( const auto& footprint : inst.second )
+            {
+                output["Instruction2Footprint"][to_string(inst.first)].push_back(footprint);
+            }
+        }
+        for( const auto& bp : bp2bp )
+        {
+            for( const auto& mappings : bp.second )
+            {
+                output["bp2bp"][to_string(bp.first)].push_back(mappings);
+            }
+        }
+
         string OutputFileName = "instance.json";
         if( getenv("INSTANCE_FILE") )
         {

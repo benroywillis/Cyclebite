@@ -256,7 +256,7 @@ namespace Cyclebite::Profile::Backend::Memory
         }
     }
 
-    void CombineStridedTuples()
+    map<int64_t, set<int64_t>> CombineStridedTuples()
     {
         // what is the problem we are solving
         // - understand which subexpressions of a consumer task map to its producer task(s)
@@ -294,25 +294,24 @@ namespace Cyclebite::Profile::Backend::Memory
         // - when separate memory footprints are contiguous
         //   -- then their dynamically-observed base pointers create a boundary between them
 
-        // before you do this part, you need to implement the base pointer capturing code
-        // - frontend: I inject at dynamic allocations (done) and static allocations (needs to be done, selection has to be made on which alloc's should be profiled)
-        // - backend: I need to put these base pointers somewhere
-        
-        // strided tuples are tuples that contain even amounts of memory between each one
-        // - this can happen when an array of structures is being traversed (only one member of the structure is accessed each time)
-        // to detect these strided patterns, we simply go through the tuples and whenever a series of three (or more) tuples has the same stride, we combine them
-        // - this search is started at one of the "base pointers" that was observed during the profile
-        // - whenever a base pointer is encountered (or passed over), the search stops
-        //   -- base pointers represent boundaries between memory footprints - we don't want to combine footprints that sit right next to each other
-
-        // combine strided tuples
-        // - you have to update instToTuple as you do this -> either that or you have to record which instructions you see as you combine strided tuples
-        
-        // now map instructions to tuples
-        // - what happens when an instruction (belonging to a certain task that has multiple instances) touches more than one memory footprint?
-        // - what happens to the temporal aspect of the footprints? do I need to know when instructions touch a memory footprint?
-        //   -- when two tasks produce-consume to each other multiple times, each one of these may be on a different footprint, in which case there won't be a 1:1 match between them. 
-        //   -- If another argument in the consuming task also touched these memory footprints at some point, this will create an ambiguity in which arguments match to which
-
+        // for now we are treating the raw base pointer allocations as the footprints
+        // we map memory accessing instructions to the footprints they touch
+        // key is instruction ID, value is a set of footprint IDs
+        map<int64_t, set<int64_t>> inst2Footprint;
+        for( const auto& inst : instToTuple )
+        {
+            for( const auto& t : inst.second )
+            {
+                for( const auto& bp : basePointers )
+                {
+                    auto o = mem_tuple_overlap(bp, t);
+                    if( o.base )
+                    {
+                        inst2Footprint[ inst.first ].insert(bp.base);
+                    }
+                }
+            }
+        }
+        return inst2Footprint;
     }
 } // namespace Cyclebite::Profile::Backend::Memory
