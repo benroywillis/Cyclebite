@@ -718,64 +718,98 @@ llvm::PreservedAnalyses Cyclebite::Profile::Passes::Memory::run(llvm::Module& M,
                         {
                             IRBuilder<> builder(call);
                             std::vector<Value *> values;
-                            // there is a corner case here where the pointer returned by the allocating function feeds into a phi
-                            // it only happens on invoke calls because the backend call has to be injected after the call executes (regular calls can just inject into the same basic block)
-                            // if this is the case, we need to feed the phi into the backend call, not the pointer itself
-                            bool fromPhi = false;
-                            if( const auto& inv = llvm::dyn_cast<llvm::InvokeInst>(call) )
+                            if( call->getCalledFunction()->arg_size() == 1 )
                             {
-                                // we only pay attention to the normal destination - the exception destination likely doesn't have a pointer worth tracking
-                                for( auto iphi = inv->getNormalDest()->begin(); iphi != inv->getNormalDest()->end(); iphi++ )
+                                // malloc or new
+                                // there is a corner case here where the pointer returned by the allocating function feeds into a phi
+                                // it only happens on invoke calls because the backend call has to be injected after the call executes (regular calls can just inject into the same basic block)
+                                // if this is the case, we need to feed the phi into the backend call, not the pointer itself
+                                bool fromPhi = false;
+                                if( const auto& inv = llvm::dyn_cast<llvm::InvokeInst>(call) )
                                 {
-                                    if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(iphi) )
+                                    // we only pay attention to the normal destination - the exception destination likely doesn't have a pointer worth tracking
+                                    for( auto iphi = inv->getNormalDest()->begin(); iphi != inv->getNormalDest()->end(); iphi++ )
                                     {
-                                        for( unsigned i = 0; i < phi->getNumIncomingValues(); i++ )
+                                        if( const auto& phi = llvm::dyn_cast<llvm::PHINode>(iphi) )
                                         {
-                                            if( phi->getIncomingValue(i) == call )
+                                            for( unsigned i = 0; i < phi->getNumIncomingValues(); i++ )
                                             {
-                                                // the pointer is in the phi, thus we have to inject the phi into the args to the backend call
-                                                values.push_back(phi);
-                                                // push back a constant 0 because we didn't get any allocation
-                                                values.push_back( llvm::ConstantInt::get(Type::getInt64Ty(fi->getContext()), 0) );
-                                                fromPhi = true;
+                                                if( phi->getIncomingValue(i) == call )
+                                                {
+                                                    // the pointer is in the phi, thus we have to inject the phi into the args to the backend call
+                                                    values.push_back(phi);
+                                                    // push back a constant 0 because we didn't get any allocation
+                                                    values.push_back( llvm::ConstantInt::get(Type::getInt64Ty(fi->getContext()), 0) );
+                                                    fromPhi = true;
+                                                    break;
+                                                }
+                                            }
+                                            if( fromPhi )
+                                            {
                                                 break;
                                             }
                                         }
-                                        if( fromPhi )
+                                        else
                                         {
-                                            break;
+                                            continue;
                                         }
                                     }
-                                    else
-                                    {
-                                        continue;
-                                    }
                                 }
+                                if( !fromPhi )
+                                {
+                                    values.push_back(call);
+                                    // grab the size parameter so we can construct a memory tuple from this
+                                    auto size = call->getOperand(0);
+                                    auto castCode = CastInst::getCastOpcode(size, true, PointerType::get(Type::getInt64Ty(fi->getContext()), 0), true);
+                                    Value *size_cast = builder.CreateCast(castCode, size, Type::getInt64Ty(fi->getContext()));
+                                    values.push_back(size_cast);
+                                }
+                                auto backendCall = builder.CreateCall(MemoryMalloc, values);
+                                // there are two injection cases
+                                // 1. this is an invoke, then we just inject after
+                                // 2. its just a regular function call, then we inject after the call
+                                if( auto inv = llvm::dyn_cast<InvokeInst>(call) )
+                                {
+                                    // only put the backend call at the regular landing site, if an exception occurred we want to ignore that pointer
+                                    auto regReturnSite = inv->getNormalDest()->getFirstNonPHIOrDbgOrLifetime();
+                                    backendCall->moveAfter(regReturnSite);
+                                }
+                                else
+                                {
+                                    backendCall->moveAfter(call);
+                                }
+                                backendCall->setDebugLoc(NULL);
                             }
-                            if( !fromPhi )
+                            else if( call->getCalledFunction()->arg_size() == 2 )
                             {
+                                // calloc
+                                // first arg is # of elements, second arg is the size of each element - we need the product of each element
                                 values.push_back(call);
-                                // grab the size parameter so we can construct a memory tuple from this
-                                auto size = call->getOperand(0);
-                                auto castCode = CastInst::getCastOpcode(size, true, PointerType::get(Type::getInt64Ty(fi->getContext()), 0), true);
-                                Value *size_cast = builder.CreateCast(castCode, size, Type::getInt64Ty(fi->getContext()));
-                                values.push_back(size_cast);
-                            }
-                            auto backendCall = builder.CreateCall(MemoryMalloc, values);
-                            // there are two injection cases
-                            // 1. this is an invoke, then we just inject after
-                            // 2. its just a regular function call, then we inject after the call
-                            if( auto inv = llvm::dyn_cast<InvokeInst>(call) )
-                            {
-                                // only put the backend call at the regular landing site, if an exception occurred we want to ignore that pointer
-                                auto regReturnSite = inv->getNormalDest()->getFirstNonPHIOrDbgOrLifetime();
-                                backendCall->moveAfter(regReturnSite);
-                            }
-                            else
-                            {
+                                //auto mul = llvm::BinaryOperator::Create(llvm::Instruction::BinaryOps::Mul, call->getOperand(0), call->getOperand(1));
+                                auto mul = builder.CreateMul(call->getOperand(0), call->getOperand(1));
+                                //mul->moveAfter(call);
+                                auto castCode = CastInst::getCastOpcode(mul, true, PointerType::get(Type::getInt64Ty(fi->getContext()), 0), true);
+                                Value* mulCast = builder.CreateCast( castCode, mul, Type::getInt64Ty(fi->getContext()));
+                                values.push_back(mulCast);
+                                auto backendCall = builder.CreateCall(MemoryMalloc, values);
                                 backendCall->moveAfter(call);
+                                backendCall->setDebugLoc(NULL);
                             }
-                            backendCall->setDebugLoc(NULL);
+                            else if( call->getCalledFunction()->arg_size() == 3 )
+                            {
+                                // posix_memalign
+                                // first arg is the pointer to the allocation (so we need to dereference what is in that pointer to find the base pointer of the allocation)
+                                // third arg is the size parameter (second arg is the alignment parameter)
+                                auto ptrld = builder.CreateLoad(Type::getInt8PtrTy(fi->getContext()), call->getOperand(0));
+                                ptrld->moveAfter(call);
+                                values.push_back(ptrld);
+                                auto castCode = CastInst::getCastOpcode(call->getOperand(2), true, PointerType::get(Type::getInt64Ty(fi->getContext()), 0), true);
+                                Value* mulCast = builder.CreateCast( castCode, call->getOperand(2), Type::getInt64Ty(fi->getContext()));
+                                values.push_back(mulCast);
+                                auto backendCall = builder.CreateCall(MemoryMalloc, values);
+                                backendCall->moveAfter(ptrld);
+                                backendCall->setDebugLoc(NULL);
+                            }
                         }
                         // libc free() or stl delete operator
                         else if( Cyclebite::Util::isFreeingFunction(call) )

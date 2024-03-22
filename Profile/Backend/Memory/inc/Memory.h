@@ -46,8 +46,12 @@ namespace Cyclebite::Profile::Backend::Memory
     extern std::map<int64_t, std::set<MemTuple, MTCompare>> instToTuple;
     /// Keeps track of base pointers as they are profiled
     /// Base pointers are used as boundaries between memory footprints when memory tuples are combined (more aggressively) after processing
-    extern std::set<int64_t> basePointers;
-
+    /// First of the pair is the base pointer address, second is the size of the allocation
+    extern std::set<MemTuple, MTCompare> basePointers;
+    /// This map points from base pointers to their moved or copied footprints
+    /// The map uses the base of each base pointer as their ID (that's the int64_t)
+    /// Key-value pairs represent moves or copies of a memory footprint to another - bp's can have this done multiple times (hence the set of values a bp may map to)
+    extern std::map<int64_t, std::set<int64_t>> bp2bp;
     /// Holds all CodeSections
     /// A code section is a unique set of basic block IDs ie a codesection may map to multiple kernels
     extern std::set<std::shared_ptr<CodeSection>, UIDCompare> codeSections;

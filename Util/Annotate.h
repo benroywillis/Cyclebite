@@ -268,13 +268,12 @@ namespace Cyclebite::Util
     {
         if( call->getCalledFunction() )
         {
-            if( (call->getCalledFunction()->getName() == "malloc") || (call->getCalledFunction()->getName() == "_Znam") || (call->getCalledFunction()->getName() == "_Znwm") )
+            if( (call->getCalledFunction()->getName() == "malloc") || 
+                (call->getCalledFunction()->getName() == "_Znam") || 
+                (call->getCalledFunction()->getName() == "_Znwm") ||
+                (call->getCalledFunction()->getName() == "calloc") ||
+                (call->getCalledFunction()->getName() == "posix_memalign") )
             {
-                return true;
-            }
-            else if( call->getCalledFunction()->getName() == "calloc" )
-            {
-                spdlog::warn("Cannot yet support the size parameter of calloc. Allocation may be erroneously considered too small for processing.");
                 return true;
             }
         }

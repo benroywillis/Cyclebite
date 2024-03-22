@@ -30,6 +30,7 @@ namespace Cyclebite::Profile::Backend::Memory
     /// Maps instructions to their working set tuples
     /// These mappings are used in the grammar tool to figure out which load instructions are touching critical pieces of memory
     map<int64_t, set<MemTuple, MTCompare>> instToTuple;
+    map<int64_t, set<int64_t>> bp2bp;
 
     /// Holds all CodeSections
     /// A code section is a unique set of basic block IDs ie a codesection may map to multiple kernels
@@ -41,7 +42,7 @@ namespace Cyclebite::Profile::Backend::Memory
     map<shared_ptr<Kernel>, set<int64_t>> dominators;
     /// Keeps track of base pointers as they are profiled
     /// Base pointers are used as boundaries between memory footprints when memory tuples are combined (more aggressively) after processing
-    set<int64_t> basePointers;
+    set<MemTuple, MTCompare> basePointers;
 
     /// Holds all task candidates that are read from the input kernel file
     std::set<std::shared_ptr<Kernel>, UIDCompare> kernels;
@@ -221,7 +222,6 @@ namespace Cyclebite::Profile::Backend::Memory
 
         void __Cyclebite__Profile__Backend__MemoryCpy(void* ptr_snk, void* ptr_src, uint64_t dataSize)
         {
-            basePointers.insert((uint64_t)ptr_snk);
             MemTuple mt;
             mt.type = __TA_MemType::Memcpy;
             mt.base = (uint64_t)ptr_src;
@@ -232,6 +232,8 @@ namespace Cyclebite::Profile::Backend::Memory
                 merge_tuple_set(currentEpoch->memoryData.rTuples, mt);
             }
             mt.base = (uint64_t)ptr_snk;
+            basePointers.insert(mt);
+            bp2bp[(uint64_t)ptr_src].insert((uint64_t)ptr_snk);
             if( currentEpoch )
             {
                 merge_tuple_set(currentEpoch->memoryData.wTuples, mt);
@@ -241,7 +243,6 @@ namespace Cyclebite::Profile::Backend::Memory
 
         void __Cyclebite__Profile__Backend__MemoryMov(void* ptr_snk, void* ptr_src, uint64_t dataSize)
         {
-            basePointers.insert((uint64_t)ptr_snk);
             MemTuple mt;
             mt.type = __TA_MemType::Memmov;
             mt.base = (uint64_t)ptr_src;
@@ -252,6 +253,8 @@ namespace Cyclebite::Profile::Backend::Memory
                 merge_tuple_set(currentEpoch->memoryData.rTuples, mt);
             }
             mt.base = (uint64_t)ptr_snk;
+            basePointers.insert(mt);
+            bp2bp[(uint64_t)ptr_src].insert((uint64_t)ptr_snk);
             if( currentEpoch )
             {
                 merge_tuple_set(currentEpoch->memoryData.wTuples, mt);
@@ -275,13 +278,18 @@ namespace Cyclebite::Profile::Backend::Memory
 
         void __Cyclebite__Profile__Backend__MemoryMalloc(void* ptr, uint64_t offset)
         {
-            basePointers.insert((uint64_t)ptr);
+            MemTuple mt;
+            mt.type = __TA_MemType::Malloc;
+            mt.base = (uint64_t)ptr;
+            mt.offset = (uint32_t)offset-1;
+            auto it = basePointers.insert(mt);
+            if( !it.second )
+            {
+                volatile auto ptrcpy = ptr;
+                volatile bool didntPush = true;
+            }
             if( currentEpoch )
             {
-                MemTuple mt;
-                mt.type = __TA_MemType::Malloc;
-                mt.base = (uint64_t)ptr;
-                mt.offset = (uint32_t)offset-1;
                 currentEpoch->malloc_ptrs.insert(mt);
             }
             updateBittenBytes();
@@ -297,13 +305,13 @@ namespace Cyclebite::Profile::Backend::Memory
 
         void __Cyclebite__Profile__Backend__StaticBasePointer( void* ptr, uint64_t size )
         {
-            basePointers.insert((uint64_t)ptr);
+            MemTuple mt;
+            mt.type = __TA_MemType::Malloc;
+            mt.base = (uint64_t)ptr;
+            mt.offset = (uint32_t)size-1;
+            basePointers.insert(mt);
             if( currentEpoch )
             {
-                MemTuple mt;
-                mt.type = __TA_MemType::Malloc;
-                mt.base = (uint64_t)ptr;
-                mt.offset = (uint32_t)size-1;
                 currentEpoch->malloc_ptrs.insert(mt);
             }
             updateBittenBytes();
