@@ -84,6 +84,7 @@ int main(int argc, char *argv[])
     BuildDFG(programFlow, dGraph, SourceBitcode, dynamicCG, blockToNode, IDToBlock);
     // takes the information from EP about which loads and stores touch significant memory chunks and injects that info into the DFG
     InjectSignificantMemoryInstructions(instanceJson, IDToValue);
+    BuildMemoryInstructionMappings( instanceJson, IDToValue );
     auto tasks = getTasks(instanceJson, kernelJson, IDToBlock);
     // color the nodes of the graph
     colorNodes(tasks);

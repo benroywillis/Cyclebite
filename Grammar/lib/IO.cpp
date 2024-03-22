@@ -22,6 +22,8 @@ using namespace Cyclebite::Grammar;
 map<string, vector<string>> Cyclebite::Grammar::fileLines;
 map<uint32_t, pair<string,uint32_t>> Cyclebite::Grammar::blockToSource;
 set<shared_ptr<Cyclebite::Graph::Inst>, Cyclebite::Graph::p_GNCompare> Cyclebite::Grammar::SignificantMemInst;
+map<shared_ptr<Cyclebite::Graph::Inst>, set<uint64_t>> Cyclebite::Grammar::memInst2Footprint;
+map<uint64_t, set<uint64_t>> Cyclebite::Grammar::bp2bp;
 
 void Cyclebite::Grammar::InitSourceMaps(const std::unique_ptr<llvm::Module>& SourceBitcode)
 {
@@ -88,6 +90,49 @@ void Cyclebite::Grammar::InjectSignificantMemoryInstructions(const nlohmann::jso
         {
             Cyclebite::Util::PrintVal(IDToValue.at(value));
             throw CyclebiteException("Significant memory op is not an instruction!");
+        }
+    }
+}
+
+void Cyclebite::Grammar::BuildMemoryInstructionMappings( const nlohmann::json& instanceJson, const map<int64_t, const llvm::Value*>& IDToValue )
+{
+    if( instanceJson.find("Instruction2Footprint") == instanceJson.end() )
+    {
+        spdlog::critical("Could not find 'Instruction2Footprint' category in input instance file!");
+        throw CyclebiteException("Could not find 'Instruction2Footprint' category in input instance file!");
+    }
+    for( const auto& value : instanceJson["Instruction2Footprint"].items() )
+    {
+        if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(IDToValue.at( stol(value.key())) ) )
+        {
+            if( !Cyclebite::Graph::DNIDMap.contains(inst) )
+            {
+                Cyclebite::Util::PrintVal(inst);
+                throw CyclebiteException("Found a significant memory op that's not live!");
+            }
+            for( const auto& footprint : value.value().items() )
+            {
+                if( const auto& i = dynamic_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(inst)) )
+                {
+                    Cyclebite::Grammar::memInst2Footprint[i].insert(footprint.value().get<uint64_t>());
+                }
+            }
+        }
+        else
+        {
+            Cyclebite::Util::PrintVal(IDToValue.at(stol(value.key())));
+            throw CyclebiteException("Significant memory op is not an instruction!");
+        }
+    }
+    // now build bp2bp mappings
+    if( instanceJson.contains("bp2bp") )
+    {
+        for( const auto& map : instanceJson["bp2bp"].items() )
+        {
+            for( const auto& other : map.value().get<vector<uint64_t>>() )
+            {
+                bp2bp[stol(map.key())].insert(other);
+            }
         }
     }
 }
