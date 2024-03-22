@@ -255,4 +255,64 @@ namespace Cyclebite::Profile::Backend::Memory
             }
         }
     }
+
+    void CombineStridedTuples()
+    {
+        // what is the problem we are solving
+        // - understand which subexpressions of a consumer task map to its producer task(s)
+        //   -- when tasks communicate in simple ways (e.g., a fully-serial pipeline), there is a trivial mapping between the pointers that come from producer and are eaten by consumer
+        //   -- when tasks communicate in complicated ways (e.g., consumers of parallel producers), there isn't a trivial mapping between producer pointers and subexpressions in the consumer task
+        //      --- e.g., 
+        //                in0, in1 = randInit()
+        //                in2, in3 = randInit()
+        //                ptr0 = Task0(in0', in1') [in0' and in1' are aliases for their respective producer outputs, since they may exist in a different context from the producer and hence have no static mapping between each other]
+        //                ptr1 = Task1(in2', in3', ptr0') [ptr0' is an alias for ptr0, which may be a value in a different context from ptr0 ie there is no explicit static mapping between ptr0 and ptr0']
+        //          ---- in this example, it is not clear (from the template's perspective) which argument is ptr0 and which argument is in2 and in3
+        //          ---- would this problem be helped by getting rid of context-switching issues in the static code? 
+        //               ----- Perhaps... but then you're reliant on LLVM's ability to inline everything... which doesn't always happen
+        //          ---- would this problem be helped by using the characteristics of the subexpression to compare to the characteristics of the producer expression?
+        //               ----- Perhaps... but it wouldn't work generally. A task that eats two images from the same image-reading method will have two subexpressions with the same characteristics
+        // why does this problem matter
+        // - understanding the mapping between values from a producer eaten by a consumer are necessary to generate cohesive and correct pipestages within a pipeline
+        //   -- ie we need to know which subexpressions within our consumer map to the output(s) of the producer in order to emulate the behavior of the original pipeline
+        // - why is this non-obvious
+        //   -- The consumer's functional expression is generated in a context with symbols that don't directly map to the symbols from the producer
+        //   -- this creates a situation where the consumer's expression has no static mapping to the outputs of the producer
+        //   -- a lack of mapping creates ambiguity in the consumer's expression when it contains subexpressions from multiple producers
+        // how are we solving it
+        // - acquire the memory footprints of each base pointer in the application
+        //   -- this allows ptr0 and ptr0' to be mapped together via the memory they touch
+        // - e.g., in2, in3, and ptr0' will all touch unique memory footprints that map them together
+        // where does this break
+        // - when memory patterns are irregular (then the memory footprint might not be detectable)
+        //    -- e.g., hash table. The stride pattern will be irregular and break the memory-tuple merge algorithm (which supports contiguous and strided memory accesses)
+        // - when memory footprints are moved, or copied, with llvm intrinsics - then the producer memory footprint may not have the same id as the consumer memory footprint
+        //   -- e.g., when llvm transforms a loop that moves memory into an llvm.memmov intrinsic
+        // corner cases
+        // - when pointers in the consumer map to the same memory footprint
+        //   -- then it doesn't matter which subexpression goes where in the expression - they are the same thing
+        // - when separate memory footprints are contiguous
+        //   -- then their dynamically-observed base pointers create a boundary between them
+
+        // before you do this part, you need to implement the base pointer capturing code
+        // - frontend: I inject at dynamic allocations (done) and static allocations (needs to be done, selection has to be made on which alloc's should be profiled)
+        // - backend: I need to put these base pointers somewhere
+        
+        // strided tuples are tuples that contain even amounts of memory between each one
+        // - this can happen when an array of structures is being traversed (only one member of the structure is accessed each time)
+        // to detect these strided patterns, we simply go through the tuples and whenever a series of three (or more) tuples has the same stride, we combine them
+        // - this search is started at one of the "base pointers" that was observed during the profile
+        // - whenever a base pointer is encountered (or passed over), the search stops
+        //   -- base pointers represent boundaries between memory footprints - we don't want to combine footprints that sit right next to each other
+
+        // combine strided tuples
+        // - you have to update instToTuple as you do this -> either that or you have to record which instructions you see as you combine strided tuples
+        
+        // now map instructions to tuples
+        // - what happens when an instruction (belonging to a certain task that has multiple instances) touches more than one memory footprint?
+        // - what happens to the temporal aspect of the footprints? do I need to know when instructions touch a memory footprint?
+        //   -- when two tasks produce-consume to each other multiple times, each one of these may be on a different footprint, in which case there won't be a 1:1 match between them. 
+        //   -- If another argument in the consuming task also touched these memory footprints at some point, this will create an ambiguity in which arguments match to which
+
+    }
 } // namespace Cyclebite::Profile::Backend::Memory
