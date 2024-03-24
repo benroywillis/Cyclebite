@@ -288,6 +288,8 @@ namespace Cyclebite::Profile::Backend::Memory
         //    -- e.g., hash table. The stride pattern will be irregular and break the memory-tuple merge algorithm (which supports contiguous and strided memory accesses)
         // - when memory footprints are moved, or copied, with llvm intrinsics - then the producer memory footprint may not have the same id as the consumer memory footprint
         //   -- e.g., when llvm transforms a loop that moves memory into an llvm.memmov intrinsic
+        // - when someone makes contiguous memory allocations (maybe within a loop) that collectively make a single memory footprint
+        //   -- we have no way of differenciating between three allocations (GEMM/Naive) back-to-back-to-back and a few thousand memory allocations that make an image (IIRBlur/Naive)
         // corner cases
         // - when pointers in the consumer map to the same memory footprint
         //   -- then it doesn't matter which subexpression goes where in the expression - they are the same thing

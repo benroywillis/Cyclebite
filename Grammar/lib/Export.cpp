@@ -352,7 +352,14 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     //    - when dimensions are not trivially mappable together, there needs to be a criteria in which one dimension matches to another
     //      -- trivially mappable: there are two pairs of dimensions, how do you know which pairs map together when they have the same iteration space?
     //         --- what happens when their iteration space is non-deterministic?
-    // 2. How do you map collections together?
+    //    - why is this hard
+    //      -- induction variables may or may not have statically determinable range - thus their range has to be dynamically profiled
+    //    - why does this need to be solved
+    //      -- when pipelines contain multiple input tasks, these input tasks will have different dimension in which they operate
+    //         --- e.g., polybench/linear-algebra/kernels/3mm
+    //      -- when algorithms map multiple dimensions together, these dimensions will have to be resolved together
+    //         --- e.g., PERFECT/STAP/system-solve
+    // 2. How do you map collections together? (SOLVED for serial and simple-parallel pipelines by the epoch base pointer tracker and the base pointer "footprint" attribute)
     //    - memory slab ID
     //      -- in the epoch profile, each significant memory inst needs to have its memory slab identified
     //         --- this may require rolling up memory tuples that are not contiguous
@@ -360,6 +367,14 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     //                  ----- [easy] the tuples are not contiguous but have consistent stride (like an array of structs in which only one member is accessed)
     //                  ----- [hard] the tuples are not contiguous and don't have consistent stride (then how do you name all of them?)
     //             ---- both cases will require refactoring what it means to be able to merge tuples together, and how they should be sorted
+    // 3. How do you handle base pointers that point to user-defined structures?
+    //    - why does this need to be solved
+    //      -- many programs will iterate over an array of structures, often just picking a specific member of that structure, leading to transformation opportunities that decrease memory bandwidth requirements
+    //         --- e.g., CGEMM (points to _Complex type { double, double })
+    //    - why is this not straightforward
+    //      -- the memory access patterns are dependent on the user-defined structure - thus unraveling that encoding is difficult
+    //      -- there may be more than one member of the structure that is used by the algorithm, and those members may be infused into a single expression
+    //         --- does Halide support this kind of thing? not really...
 
     // maps symbols to other symbols when printing
     // currently this serves two purposes
