@@ -359,6 +359,21 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     //         --- e.g., polybench/linear-algebra/kernels/3mm
     //      -- when algorithms map multiple dimensions together, these dimensions will have to be resolved together
     //         --- e.g., PERFECT/STAP/system-solve
+    //    - [BW] 2024-03-24: some observations
+    //      -- when running 3MM/polybench exported Halide, there is no observed (significant) performance difference beween tasks mapped together with common vars v tasks that use their own vars in their definitions (then use common vars when combined together in the last GEMM)
+    //      -- 10 sample-1 iteation trials
+    //         --- test case where tasks use their own vars:
+    //             1: 0.559
+    //             2: 0.454
+    //             4: 0.193
+    //             8: 0.116
+    //             16: 0.073
+    //         --- test case where all tasks used common vars
+    //             1: 0.566
+    //             2: 0.470
+    //             4: 0.192
+    //             8: 0.130
+    //             16: 0.064
     // 2. How do you map collections together? (SOLVED for serial and simple-parallel pipelines by the epoch base pointer tracker and the base pointer "footprint" attribute)
     //    - memory slab ID
     //      -- in the epoch profile, each significant memory inst needs to have its memory slab identified
