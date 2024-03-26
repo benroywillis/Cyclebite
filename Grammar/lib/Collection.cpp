@@ -182,7 +182,9 @@ string Collection::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>
     }
     if( expr.empty() )
     {
-        expr += name;
+        // we print the name of the bp behind the collection
+        // this way, when many collections refer to the same bp, we won't get redundant references to the same bp
+        expr += indexBP->getName();
     }
     if( !vars.empty() )
     {

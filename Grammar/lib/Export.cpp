@@ -462,14 +462,14 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     // now start the generator definition
     halideGenerator += "class "+pipelineName+" : public Generator<"+pipelineName+"> {\npublic:\n";
     // 2. inject GeneratorParam(s) 
-    for( const auto& param : generatorParams )
+    /*for( const auto& param : generatorParams )
     {
         string typeStr;
         llvm::raw_string_ostream ty(typeStr);
         //PrintVal(param->getNode()->getVal());
         //param->getNode()->getVal()->getType()->print(ty);
         halideGenerator += "\tGeneratorParam<"+ty.str()+"> "+param->getName()+"{ \"+"+param->getName()+"\", "+to_string(0)+"};\n";
-    }
+    }*/
     // 3. inject inputs
     set<shared_ptr<Collection>> inputs;
     // the front input is the easy case
@@ -521,23 +521,33 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             }
         }
     }
-    for( const auto& coll : inputs )
-    {
-        inputs.insert(coll);
-        halideGenerator += "\tInput<Buffer<"+coll->getBP()->getContainedTypeString()+">> "+coll->getName()+"{\""+coll->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
-    }
-    // 4. inject output
     shared_ptr<Collection> output = nullptr;
-    string outputName = "";
-    for( const auto& expr : taskToExpr.at(exprOrder.back()) )
     {
-        if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
+        // when we print references to collections, we're actually just interested in printing their base pointers
+        // so the print here only prints the unique base pointer names
+        set<shared_ptr<BasePointer>> printed;
+        for( const auto& coll : inputs )
         {
-            output = coll;
-            outputName = coll->getName();
-            halideGenerator += "\tOutput<Buffer<"+coll->getBP()->getContainedTypeString()+">> "+coll->getName()+"{\""+coll->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
+            inputs.insert(coll);
+            if( !printed.contains( coll->getBP()) )
+            {
+                halideGenerator += "\tInput<Buffer<"+coll->getBP()->getContainedTypeString()+">> "+coll->getBP()->getName()+"{\""+coll->getBP()->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
+                printed.insert(coll->getBP());
+            }
+        }
+        // 4. inject output
+        printed.clear();
+        for( const auto& expr : taskToExpr.at(exprOrder.back()) )
+        {
+            if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
+            {
+                output = coll;
+                halideGenerator += "\tOutput<Buffer<"+coll->getBP()->getContainedTypeString()+">> "+coll->getBP()->getName()+"{\""+coll->getBP()->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
+                printed.insert(coll->getBP());
+            }
         }
     }
+
     // 5. start generator
     halideGenerator += "\tvoid generate() {\n";
     // 5a. List all Vars (all dimensions used by the pipeline)
@@ -596,11 +606,25 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
     }
     if( !constants.empty() ) halideGenerator += "\n";
     // 5c. Bound the input(s) for good measure - the default behavior is repeat edge e.g. aaa | abc | ccc
-    for( const auto& in : inputs )
     {
-        auto bounded = make_shared<Collection>(in->getIndices(), in->getBP(), in->getElementPointers());
-        Symbol2Symbol[in] = bounded;
-        halideGenerator += "\t\tFunc "+bounded->getName()+"(\""+bounded->getName()+"\");\n\t\t"+bounded->getName()+" = Halide::BoundaryConditions::repeat_edge("+in->getName()+");\n";
+        // maps an unbounded bp to a bounded bp
+        map<shared_ptr<BasePointer>, shared_ptr<BasePointer>> printed;
+        for( const auto& in : inputs )
+        {
+            if( printed.contains(in->getBP()) )
+            {
+                auto bounded = make_shared<Collection>(in->getIndices(), printed.at(in->getBP()), in->getElementPointers());
+                Symbol2Symbol[in] = bounded;
+            }
+            else
+            {
+                auto newBP = make_shared<BasePointer>(in->getBP()->getNode(), in->getBP()->getFootprint(), in->getBP()->getMappedFootprints());
+                auto bounded = make_shared<Collection>(in->getIndices(), newBP, in->getElementPointers());
+                Symbol2Symbol[in] = bounded;                
+                printed[in->getBP()] = newBP;
+                halideGenerator += "\t\tFunc "+bounded->getBP()->getName()+"(\""+bounded->getBP()->getName()+"\");\n\t\t"+bounded->getBP()->getName()+" = Halide::BoundaryConditions::repeat_edge("+in->getBP()->getName()+");\n";
+            }
+        }
     }
     if( !inputs.empty() ) halideGenerator += "\n";
     // 5d. print the expressions
@@ -705,7 +729,9 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
                     }
                     else
                     {
-                        throw CyclebiteException("Could not match a producer collection to a corresponding subexpression in the consumer!");
+                        // this case can arrise from a producer having multiple expressions within it
+                        // for now, we trust the input will be mapped somehow... if it doesn't the Halide will be wrong
+                        //throw CyclebiteException("Could not match a producer collection to a corresponding subexpression in the consumer!");
                     }
                 }
             }
@@ -756,88 +782,95 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
         halideGenerator += varString+") = "+expr->getName()+"("+varString+");\n";
     }
     // out is assigned to output
-    halideGenerator += "\t\t"+outputName+" = output;\n";
+    halideGenerator += "\t\t"+output->getBP()->getName()+" = output;\n";
 
     // finally, the autoscheduler needs estimates of the input and output sizes
-    for( const auto& in : inputs )
     {
-        halideGenerator += "\t\t"+in->getName()+".set_estimates({ ";
-        unsigned i = 0;
-        for( const auto& dim : in->getDimensions() )
+        set<shared_ptr<BasePointer>> printed;
+        for( const auto& in : inputs )
         {
-            if( i )
+            if( !printed.contains(in->getBP()) )
             {
-                halideGenerator += ", ";
+                printed.insert(in->getBP());
+                halideGenerator += "\t\t"+in->getBP()->getName()+".set_estimates({ ";
+                unsigned i = 0;
+                for( const auto& dim : in->getDimensions() )
+                {
+                    if( i )
+                    {
+                        halideGenerator += ", ";
+                    }
+                    halideGenerator += "{ ";
+                    if( const auto& c = dynamic_pointer_cast<Counter>(dim) )
+                    {
+                        if( c->getSpace().min > static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+                        {
+                            halideGenerator += to_string(c->getSpace().min);
+                        }
+                        else
+                        {
+                            halideGenerator += "0";
+                        }
+                        halideGenerator += ", ";
+                        if( c->getSpace().max > static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+                        {
+                            halideGenerator += to_string(c->getSpace().max);
+                        }
+                        else
+                        {
+                            halideGenerator += "1";
+                        }
+                    }
+                    else
+                    {
+                        halideGenerator += "0,1";
+                    }
+                    halideGenerator += " }";
+                    i++;
+                }
+                halideGenerator += " });\n";
             }
-            halideGenerator += "{ ";
-            if( const auto& c = dynamic_pointer_cast<Counter>(dim) )
-            {
-                if( c->getSpace().min > static_cast<int>(STATIC_VALUE::UNDETERMINED) )
-                {
-                    halideGenerator += to_string(c->getSpace().min);
-                }
-                else
-                {
-                    halideGenerator += "0";
-                }
-                halideGenerator += ", ";
-                if( c->getSpace().max > static_cast<int>(STATIC_VALUE::UNDETERMINED) )
-                {
-                    halideGenerator += to_string(c->getSpace().max);
-                }
-                else
-                {
-                    halideGenerator += "1";
-                }
-            }
-            else
-            {
-                halideGenerator += "0,1";
-            }
-            halideGenerator += " }";
-            i++;
         }
-        halideGenerator += " });\n";
-    }
-    if( output )
-    {
-        halideGenerator += "\t\t"+output->getName()+".set_estimates({ ";
-        unsigned i = 0;
-        for( const auto& dim : output->getDimensions() )
+        if( output )
         {
-            if( i )
+            halideGenerator += "\t\t"+output->getBP()->getName()+".set_estimates({ ";
+            unsigned i = 0;
+            for( const auto& dim : output->getDimensions() )
             {
-                halideGenerator += ", ";
-            }
-            halideGenerator += "{ ";
-            if( const auto& c = dynamic_pointer_cast<Counter>(dim) )
-            {
-                if( c->getSpace().min > static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+                if( i )
                 {
-                    halideGenerator += to_string(c->getSpace().min);
+                    halideGenerator += ", ";
+                }
+                halideGenerator += "{ ";
+                if( const auto& c = dynamic_pointer_cast<Counter>(dim) )
+                {
+                    if( c->getSpace().min > static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+                    {
+                        halideGenerator += to_string(c->getSpace().min);
+                    }
+                    else
+                    {
+                        halideGenerator += "0";
+                    }
+                    halideGenerator += ", ";
+                    if( c->getSpace().max > static_cast<int>(STATIC_VALUE::UNDETERMINED) )
+                    {
+                        halideGenerator += to_string(c->getSpace().max);
+                    }
+                    else
+                    {
+                        halideGenerator += "1";
+                    }
                 }
                 else
                 {
-                    halideGenerator += "0";
+                    halideGenerator += "0,1";
                 }
-                halideGenerator += ", ";
-                if( c->getSpace().max > static_cast<int>(STATIC_VALUE::UNDETERMINED) )
-                {
-                    halideGenerator += to_string(c->getSpace().max);
-                }
-                else
-                {
-                    halideGenerator += "1";
-                }
+                halideGenerator += " }";
+                i++;
             }
-            else
-            {
-                halideGenerator += "0,1";
-            }
-            halideGenerator += " }";
-            i++;
+            halideGenerator += " });\n";
         }
-        halideGenerator += " });\n";
     }
 
     // and close off the generator
