@@ -132,7 +132,6 @@ string Expression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<Symbol>>
         auto o = ops.begin();
         if( symbol2Symbol.contains(*b) )
         {
-            spdlog::info((*b)->getName());
             if( const auto& childExpr = dynamic_pointer_cast<Expression>( symbol2Symbol.at(*b) ) )
             {
                 expr += " "+childExpr->dumpHalideReference(symbol2Symbol);

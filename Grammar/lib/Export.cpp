@@ -232,7 +232,6 @@ set<shared_ptr<Cycle>> ParallelizeCycles( const shared_ptr<Expression>& expr )
                 spdlog::info("Overlap detected between collections "+array->dump()+" and "+output->dump()+":");
                 for( const auto& o : overlap )
                 {
-                    spdlog::info(o->dump());
                     overlaps.insert(o);
                 }
             }
@@ -675,50 +674,39 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
                     {
                         // we map the subexpression in the consumer to the producer expression (because the consumer needs to refer to the producer)
                         Symbol2Symbol[matchedInput] = producerExpr;
+                        // we also have to map the producerExpr's dimensions to the matchInput dimensions
+                        // we assume the dimensions that have the same index map to each other
+                        // e.g., the first dimension of the matchedInput maps to the first dimension of the producerExpr
+                        // thus, these dimension counts should match up
+                        // side note: if a reduction occurs here, that mapping was done above in the reduction dimension mapping loop
+                        if( matchedInput->getDimensions().size() != producerExpr->getOutputDimensions().size() )
+                        {
+                            spdlog::warn("The dimensions between a function subexpression and its producer do not match up!");
+                        }
+                        vector<shared_ptr<InductionVariable>> inputDims;
+                        // in order to preserve the index ordering of the dimensions, you must iterate through the indices of the collection
+                        for( const auto& ind : matchedInput->getIndices() )
+                        {
+                            for( const auto& dim : ind->getDimensions() )
+                            {
+                                if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
+                                {
+                                    inputDims.push_back(iv);
+                                }
+                            }
+                        }
+                        for( unsigned i = 0; i < inputDims.size(); i++ )
+                        {
+                            if( const auto& iv = dynamic_pointer_cast<InductionVariable>(producerExpr->getOutputDimensions()[i]) )
+                            {
+                                Symbol2Symbol[iv] = inputDims[i];
+                            }
+                        }
                     }
                     else
                     {
                         throw CyclebiteException("Could not match a producer collection to a corresponding subexpression in the consumer!");
                     }
-                }
-                // next, map the dimensions that are used in the producer expression to the dimensions that are used in the exprInput expression
-                // this maps the dimensions of the producer onto the consumer
-                vector<shared_ptr<InductionVariable>> producerDims;
-                vector<shared_ptr<InductionVariable>> consumerDims;
-                for( const auto& dim : producerExpr->getOutputDimensions() )
-                {
-                    if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
-                    {
-                        producerDims.push_back(iv);
-                    }
-                }
-                for( const auto& in : exprInputs )
-                {
-                    for( const auto& dim : in->getDimensions() )
-                    {
-                        if( const auto& iv = dynamic_pointer_cast<InductionVariable>(dim) )
-                        {
-                            // the consumer might be a reduction, in which the dimensions that map to the reductions need to be removed from the dimensions that map to the producer
-                            if( !RDomDims.contains(iv) )
-                            {
-                                consumerDims.push_back(iv);
-                            }
-                        }
-                    }
-                }
-                if( producerDims.size() == consumerDims.size() )
-                {
-                    // there is a 1:1 mapping between consumerDims and producerDims, so we trivially map producer dims to consumer dims
-                    // if the consumerDims have already been mapped to something else, we map the producer dims to that too
-                    // keep in mind that this may be overwriting a previous mapping (say, from the previous step), so after this step the Symbol2Symbol map is case-specific to this expression
-                    for( unsigned i = 0; i  < producerDims.size(); i++ )
-                    {
-                        Symbol2Symbol[consumerDims[i]] = producerDims[i];
-                    }
-                }
-                else
-                {
-                    spdlog::warn("Expression "+expr->getName()+" consumed over dimensions that did not match its producer dimensions.");
                 }
             }
 
