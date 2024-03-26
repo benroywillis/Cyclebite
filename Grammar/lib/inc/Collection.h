@@ -33,7 +33,7 @@ namespace Cyclebite::Grammar
         /// Each collection is given the ld/st instructions that served as their starting points, and this method returns them
         /// @return Set of instructions that either load an element from or store an element to this collection
         const std::set<const llvm::Value*> getElementPointers() const;
-        const llvm::LoadInst* getLoad() const;
+        const std::set<const llvm::LoadInst*> getLds() const;
         const std::set<const llvm::StoreInst*> getStores() const;
         /// @brief Returns the dimensions in which this collection and the input overlap
         ///

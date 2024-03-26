@@ -102,7 +102,7 @@ const set<const llvm::Value*> Collection::getElementPointers() const
     return eps;
 }
 
-const llvm::LoadInst* Collection::getLoad() const
+const set<const llvm::LoadInst*> Collection::getLds() const
 {
     set<const llvm::LoadInst*> lds;
     for( const auto& e : eps )
@@ -114,18 +114,37 @@ const llvm::LoadInst* Collection::getLoad() const
     }
     if( lds.size() > 1 )
     {
-        Cyclebite::Util::PrintVal(indexBP->getNode()->getVal());
-        for( const auto& var : vars )
-        {
-            Cyclebite::Util::PrintVal(var->getNode()->getVal());
-        }
+        // there is a corner case where the LLVM front-end just makes redundant loads on the same pointer
+        // ex: BICG/polybench (doesn't matter what the optimization level is) %84 = load from %83 ... %89 = load from %83
+        // thus, we check to see if these loads are exactly the same thing
+        bool isSame = true;
         for( const auto& ld : lds )
         {
-            Cyclebite::Util::PrintVal(ld);
+            for( const auto& ld2 : lds )
+            {
+                if( ld == ld2 ) continue;
+                if( (ld->getPointerOperand() != ld2->getPointerOperand()) || (ld->getAccessType() != ld2->getAccessType()) )
+                {
+                    isSame = false;
+                    break;
+                }
+            }
         }
-        throw CyclebiteException("Collection maps to more than one load!");
+        if( !isSame )
+        {
+            Cyclebite::Util::PrintVal(indexBP->getNode()->getVal());
+            for( const auto& var : vars )
+            {
+                Cyclebite::Util::PrintVal(var->getNode()->getVal());
+            }
+            for( const auto& ld : lds )
+            {
+                Cyclebite::Util::PrintVal(ld);
+            }
+            throw CyclebiteException("Collection maps to more than one type of load!");
+        }
     }
-    return *lds.begin();
+    return lds;
 }
 
 const set<const llvm::StoreInst*> Collection::getStores() const

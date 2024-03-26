@@ -189,6 +189,7 @@ string Expression::dumpHalideReference( const map<shared_ptr<Symbol>, shared_ptr
     }
     else
     {
+        spdlog::error(output->dump());
         throw CyclebiteException("Cannot print a task that doesn't have a collection as output!");
     }
     string ref = name+"(";
@@ -420,7 +421,7 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             {
                 // collections are distinguished by their indexVariables, not necessarily their base pointer
                 // in order to find the right one, we need to figure out which indexVariable is used in this load
-                if( coll->getLoad() == ld )
+                if( coll->getLds().contains(ld) )
                 {
 #ifdef DEBUG
                     if( found )
@@ -428,10 +429,10 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                         cout << endl;
                         Cyclebite::Util::PrintVal(ld);
                         Cyclebite::Util::PrintVal(coll->getBP()->getNode()->getVal());
-                        Cyclebite::Util::PrintVal(coll->getLoad());
+                        Cyclebite::Util::PrintVal(*coll->getLds().begin());
                         Cyclebite::Util::PrintVal(coll->getIndices().back()->getNode()->getVal());
                         Cyclebite::Util::PrintVal(found->getBP()->getNode()->getVal());
-                        Cyclebite::Util::PrintVal(found->getLoad());
+                        Cyclebite::Util::PrintVal(*found->getLds().begin());
                         Cyclebite::Util::PrintVal(found->getIndices().back()->getNode()->getVal());
                         throw CyclebiteException("Mapped more than one collection to a load value!");
                     }
@@ -484,9 +485,9 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
                     {
                         Cyclebite::Util::PrintVal(idx->getNode()->getVal());
                     }
-                    if( coll->getLoad() )
+                    for( const auto& ld : coll->getLds() )
                     {
-                        Cyclebite::Util::PrintVal(coll->getLoad());
+                        Cyclebite::Util::PrintVal(ld);
                     }
                 }
                 throw CyclebiteException("Could not find a collection to describe this load!");
@@ -845,9 +846,9 @@ const shared_ptr<Expression> constructExpression( const shared_ptr<Task>& t,
     // second, the loads and stores of collections (these will be used to find the input and output values of the expression)
     for( const auto& coll : colls )
     {
-        if( coll->getLoad() )
+        for( const auto& ld : coll->getLds() )
         {
-            nodeToExpr[ Cyclebite::Graph::DNIDMap.at(coll->getLoad()) ] = coll;
+            nodeToExpr[ Cyclebite::Graph::DNIDMap.at(ld) ] = coll;
         }
         for( const auto& st : coll->getStores() )
         {
