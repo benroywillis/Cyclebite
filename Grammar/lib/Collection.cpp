@@ -51,7 +51,10 @@ const set<shared_ptr<Dimension>, DimensionSort> Collection::getDimensions() cons
     set<shared_ptr<Dimension>, DimensionSort> dims;
     for( const auto& var : vars )
     {
-        dims.insert(var->getDimensions().begin(), var->getDimensions().end());
+        for( const auto& dim : var->getDimensions() )
+        {
+            dims.insert(dim);
+        }
     }
     return dims;
 }
