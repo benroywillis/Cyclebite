@@ -542,8 +542,11 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
             if( const auto& coll = dynamic_pointer_cast<Collection>(expr->getOutput()) )
             {
                 output = coll;
-                halideGenerator += "\tOutput<Buffer<"+coll->getBP()->getContainedTypeString()+">> "+coll->getBP()->getName()+"{\""+coll->getBP()->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
-                printed.insert(coll->getBP());
+                if( !printed.contains(coll->getBP()) )
+                {
+                    halideGenerator += "\tOutput<Buffer<"+coll->getBP()->getContainedTypeString()+">> "+coll->getBP()->getName()+"{\""+coll->getBP()->getName()+"\", "+to_string(coll->getDimensions().size())+"};\n";
+                    printed.insert(coll->getBP());
+                }
             }
         }
     }
@@ -705,6 +708,8 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
                         // side note: if a reduction occurs here, that mapping was done above in the reduction dimension mapping loop
                         if( matchedInput->getDimensions().size() != producerExpr->getOutputDimensions().size() )
                         {
+                            spdlog::info(producerExpr->getOutput()->getName());
+                            spdlog::info(matchedInput->getName());
                             spdlog::warn("The dimensions between a function subexpression and its producer do not match up!");
                         }
                         vector<shared_ptr<InductionVariable>> inputDims;
