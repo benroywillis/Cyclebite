@@ -187,9 +187,8 @@ const string BasePointer::getContainedTypeString() const
     const auto& containedTy = Cyclebite::Util::getContainedType(node->getVal());
     if( const auto& st = llvm::dyn_cast<llvm::StructType>(containedTy) )
     {
-        Cyclebite::Util::PrintVal(node->getVal());
-        Cyclebite::Util::PrintVal(st);
-        throw CyclebiteException("Cannot yet handle base pointers that contain structures!");
+        return Cyclebite::Util::PrintVal(st, false);
+        //throw CyclebiteException("Cannot yet handle base pointers that contain structures!");
     }
     else if( const auto& fp = llvm::dyn_cast<llvm::FunctionType>(containedTy) )
     {
