@@ -239,10 +239,6 @@ set<shared_ptr<Collection>> Cyclebite::Grammar::getCollections(const shared_ptr<
 {
     // all collections that are forged in this method
     set<shared_ptr<Collection>> colls;
-    // holds all information necessary to construction collections
-    // each base pointer contains groups of sorted index variables (from parent to child) that encode the hierarchy of idxVars for that collection
-    // thus the <base pointer, idxVar hierarchy> pairs map 1:1 with collections
-    map<shared_ptr<BasePointer>, set<vector<shared_ptr<IndexVariable>>>> varHierarchies;
     // to build collections, we look for all loads and stores that must be explained by collections
     // these collections are later referred to when we build the task's function expression(s)
     // the starting points need to be the pointers of the ld/st (to ensure we only search through instructions that deal with memory)
