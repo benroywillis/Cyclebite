@@ -787,7 +787,14 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
         halideGenerator += varString+") = "+expr->getName()+"("+varString+");\n";
     }
     // out is assigned to output
-    halideGenerator += "\t\t"+output->getBP()->getName()+" = output;\n";
+    if( output )
+    {
+        halideGenerator += "\t\t"+output->getBP()->getName()+" = output;\n";
+    }
+    else
+    {
+        halideGenerator += "\t\t<undetermined> = output;\n";
+    }
 
     // finally, the autoscheduler needs estimates of the input and output sizes
     {

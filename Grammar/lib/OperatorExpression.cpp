@@ -80,7 +80,7 @@ string OperatorExpression::dumpHalide( const map<shared_ptr<Symbol>, shared_ptr<
         case Cyclebite::Graph::Operation::inttoptr     : expr += "Halide::cast<uint64_t>("; break;
         case Cyclebite::Graph::Operation::bitcast      : expr += "Halide::cast<void*>("; break;
         case Cyclebite::Graph::Operation::addrspacecast: expr += "Halide::cast<void*>("; break;
-        case Cyclebite::Graph::Operation::fneg         : expr += "-"; break;
+        case Cyclebite::Graph::Operation::fneg         : expr += "-("; break;
         default: throw CyclebiteException("Cannot yet handle a non-cast operator inside operator expressions yet! (Operation is a "+string(Cyclebite::Graph::OperationToString.at(op))+")");
     }
     if( !args.empty() )
