@@ -990,7 +990,7 @@ void exportHalide( const map<shared_ptr<Task>, vector<shared_ptr<Expression>>>& 
                     }
                 }
             }
-            halideDriver += ");\n\toutput"+to_string(outputId++)+".allocate();\n";
+            halideDriver += " );\n\toutput"+to_string(outputId++)+".allocate();\n";
         }
     }
     // now inject the calls to the generators (autoschedule and non-autoschedule)
