@@ -699,6 +699,16 @@ vector<shared_ptr<Symbol>> buildExpression( const shared_ptr<Cyclebite::Graph::I
             nodeToExpr[ opInst ] = unaryExpr;
             newSymbols.push_back(unaryExpr);
         }
+        else if( const auto& freeze = llvm::dyn_cast<llvm::FreezeInst>(op) )
+        {
+            // we don't care about freeze instructions, they are only meant to get rid of undef and poison values
+            // so just move onto the input args of the freeze
+            for( const auto& news : buildExpression( opInst, t, freeze->getOperand(0), nodeToExpr, colls, vars) )
+            {
+                nodeToExpr[ opInst ] = news;
+                newSymbols.push_back(news);
+            }
+        }
     }
     else if( auto con = llvm::dyn_cast<llvm::Constant>(op) )
     {

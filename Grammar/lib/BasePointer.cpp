@@ -561,10 +561,6 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call, co
             }
         }
     }
-    else
-    {
-        throw CyclebiteException("Found an indirect function call when trying to discover base pointers!");
-    }
     return 0;
 }
 
