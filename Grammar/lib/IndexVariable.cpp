@@ -17,6 +17,7 @@
 #include "Util/Exceptions.h"
 #include "Util/Print.h"
 #include <spdlog/spdlog.h>
+#include "RandomAccessVariable.h"
 
 using namespace std;
 using namespace Cyclebite::Grammar;
@@ -856,14 +857,10 @@ int IndexVariable::getDimensionIndex() const
     return (int)dimensions.size()-1; // we subtract one because the first position starts at 0
 }
 
-set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const shared_ptr<Task>& t, const set<shared_ptr<InductionVariable>>& vars)
+set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const shared_ptr<Task>& t, const set<shared_ptr<BasePointer>>& bps, const set<shared_ptr<InductionVariable>>& vars)
 {
     // final set of index variables that may be found
     set<shared_ptr<IndexVariable>> idxVars;
-
-    // mapping between base pointers and their index variables
-    map<shared_ptr<BasePointer>, set<shared_ptr<IndexVariable>>> BPtoIdx;
-
     // our first step is to find and map all geps in the task first
     // find: search for each gep
     //  - we do this by finding the "start points" of the search (that is, the points in the DFG we would expect to be using the products of geps that have worked together)
@@ -1006,8 +1003,15 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             deque<const llvm::Value*> Q;
             // records binary operations found to be done on gep indices
             // used to investigate the dimensionality of the pointer offset being done by the gep
-            // the ordering of the ops is done in reverse order (since the DFG traversal is reversed), thus the inner-most dimension is first in the list, outer-most is last 
+            // the ordering of the ops is done in reverse order (since the DFG traversal is reversed), thus the inner-most dimension is first in the list, outer-most is last
+            // each vector entry is < <instruction that produces the idxVar value (e.g., the gep, or the mul that offsets a value), 
+            //                         specific value within the inst that produces the idxVar value (e.g., the constant offset within a gep, if inst is arithmetic then inst==value)>, 
+            //                       affineOffset of the idxVar candidate >
             vector<pair<pair<const llvm::Instruction*, const llvm::Value*>, AffineOffset>> indVarCandidates;
+            // ranVarCandidates are candidates to become RandomAccessVariables
+            // ranVarCandidates come from the geps of (and ultimately, loads from) base pointers that offset other base pointers (like when building a histogram: hist[img[i]]++)
+            // each vector entry is <loadInst that produces a value from the bp, basepointer that produced the value>
+            vector<pair<const llvm::LoadInst*, const shared_ptr<BasePointer>>> ranVarCandidates;
             covered.insert(gep->getInst());
             for( const auto& idx : llvm::cast<llvm::GetElementPtrInst>(gep->getInst())->indices() )
             {
@@ -1127,10 +1131,27 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 }
                 else if( const auto& ld = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
                 {
+                    if( const auto& gep2 = llvm::dyn_cast<llvm::GetElementPtrInst>(ld->getPointerOperand()) )
+                    {
+                        // when RandomAccessVariables come around (like in a histogram) they will show up as a gep from a base pointers
+                        // (e.g., when we walk backward from a gep index we will hit a gep of a base pointer)
+                        // thus, we need to 
+                        for( const auto& bp : bps )
+                        {
+                            // if gep2 comes from a bp's member (bp0), and gep2 is offsetting another bp (bp1), then bp1 should not have gep2 in its list of geps
+                            if( bp->isOffset(gep2) && !bp->isOffset(gep->getInst()) )
+                            {
+                                // this gep comes from a base pointer
+                                // thus we need to make a randomaccessvariable for this
+                                ranVarCandidates.push_back(pair(ld, bp));
+                            }
+                        }
+                    }
                     // llvm front-end can do weird things in the new versions, like load from a multi-star pointer many times to get down to a more elementary array element
                     // e.g., if I have float a[x][y][z] aka float***, then the LLVM front end will get to float* by doing: float** b = load a, float* c = load b
                     // thus we need to walk through loads now - push the pointer operand into the q
-                    if( const auto& ptrInst = llvm::dyn_cast<llvm::LoadInst>(Q.front()) )
+
+                    if( const auto& ptrInst = llvm::dyn_cast<llvm::LoadInst>(ld->getPointerOperand()) )
                     {
                         if( !covered.contains(ptrInst) )
                         {
@@ -1145,8 +1166,8 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
             deque<shared_ptr<IndexVariable>> idxVarOrder;
             if( indVarCandidates.empty() ) 
             {
-                // shouldn't happen anymore
-                throw CyclebiteException("Could not get any idxVar candidates from a gep!");
+                // this will happen when we encounter a case like histogram, which uses the input grayscale image to index the histogram matrix
+                // to handle this case, we have to make a special kind of index variable (the "random access" variable)
                 /*
                 // confirm that this gep is not already explained by existing indexVariables
                 bool found = false;
@@ -1220,6 +1241,16 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 }
                 idxVarOrder.push_back( newIdx );*/
             }
+            else if( indVarCandidates.empty() && ranVarCandidates.empty() )
+            {
+                Cyclebite::Util::PrintVal(gep->getInst());
+                throw CyclebiteException("Could not get any idxVar candidates from a gep!");
+            }
+            else if( !indVarCandidates.empty() && !ranVarCandidates.empty() )
+            {
+                Cyclebite::Util::PrintVal(gep->getInst());
+                throw CyclebiteException("Cannot yet handle both indVarCandidates and ranVarCandidates at the same time!");
+            }
             else if( indVarCandidates.size() == 1 )
             {
                 shared_ptr<IndexVariable> newIdx = nullptr;
@@ -1239,7 +1270,6 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                     }
                     nodeToIdx[ indVarCandidates.front().first ] = newIdx;
                 }
-
                 if( gh.size() > 1 )
                 {
                     if( gep != *gh.begin() )
@@ -1265,7 +1295,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 }
                 idxVarOrder.push_back(newIdx);
             }
-            else
+            else if( indVarCandidates.size() > 1 )
             {
                 // for each candidate we encountered, it may or may not warrant an indexVariable
                 // cases:
@@ -1392,6 +1422,50 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                         bin = next(bin);
                     }
                 }
+            }
+            else if( ranVarCandidates.size() == 1 )
+            {
+                // ranVarCandidates fit into the indVarHierarchy the same way an indVarCandidates do
+                shared_ptr<IndexVariable> newIdx = nullptr;
+                if( nodeToIdx.contains( pair(ranVarCandidates.front().first, ranVarCandidates.front().second->getNode()->getVal()) ) )
+                {
+                    newIdx = nodeToIdx.at( pair(ranVarCandidates.front().first, ranVarCandidates.front().second->getNode()->getVal()) );
+                }
+                else
+                {
+                    auto ldNode = static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(ranVarCandidates.front().first));
+                    newIdx = make_shared<RandomAccessVariable>( ranVarCandidates.front().second, ldNode, ldNode );
+                    nodeToIdx[ pair(ranVarCandidates.front().first, ranVarCandidates.front().first) ] = newIdx;
+                }
+                if( gh.size() > 1 )
+                {
+                    if( gep != *gh.begin() )
+                    {
+                        auto parentGep = prev( std::find(gh.begin(), gh.end(), gep) );
+                        shared_ptr<IndexVariable> p = nullptr;
+                        for( const auto& idx : idxVars )
+                        {
+                            // if the idxVar is a binaryOp, we won't find it by our parent gep
+                            // thus we have to find it by searching through its geps (which may be the idxVar itself)
+                            auto idxVarGeps = idx->getGeps();
+                            if( idxVarGeps.find(*parentGep) != idxVarGeps.end() )
+                            {
+                                p = idx;
+                            };
+                        }
+                        if( p )
+                        {
+                            p->addChild(newIdx);
+                            newIdx->addParent(p);
+                        }
+                    }
+                }
+                idxVarOrder.push_back(newIdx);
+            }
+            else if( ranVarCandidates.size() > 1 )
+            {
+                Cyclebite::Util::PrintVal(gep->getInst());
+                throw CyclebiteException("Cannot yet handle multiple ranVarCandidates!");
             }
             // after the gep indices are done, we investigate the pointer operand of the gep
             // when geps are discovered in the gep pointer, those geps become parents of the gep indices

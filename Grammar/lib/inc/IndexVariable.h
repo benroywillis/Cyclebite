@@ -92,11 +92,11 @@ namespace Cyclebite::Grammar
         /// @return A non-negative integer if the dimension index is valid. If invalid, a negative integer.
         int getDimensionIndex() const;
     protected:
-        /// @brief The node is the value that this index variable refers to
+        /// @brief The node is the value that makes this index variable unique among all its parents and children
         /// If this index variable represents a constant within a gep, this is the constant
-        /// If this index variable represents an affine transform of a dimension, this is that affine transform instruction (and thus node and inst are the same thing)
+        /// If this index variable represents an affine transform of a dimension, this is the arithmetic instruction that does that affine transformation (and thus node and inst are the same thing)
         std::shared_ptr<Cyclebite::Graph::DataValue> node;
-        /// @brief The inst represents the instruction having to do with the index variable
+        /// @brief The inst is the Cyclebite::Graph::Inst that produces the index
         ///
         /// If the index variable models a constant within a gep, this is the gep
         /// If the index variable models an affine transform of a dimension, this that affine transform instruction (thus node and inst will be the same thing)
@@ -171,5 +171,7 @@ namespace Cyclebite::Grammar
     };
 
     class Task;
-    std::set<std::shared_ptr<IndexVariable>> getIndexVariables(const std::shared_ptr<Task>& t, const std::set<std::shared_ptr<InductionVariable>>& vars);
+    std::set<std::shared_ptr<IndexVariable>> getIndexVariables( const std::shared_ptr<Task>& t, 
+                                                                const std::set<std::shared_ptr<BasePointer>>& bps, 
+                                                                const std::set<std::shared_ptr<InductionVariable>>& vars );
 } // namespace Cyclebite::Grammar

@@ -152,7 +152,7 @@ map<shared_ptr<Task>, vector<shared_ptr<Expression>>> Cyclebite::Grammar::Proces
             }
 #endif
             // get index variables
-            auto idxVars = getIndexVariables(t, vars);
+            auto idxVars = getIndexVariables(t, bps, vars);
 #ifdef DEBUG
             spdlog::info("Index Variables:");
             for( const auto& idx : idxVars )

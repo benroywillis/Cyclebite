@@ -207,7 +207,6 @@ set<shared_ptr<Cyclebite::Graph::DataValue>> findFunction(const set<shared_ptr<T
         {
             if (entry->colors.contains(OpColor::Blue))
             {
-                Cyclebite::Util::PrintVal(entry->inst);
                 if( Cyclebite::Graph::DNIDMap.contains(entry->inst) )
                 {
                     funcs.insert( Cyclebite::Graph::DNIDMap.at(entry->inst) );

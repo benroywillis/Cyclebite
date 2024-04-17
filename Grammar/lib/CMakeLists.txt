@@ -19,7 +19,8 @@ file(GLOB SOURCES BasePointer.cpp
                   Export.cpp
                   Dimension.cpp
                   Counter.cpp
-                  FunctionCallArgs.cpp)
+                  FunctionCallArgs.cpp
+                  RandomAccessVariable.cpp)
 
 add_library(Grammar SHARED ${SOURCES})
 set_target_properties(
