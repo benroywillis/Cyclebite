@@ -187,10 +187,14 @@ string Expression::dumpHalideReference( const map<shared_ptr<Symbol>, shared_ptr
             }
         }
     }
-    else
+    else if( output )
     {
         spdlog::error(output->dump());
         throw CyclebiteException("Cannot print a task that doesn't have a collection as output!");
+    }
+    else
+    {
+        throw CyclebiteException("Output for expression "+this->dump()+" is a nullptr!");
     }
     string ref = name+"(";
     if( exprDims.size() )
