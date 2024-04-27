@@ -1246,7 +1246,7 @@ set<shared_ptr<IndexVariable>> Cyclebite::Grammar::getIndexVariables(const share
                 Cyclebite::Util::PrintVal(gep->getInst());
                 throw CyclebiteException("Could not get any idxVar candidates from a gep!");
             }
-            else if( !indVarCandidates.empty() && !ranVarCandidates.empty() )
+            else if( (!indVarCandidates.empty()) && (!ranVarCandidates.empty()) )
             {
                 Cyclebite::Util::PrintVal(gep->getInst());
                 throw CyclebiteException("Cannot yet handle both indVarCandidates and ranVarCandidates at the same time!");
