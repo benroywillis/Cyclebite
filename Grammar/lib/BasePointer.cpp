@@ -404,6 +404,11 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call, co
                             default                                 : throw CyclebiteException("Type of determinable value is undetermined!");
                         }
                     }
+                    else
+                    {
+                        // we evaluate anyway, because dynamic allocations are often important
+                        first = 128;
+                    }
                     uint32_t second = 0;
                     if( determinables.contains( call->getArgOperand(1)) )
                     {
@@ -418,6 +423,11 @@ uint32_t Cyclebite::Grammar::isAllocatingFunction(const llvm::CallBase* call, co
                             case FunctionCallArgs::T_member::DOUBLE : second = (uint32_t)determinables.at( call->getArgOperand(1) ).first.k; break;
                             default                                 : throw CyclebiteException("Type of determinable value is undetermined!");
                         }
+                    }
+                    else
+                    {
+                        // we evaluate anyway, because dynamic allocations are often important (even if their allocation size is not statically determinable)
+                        second = 128;
                     }
                     return first*second;
                 }
