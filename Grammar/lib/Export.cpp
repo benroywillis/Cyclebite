@@ -32,6 +32,7 @@ string labelLUT( int noInputs, int noOutputs, vector<int> inputDimensions, vecto
     // GEMV     |      2      |           1            |          2,1          |            1           |     1     |           1          |          |
     // GEMM     |      2      |           1            |          2,2          |            2           |     1     |           1          |          |
     // Stencil  |      1      |           1            |           2           |       same as input    |     1     |           2          |          |
+    // GroupBy  |      1      |          any           |          any          |           any          |   0 || 1  |         0 || 1       |          | (histogram)
 #if DEBUG
     string inDimString = "";
     if( !inputDimensions.empty() )
