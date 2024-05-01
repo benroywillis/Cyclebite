@@ -12,10 +12,12 @@ inline void Split(llvm::Module& M)
 {
     for (auto f = M.begin(); f != M.end(); f++)
     {
+        // do not re-process blocks
         llvm::Function::iterator bi = f->begin();
         while (bi != f->end())
         {
-            for (auto ii = bi->begin(); ii != bi->end(); ii++)
+            auto ii = bi->begin();
+            while( ii != bi->end() )
             {
                 // if this is a callinst or invoke
                 if (auto cb = llvm::dyn_cast<llvm::CallBase>(ii))
@@ -24,24 +26,22 @@ inline void Split(llvm::Module& M)
                     // skip debug info
                     if (!llvm::isa<llvm::DbgInfoIntrinsic>(ii))
                     {
-                        // determines which block iterator will be used after the transformations below
-                        // it is one behind because the iterator gets incremented after the instruction loop is broken
-                        llvm::Function::iterator nextbi = bi;
-                        // this splits the function from any prior instructions
+                        // this splits the function from the instructions that come prior to it in the basic block
                         auto newNext = bi->splitBasicBlock(cb);
-                        // invoke instruction are already the terminators in their blocks so they don't need to be split from the rest of other functions that may be in the block
+                        // invoke instruction are already the terminators in their blocks so they don't need to be split from the latter part of the basic block
                         if (!llvm::isa<llvm::InvokeInst>(cb))
                         {
-                            // getNextNode retrieves the next instruction in the block
+                            // we also want to split the call instruction from the instructions that come after it in the basic block
+                            // thus, we split again
                             auto newCB = llvm::cast<llvm::CallBase>(newNext->begin());
                             auto nxt = newCB->getNextNode();
-                            newNext->splitBasicBlock(nxt);
-                            nextbi = newNext->getIterator();
+                            newNext = newNext->splitBasicBlock(nxt);
                         }
                         bi = newNext->getIterator();
                         break;
                     }
                 }
+                ii++;
             }
             bi++;
         }
