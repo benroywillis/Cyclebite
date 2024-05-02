@@ -716,8 +716,10 @@ llvm::PreservedAnalyses Cyclebite::Profile::Passes::Memory::run(llvm::Module& M,
                         // libc malloc or stl new operator (two stl flavors)
                         else if( Cyclebite::Util::isAllocatingFunction(call) )
                         {
+                            
                             IRBuilder<> builder(call);
                             std::vector<Value *> values;
+                            llvm::CallInst* backendCall = nullptr;
                             if( call->getCalledFunction()->arg_size() == 1 )
                             {
                                 // malloc or new
@@ -764,7 +766,7 @@ llvm::PreservedAnalyses Cyclebite::Profile::Passes::Memory::run(llvm::Module& M,
                                     Value *size_cast = builder.CreateCast(castCode, size, Type::getInt64Ty(fi->getContext()));
                                     values.push_back(size_cast);
                                 }
-                                auto backendCall = builder.CreateCall(MemoryMalloc, values);
+                                backendCall = builder.CreateCall(MemoryMalloc, values);
                                 // there are two injection cases
                                 // 1. this is an invoke, then we just inject after
                                 // 2. its just a regular function call, then we inject after the call
@@ -785,13 +787,11 @@ llvm::PreservedAnalyses Cyclebite::Profile::Passes::Memory::run(llvm::Module& M,
                                 // calloc
                                 // first arg is # of elements, second arg is the size of each element - we need the product of each element
                                 values.push_back(call);
-                                //auto mul = llvm::BinaryOperator::Create(llvm::Instruction::BinaryOps::Mul, call->getOperand(0), call->getOperand(1));
                                 auto mul = builder.CreateMul(call->getOperand(0), call->getOperand(1));
-                                //mul->moveAfter(call);
                                 auto castCode = CastInst::getCastOpcode(mul, true, PointerType::get(Type::getInt64Ty(fi->getContext()), 0), true);
                                 Value* mulCast = builder.CreateCast( castCode, mul, Type::getInt64Ty(fi->getContext()));
                                 values.push_back(mulCast);
-                                auto backendCall = builder.CreateCall(MemoryMalloc, values);
+                                backendCall = builder.CreateCall(MemoryMalloc, values);
                                 backendCall->moveAfter(call);
                                 backendCall->setDebugLoc(NULL);
                             }
@@ -806,9 +806,26 @@ llvm::PreservedAnalyses Cyclebite::Profile::Passes::Memory::run(llvm::Module& M,
                                 auto castCode = CastInst::getCastOpcode(call->getOperand(2), true, PointerType::get(Type::getInt64Ty(fi->getContext()), 0), true);
                                 Value* mulCast = builder.CreateCast( castCode, call->getOperand(2), Type::getInt64Ty(fi->getContext()));
                                 values.push_back(mulCast);
-                                auto backendCall = builder.CreateCall(MemoryMalloc, values);
+                                backendCall = builder.CreateCall(MemoryMalloc, values);
                                 backendCall->moveAfter(ptrld);
                                 backendCall->setDebugLoc(NULL);
+                            }
+                            // now verify that we didn't just move the terminator of the basic block
+                            if( !backendCall->getParent()->getTerminator() )
+                            {
+                                // go find the terminator and put it at the end of the basic block again
+                                auto it = backendCall->getParent()->begin();
+                                llvm::Instruction* term = nullptr;
+                                while( it != backendCall->getParent()->end() )
+                                {
+                                    if( it->isTerminator() )
+                                    {
+                                        term = llvm::cast<llvm::Instruction>(it);
+                                    }
+                                    it++;
+                                }
+                                // finally, move the terminator to the end of the block
+                                term->moveAfter(llvm::cast<llvm::Instruction>(std::prev(backendCall->getParent()->end())));
                             }
                         }
                         // libc free() or stl delete operator
