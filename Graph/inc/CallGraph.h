@@ -12,7 +12,6 @@ namespace Cyclebite::Graph
     class CallGraph : public Graph
     {
     public:
-        std::set<std::shared_ptr<CallGraphNode>, CGNCompare> CGN;
         CallGraph();
         CallGraph(const std::set<std::shared_ptr<CallGraphNode>, CGNCompare> &nodeSet, const std::set<std::shared_ptr<CallGraphEdge>, GECompare> &edgeSet);
         const std::set<std::shared_ptr<CallGraphNode>, CGNCompare> getCallNodes() const;
@@ -20,6 +19,9 @@ namespace Cyclebite::Graph
         const std::shared_ptr<CallGraphNode> &operator[](const llvm::Function *f) const;
         void addNode(const std::shared_ptr<CallGraphNode> &a);
         void addNodes(const std::set<std::shared_ptr<CallGraphNode>, CGNCompare> &nodes);
+        void removeNode(const std::shared_ptr<CallGraphNode>& r);
         const std::shared_ptr<CallGraphNode> getMainNode() const;
+    private:
+        std::set<std::shared_ptr<CallGraphNode>, CGNCompare> CGN;
     };
 } // namespace Cyclebite::Graph

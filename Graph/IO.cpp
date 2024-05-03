@@ -1527,7 +1527,7 @@ const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Mo
                                 throw CyclebiteException("Edge between two functions was not a calledge!");
                             }
                         }
-                        else if (calleeNode == nullptr)
+                        else if (callerNode == nullptr)
                         {
                             // this is a live function that is somehow dead even though its caller block is live
                             // this can be found in OpenCV/travelingsalesman (BBID 225,613 calls BBID 52,890 but it doesn't show in the profile)
@@ -1616,6 +1616,15 @@ const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Mo
                 parent->addSuccessor(newEdge);
                 dynamicCG.addEdge(newEdge);
             }
+        }
+    }
+    auto allNodes = dynamicCG.getCallNodes();
+    for( const auto& node : allNodes )
+    {
+        // finally clean up the nodes that don't have any preds or succs
+        if( node->getPredecessors().empty() && node->getSuccessors().empty() )
+        {
+            dynamicCG.removeNode(node);
         }
     }
     return dynamicCG;

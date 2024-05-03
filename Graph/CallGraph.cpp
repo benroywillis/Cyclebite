@@ -27,7 +27,7 @@ const set<shared_ptr<CallGraphNode>, CGNCompare> CallGraph::getCallNodes() const
 
 bool CallGraph::find(const llvm::Function *f) const
 {
-    return CGN.find(f) != CGN.end();
+    return CGN.contains(f);
 }
 
 const std::shared_ptr<CallGraphNode> &CallGraph::operator[](const llvm::Function *f) const
@@ -49,6 +49,12 @@ void CallGraph::addNode(const std::shared_ptr<CallGraphNode> &a)
 void CallGraph::addNodes(const std::set<std::shared_ptr<CallGraphNode>, CGNCompare> &nodes)
 {
     nodeSet.insert(nodes.begin(), nodes.end());
+}
+
+void CallGraph::removeNode(const std::shared_ptr<CallGraphNode>& r)
+{
+    nodeSet.erase(r);
+    CGN.erase(r);
 }
 
 const shared_ptr<CallGraphNode> CallGraph::getMainNode() const
