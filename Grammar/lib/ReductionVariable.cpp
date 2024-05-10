@@ -361,6 +361,28 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                     // shouldn't encounter this case, we started from the store and walked backwards
                     seen.insert(st);
                 }
+                else if( const auto& call = llvm::dyn_cast<llvm::CallBase>(use.get()) )
+                {
+                    // function calls in the function group may transform reductions in a certain way before storing them (e.g., vector norm takes the sqrt of the vector reduction)
+                    // so we "pass through this instruction" to find the reduction behind it
+                    for( const auto& op : call->operands() )
+                    {
+                        if( Cyclebite::Graph::DNIDMap.contains(op))
+                        {
+                            if( const auto& inst = llvm::dyn_cast<llvm::Instruction>(op) )
+                            {
+                                if( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(op))->isFunction() )
+                                {
+                                    if( !seen.contains(inst) )
+                                    {
+                                        Q.push_back(inst);
+                                        seen.insert(inst);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             Q.pop_front();
         }
