@@ -1,6 +1,10 @@
 # Cyclebite
 
-Cyclebite is a program analysis toolchain. It uses the LLVM api to profile programs dynamically and segment the coarse-grained tasks of the program automatically. 
+[Cyclebite](https://ieeexplore.ieee.org/document/10301361) is a program analysis toolchain that extracts the task graph from unstructured compute-programs automatically. It uses the [LLVM project](https://github.com/llvm/llvm-project) to profile programs dynamically, extract coarse-grained task candidates from that profile's state transitions, dynamically localizes the epochs of the application, and exports a directed acyclic graph describing the structure of the application. The nodes of that graph are groups of basic blocks and edges between those nodes are communication patterns.
+
+Cyclebite-Template is a follow-on work of Cyclebite that characterizes the tasks in the extracted Cyclebite task graph. Cyclebite-Template accepts the task graph from Cyclebite as input and extracts the parallel pattern from each task in the task graph. A label describing the parallel pattern of that task (according to [DeLite's labels](https://dl.acm.org/doi/abs/10.1145/2584665)) is assigned to each task. Finally, Cyclebite-Template exports a [Halide](https://github.com/halide/Halide) program of the input task graph.
+
+Several test programs and a toolchain build flow can be found in the [Algorithms](https://github.com/benroywillis/Algorithms) repository. See that repo's README on how the build flow works and how you can structure your own C/C++ project with Cyclebite and Cyclebite-Template.
 
 ## Building
 Cyclebite requires cmake version 3.13 or higher. You can run the test suite with the `test` target and generate the documentation with the `doc` target.
@@ -60,18 +64,9 @@ When linking against dependency installs, an example build command:
 ### Example Cyclebite build 
 `mkdir build ; cd build ; $CMAKE ../ -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_INSTALL_PREFIX=/path/to/Cyclebite/debug/ -DLLVM_DIR=/path/to/Installs/LLVM17/release/lib/cmake/llvm/ -DCMAKE_TOOLCHAIN_FILE=${VCPKG_INSTALL_PREFIX}/scripts/buildsystems/vcpkg.cmake ; ninja test ; ninja install`
 
-## Profile, Cartographer
-1. Compile to bitcode: `clang -flto -fuse-ld=lld -Wl,--plugin-opt=emit-llvm $(ARCHIVES) input.c -o input.bc`
-2. Inject our profiler: `LOOP_FILE=Loops.json opt -load {PATH_TO_TRACEATLAS_INSTALL}lib/AtlasPasses.so -Markov input.bc -o input.markov.bc`
-3. Compile to binary: `clang++ -fuse-ld=lld -lz -lpapi -lpthread $(SHARED_OBJECTS) {$PATH_TO_TRACEATLAS_INSTALL}lib/libAtlasBackend.a $(ARCHIVES) input.markov.bc -o input.markov.native`
-4. Profile your program: `LD_LIBRARY_PATH=${TRACEATLAS_INSTALL_ROOT}lib/ MARKOV_FILE=profile.bin BLOCK_FILE=BlockInfo.json ./input.markov.native ${RARGS}`
-5. Segment the program: `LD_LIBRARY_PATH=${TRACEATLAS_INSTALL_ROOT}lib/ ./${PATH_TO_TRACEATLAS_INSTALL}bin/newCartographer -i profile.bin -bi BlockInfo_profile.json -b input.bc -h -l Loops.json -o kernel.json`
+## Usage
+We recommend you go to the [Algorithms](https://github.com/benroywillis/Algorithms) repository for using Cyclebite. Its README will provide instructions on how the toolchain can be used with your LLVM Install. It will also provide a guide on what each outfile file from Cyclebite is and how to interpret their results.
 
-`$(ARCHIVES)` should be a variable that contains all static LLVM bitcode libraries your application can link against. This step contains all code that will be profiled i.e. the profiler only observes LLVM IR bitcode. `$(SHARED_OBJECTS)` enumerates all dynamic links that are required by the target program (for example, any dependencies that are not available in LLVM IR). There are two output files from the resulting executable: `MARKOV_FILE` which specifies the name of the resultant profile (default is `markov.bin`) and `BLOCK_FILE` which specifies the Json output file (contains information about the profile, default is `BlockInfo.json`). These two output files feed the cartographer.
-
-Cartographer (step 5) is our program segmenter. It exploits cycles within the control flow to structure an input profile into its concurrent tasks. We define a kernel to be a cycle that has the highest probability of continuing to cycle. Call cartographer with the input profile specified by `-i`, the input BlockInfo.json file with `-bi`, the input LLVM IR bitcode file with `-b` and the output kernel file with `-o`. The input Loop file, `-l` comes from the opt pass that injected the profiler. This file contains information about the static loops in the program and is required in order for hotcode detection to work. Use `--help` for a description of optional flags. 
-
-### Cartographer Output
 The main output file from cartographer is kernel.json. This file contains a dictionary of many pieces of information, the most important being the "Kernels" dictionary. Inside "Kernels" are keys of IDs that belong to each individual kernel. Within a kernel ID is the "Blocks" list that contains all unique block IDs that belong to this kernel. Several other pieces of information, like performance intrinsics, the dynamic "Nodes" that represented the kernel in the segmentation algorithm, and others describe interesting characteristics about the kernel.
 
 If hotcode detection is enabled, cartographer will output two additional kernel files: one with suffix .json_HC and another with suffix .json_HL. HC stands for hotcode, and its kernel file contains kernels constituting "hotblocks" from the profile. By default, the hotcode detection algorithm will sort blocks from greatest frequency to least, then gather all hot blocks until 95% of the total basic block execution frequency has been explained. To adjust this threshold, use the `-ht` option. HL stands for hotloop. A hotloop is a static loop that has at least one hot block in it. These two program segmentation schemes are intended to simulate state-of-the-art program segmentation techniques used in the computer architecture field.
@@ -87,6 +82,3 @@ If the repository is compiled with configuration `-DCMAKE_BUILD_TYPE=Debug`, car
 * `TransformedStaticControlGraph.dot` is the CFG of the program after all transforms have been applied and before loop segmentation has begun.
 * `TransformedStaticControlGraph_\d.dot` is the CFG of the program after \d iterations of the loop segmentation algorithm has taken place.
 * `dot_<Program>.dot` is the final segmentation result of the cartographer. Dashed edges denote hierarchical kernel relationships, pointing from child to parent. 
-
-## Cyclebite Algorithms
-A [small corpus](https://github.com/benroywillis/Algorithms) of programs facilitates the Cyclebite toolchain using a GNU Makefile buildflow. This buildflow can be used to automate the Cyclebite toolchain (after some environment adaptations and installations). The purpose of the repository is to verify the Cyclebite pipeline and compare its structuring capabilities to that of state-of-the-art tools. [Halide](https://github.com/halide/Halide) programs have been written to "hand-compile" the structuring results of Cyclebite with the [PERFECT](https://hpc.pnl.gov/PERFECT/) benchmark as the input corpus.
