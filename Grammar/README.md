@@ -1,7 +1,7 @@
 # Cyclebite-Template
-Cyclebite-Template is a task template that extracts that parallel pattern from Cyclebite task graphs.
-It lifts tasks within Cyclebite task graphs (at the LLVM-IR level) to a higher level of abstraction, which facilitates transformation and optimization towards target architectures.
-Cyclebite-Template exports the Cyclebite task graph to the Halide domain-specific language for transformation and optimization, which 
+Cyclebite-Template is an application task template that lifts the abstraction level of those tasks to better facilitate transformation and optimization.
+Cyclebite-Template lifts Cyclebite tasks (at the LLVM-IR level) to a higher level of abstraction by extracting their [parallel execution patterns](https://stanford-ppl.github.io/Delite/).
+Cyclebite-Template exports the Cyclebite task graph to the Halide domain-specific language for transformation and optimization, which autoschedules the pipelines of the task using a [CPU scheduler](https://halide-lang.org/papers/autoscheduler2019.html) or [GPU scheduler](https://cseweb.ucsd.edu/~tzli/gpu_autoscheduler.pdf).
 
 ## Build from source
 Cyclebite-Template is part of the Cyclebite repository, and is automatically built from the instructions in the main repository build flow.
