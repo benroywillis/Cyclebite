@@ -85,8 +85,11 @@ const set<shared_ptr<Cyclebite::Graph::Inst>, Cyclebite::Graph::p_GNCompare> Ind
         {
             if( const auto& useInst = llvm::dyn_cast<llvm::Instruction>(use) )
             {
-                Q.push_front( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(useInst)) );
-                covered.insert( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(useInst)) );
+                if( Cyclebite::Graph::DNIDMap.contains(useInst) )
+                {
+                    Q.push_front( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(useInst)) );
+                    covered.insert( static_pointer_cast<Cyclebite::Graph::Inst>(Cyclebite::Graph::DNIDMap.at(useInst)) );
+                }
             }
         }
     }
