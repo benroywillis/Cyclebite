@@ -254,6 +254,10 @@ set<shared_ptr<ReductionVariable>> Cyclebite::Grammar::getReductionVariables(con
                             }
                         }
                     }
+                    // TODO: this case keeps walking the DFG in case there are several accumulations inlined back-to-back (e.g., polybench4/deriche Task 9)
+                    // remember that this creates a cycle in the DFG that is multiple nodes large... thus we can't determine if this is a candidate right here
+                    // 
+                    //else if( )
                 }
                 else if( auto phi = llvm::dyn_cast<llvm::PHINode>(use.get()) )
                 {

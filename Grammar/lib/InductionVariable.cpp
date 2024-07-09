@@ -775,6 +775,7 @@ set<shared_ptr<InductionVariable>> Cyclebite::Grammar::getInductionVariables(con
                 }
                 if( vars.empty() )
                 {
+                    // TODO: is this really a missing IV, or is this finding predication before we find the IV?
                     throw CyclebiteException("Could not find any IVs for this cycle!");
                 }
                 for( const auto& var : vars )

@@ -46,15 +46,13 @@ int main(int argc, char *argv[])
     SMDiagnostic smerror;
     auto SourceBitcode = parseIRFile(BitcodeFileName, smerror, context);
     Cyclebite::Util::Format(*SourceBitcode, false);
-    // construct its callgraph
-
+    // builds mappings between ID numbers and basic blocks/llvm::Values (IDToBlock, IDToValue)
     InitializeIDMaps(SourceBitcode.get());
-    // build IR to source maps (must be done after ID maps are initialized)
+    // build mappings between source code lines and basic blocks (must be done after ID maps are initialized)
     InitSourceMaps(SourceBitcode);
-
     // construct static call graph from the input bitcode
     llvm::CallGraph staticCG(*SourceBitcode);
-    // construct program control graph and call graph
+    // construct program control graph and call graph from dynamic profiles
     ControlGraph cg;
     Cyclebite::Graph::CallGraph dynamicCG;
     getDynamicInformation( cg, dynamicCG, ProfileFileName, SourceBitcode, staticCG, blockCallers, threadStarts, IDToBlock, false );
@@ -68,7 +66,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* this section constructs the data flow and shared_ptr<ControlBlock> */
     ifstream kernelFile(KernelFile);
     nlohmann::json kernelJson;
     kernelFile >> kernelJson;
@@ -77,7 +74,7 @@ int main(int argc, char *argv[])
     nlohmann::json instanceJson;
     instanceFile >> instanceJson;
     instanceFile.close();
-    // BBsubgraphs of the program
+    // contains basic block-like structures, but with dynamic information injected into them
     set<shared_ptr<ControlBlock>, p_GNCompare> programFlow;
     // data flow of the program
     DataGraph dGraph;
@@ -90,9 +87,9 @@ int main(int argc, char *argv[])
     colorNodes(tasks);
     // print for everyone to see
     PrintDFGs(tasks);
-    // interpret the tasks in the DFG
+    // build a canonical expression for each task in the task graph
     auto taskToExpr = Process(tasks);
-    // finally, export the processed tasks
+    // finally, label and export each canonical expression and the pipeline as a whole
     Export(taskToExpr, OutputFile, LabelTasks, OutputOMP, OutputHalide);
     // output json file with special instruction information
     OutputJson(SourceBitcode, tasks, OutputFile);

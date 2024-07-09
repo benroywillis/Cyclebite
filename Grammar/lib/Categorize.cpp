@@ -359,7 +359,7 @@ set<shared_ptr<Cyclebite::Graph::DataValue>> findState(const set<shared_ptr<Task
                 }
             }
         }
-        // for each store instruction that stores state
+        // for each store instruction that determines state, walk backwards in the DFG until you run out of instructions to touch, each time categorizing the instructions touched into state
         for (const auto &st : stateSts)
         {
             if (auto valueInst = llvm::dyn_cast<llvm::Instruction>(st->getValueOperand()))
