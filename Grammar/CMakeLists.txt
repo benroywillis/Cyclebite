@@ -1,4 +1,5 @@
 add_subdirectory("lib")
+add_subdirectory("MLIR")
 
 add_executable(KernelGrammar Grammar.cpp)
 target_link_libraries(KernelGrammar Grammar Graph nlohmann_json nlohmann_json::nlohmann_json Util)
