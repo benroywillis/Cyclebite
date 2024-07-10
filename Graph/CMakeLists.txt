@@ -20,7 +20,6 @@ install(TARGETS Graph
 )
 
 set(GRAPH_INC "${CMAKE_SOURCE_DIR}/Graph/inc/")
-message(STATUS ${GRAPH_INC})
 
 file(GLOB GR ${GRAPH_INC}/*.h)
 install (FILES ${GR} DESTINATION "include/Graph")
