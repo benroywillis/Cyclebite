@@ -8,35 +8,59 @@
 
 namespace Cyclebite::Graph
 {
+    /// A general class for a graph of GraphNodes and GraphEdges
     class Graph
     {
     public:
         Graph();
         Graph(const std::set<std::shared_ptr<GraphNode>, p_GNCompare> &nodeSet, const std::set<std::shared_ptr<GraphEdge>, GECompare> &edgeSet);
         virtual ~Graph();
+        /// @brief Returns the node in the graph whose Cyclebite::Graph::GraphNode::NID matches the NID of s
         const std::shared_ptr<GraphNode> &getOriginalNode(const std::shared_ptr<GraphNode> &s) const;
+        /// @brief Returns the Cyclebite::Graph::GraphNode whose NID matches ID
         const std::shared_ptr<GraphNode> &getOriginalNode(uint64_t ID) const;
+        /// @brief Returns all nodes in the graph in their parent-most class
         const std::set<std::shared_ptr<GraphNode>, p_GNCompare> &getNodes() const;
+        /// @brief Returns the Cyclebite::Graph::GraphEdge whose EID matches e->getEID()
         const std::shared_ptr<GraphEdge> &getOriginalEdge(const std::shared_ptr<GraphEdge> &e) const;
+        /// @brief Returns all GraphEdge's in the graph
+        /// @return 
         const std::set<std::shared_ptr<GraphEdge>, GECompare> &getEdges() const;
+        /// @brief Returns the nodes in the graph that have no predecessors
         const std::set<std::shared_ptr<GraphNode>, p_GNCompare> getFirstNodes() const;
+        /// @brief Returns the nodes in the graph that have no successors
         const std::set<std::shared_ptr<GraphNode>, p_GNCompare> getLastNodes() const;
         void addNode(const std::shared_ptr<GraphNode> &a);
         void addNodes(const std::set<std::shared_ptr<GraphNode>, p_GNCompare> &nodes);
+        /// Removes the node(s) in the graph whose Cyclebite::Graph::GraphNode::NID matches that of r
         void removeNode(const std::shared_ptr<GraphNode> &r);
         void addEdge(const std::shared_ptr<GraphEdge> &a);
         void addEdges(const std::set<std::shared_ptr<GraphEdge>, GECompare> &a);
+        /// Removes the Cyclebite::Graph::GraphEdge whose EID matches that of r
         void removeEdge(const std::shared_ptr<GraphEdge> &r);
+        /// Returns true if there is a node whose NID matches that of s, false otherwise
         bool find(const std::shared_ptr<GraphNode> &s) const;
+        /// Returns true if there is a node whose NID matches ID, false otherwise
         bool find_node(uint64_t ID) const;
+        /// Returns true if there is an edge whose EID matches that of s, false otherwise
         bool find(const std::shared_ptr<GraphEdge> &s) const;
+        /// Returns true if there are there are both no nodes and no edges in the graph, false otherwise 
         bool empty() const;
+        /// Removes all nodes and edges from this graph
         void clear();
         uint64_t node_count() const;
         uint64_t edge_count() const;
+        /// Returns the sum of all member nodes and all member edges in the graph
         uint64_t size() const;
+        /// Returns the node whose NID matches that of s
+        /// Throws a CyclebiteException if no node matches the NID in s
+        /// If there is more than one node with the NID of s, a random node with the same NID as s is returned
         const std::shared_ptr<GraphNode> &operator[](const std::shared_ptr<GraphNode> &s) const;
+        /// Returns the edge whose EID matches that of f
+        /// Throws a CyclebiteException if no edges in the graph match the EID of f
+        /// If there is more than one edge whose EID is that of f, a random edge with the same EID as f is returned
         const std::shared_ptr<GraphEdge> &operator[](const std::shared_ptr<GraphEdge> &f) const;
+        /// Useful for defining iterator ranges over the nodes of the graph
         struct Node_Range
         {
             std::set<std::shared_ptr<GraphNode>, p_GNCompare>::iterator begin_;
@@ -44,6 +68,7 @@ namespace Cyclebite::Graph
             std::set<std::shared_ptr<GraphNode>, p_GNCompare>::iterator begin() { return begin_; }
             std::set<std::shared_ptr<GraphNode>, p_GNCompare>::iterator end() { return end_; }
         };
+        /// Useful for defining iterator ranges over the edges of the graph
         struct Edge_Range
         {
             std::set<std::shared_ptr<GraphEdge>, GECompare>::iterator begin_;
@@ -53,6 +78,7 @@ namespace Cyclebite::Graph
         };
         Node_Range nodes();
         Edge_Range edges();
+        /// Const version of the above
         struct Const_Node_Range
         {
             const std::set<std::shared_ptr<GraphNode>, p_GNCompare>::iterator begin_;
@@ -97,29 +123,3 @@ namespace Cyclebite::Graph
         return converted;
     }
 } // namespace Cyclebite::Graph
-
-// John 3/11/22
-// to fix the memory management problem, use references
-// a reference contains a pointer to the real object, and the number of references made
-// - this enables reference counting
-// as things are being deleted
-// - the children with 0 references can be safely deleted
-// - the children with nonzero references cannot be safely deleted
-// so add to the inheritence tree a parameter that counts references and implement this that way
-// or build a reference object that is templated
-
-// John 3/11/22 - On improving your speed of development
-// 1. What does your pre-programming look like?
-//   - generally drawing figures are the best thing
-//   - atomize the work as much as possible
-//     -> this makes tests small
-//     -> example: a unit test that just runs the VirtualizeSubgraph() method
-//   - What can I program and compile in 1-2h? And then write a unit test for it in 1-2h?
-// 2. Longer-range plan
-//   - What needs to work?
-//   - In agile development, the goals are not concrete, but the goals are still known at all times
-//   - What can be done in one week?
-//   - What can be done in one month?
-//   - What can be done in one quarter?
-//   - What is aspirational but not deliverable?
-//   - How well do we understand the problem?

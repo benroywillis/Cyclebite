@@ -18,7 +18,10 @@ namespace Cyclebite::Graph
         GraphEdge(uint64_t ID, std::shared_ptr<GraphNode> sou, std::shared_ptr<GraphNode> sin);
         virtual ~GraphEdge();
         uint64_t ID() const;
+        /// Returns true if there the source node of type ControlNode, false otherwise
+        /// @return 
         bool hasWeightedSrc() const;
+        /// Returns true if the sink node of type ControlNode, false otherwise
         bool hasWeightedSnk() const;
         const std::shared_ptr<GraphNode> &getSrc() const;
         const std::shared_ptr<GraphNode> &getSnk() const;
@@ -28,7 +31,9 @@ namespace Cyclebite::Graph
         float weight;
         std::shared_ptr<GraphNode> src;
         std::shared_ptr<GraphNode> snk;
+        /// Class-wide counter to uniquely number each constructed edge
         static uint64_t nextEID;
+        /// Incrementor for the EIDs of edges - it increments nextEID any time the constructor is called
         static uint64_t getNextEID();
     };
     /// Allows for us to search a set of GraphEdges using an EID

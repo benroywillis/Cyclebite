@@ -21,12 +21,20 @@ namespace Cyclebite::Graph
         ControlNode();
         /// Meant to be constructed from a new block description in the input binary file
         ~ControlNode() = default;
+        /// Incoming edges
         const std::set<std::shared_ptr<UnconditionalEdge>, GECompare> getPredecessors() const;
+        /// Outgoing edges
         const std::set<std::shared_ptr<UnconditionalEdge>, GECompare> getSuccessors() const;
         void addPredecessor(std::shared_ptr<UnconditionalEdge> newEdge);
         void removePredecessor(std::shared_ptr<UnconditionalEdge> oldEdge);
         void addSuccessor(std::shared_ptr<UnconditionalEdge> newEdge);
         void removeSuccessor(std::shared_ptr<UnconditionalEdge> oldEdge);
+        /// @brief Adds an underlying llvm::BasicBlock::ID that this node represents
+        /// 
+        /// Each node comes from an llvm::basicblock in the original program
+        /// Each basic block gets its own ID from the Cyclebite::Profile::Passes::Annotate pass
+        /// Before MCG transformation, each ControlNode maps to exactly one llvm::basicblock
+        /// After transformation, a ControlNode may map to many llvm::basicblocks (or an entire subgraph of them)
         bool addBlock(int64_t newBlock);
         void addBlocks(const std::set<int64_t> &newBlocks);
         /// Merges the blocks and originalBlocks of a successor node

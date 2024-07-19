@@ -9,9 +9,8 @@ namespace Cyclebite::Graph
 {
     class DataValue;
     class Inst;
-    // structures for a basic block subgraph
-    // a basic block subgraph is a basic block with its data flow annotated within
-    // the basic block is a piece within the entire representation of the kernel that includes both its control flow and instruction-level DAG
+    // Cyclebite's imitation of an llvm::BasicBlock
+    // It holds DataValue's in their prescribed order that makes evaluation of the tasks straightforward (in Cyclebite-Template)
     class ControlBlock : public ControlNode
     {
     public:

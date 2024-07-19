@@ -9,6 +9,9 @@
 namespace Cyclebite::Graph
 {
     class UnconditionalEdge;
+    /// Cyclebite::Graph::Datagraph holds Cyclebite::Graph::DataValues, which sit on top of llvm::Value's from the static program
+    /// Each node is a DataValue (or perhaps a Cyclebite::Graph::Inst, an upgraded DataValue)
+    /// Each edge is an UnconditionalEdge (because LLVM-IR is SSA)
     class DataGraph : public Graph
     {
     public:

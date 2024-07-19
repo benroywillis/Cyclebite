@@ -22,7 +22,7 @@ namespace Cyclebite::Graph
         Grey,
         Black
     };
-
+    /// Holds the transformation from a Cyclebite::Graph::ControlNode to a negative-log-space node
     struct DijkstraNode
     {
         DijkstraNode() = default;
@@ -37,7 +37,7 @@ namespace Cyclebite::Graph
         /// whether or not this node has been investigated
         NodeColor color;
     };
-
+    /// Convenient for when Dijkstra's needs to figure out where to go next
     struct DijkstraCompare
     {
         using is_transparent = void;
@@ -46,6 +46,12 @@ namespace Cyclebite::Graph
             return lhs.distance < rhs.distance;
         }
     };
-
+    /// @brief Implements Dijkstra's algorithm on a Cyclebite::Graph::Graph
+    ///
+    /// The input graph is transformed into a negative-log-space nodes in which maximum probabilities become minimum values
+    /// @param graph    A set of nodes that should contain a cycle within them. 
+    /// @param source   The place to start dijkstra's - if you are looking for a cycle, this should be equal to sink
+    /// @param sink     The place to end dijkstra's - if you are looking for a cycle, this should be equal to source 
+    /// @return         A set of Cyclebite::Graph::GraphNode::NID's that constitute the shortest path between source and sink
     std::set<uint64_t> Dijkstras(const Graph &graph, uint64_t source, uint64_t sink);
 } // namespace Cyclebite::Graph

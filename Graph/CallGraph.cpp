@@ -49,6 +49,7 @@ void CallGraph::addNode(const std::shared_ptr<CallGraphNode> &a)
 void CallGraph::addNodes(const std::set<std::shared_ptr<CallGraphNode>, CGNCompare> &nodes)
 {
     nodeSet.insert(nodes.begin(), nodes.end());
+    CGN.insert(nodes.begin(), nodes.end());
 }
 
 void CallGraph::removeNode(const std::shared_ptr<CallGraphNode>& r)
