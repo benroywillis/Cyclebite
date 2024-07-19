@@ -15,6 +15,7 @@ namespace Cyclebite::Graph
         VirtualEdge(uint64_t frequency, std::shared_ptr<ControlNode> sou, std::shared_ptr<ControlNode> sin, std::set<std::shared_ptr<UnconditionalEdge>, GECompare> &newEdges);
         bool addEdge(const std::shared_ptr<UnconditionalEdge> newEdge);
         void addEdges(const std::set<std::shared_ptr<UnconditionalEdge>, GECompare> newEdges);
+        /// Returns the edges contained by this virtual edge
         const std::set<std::shared_ptr<UnconditionalEdge>, GECompare> &getEdges() const;
         bool isCallEdge() const;
 

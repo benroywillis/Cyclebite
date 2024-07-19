@@ -25,10 +25,10 @@ namespace Cyclebite::Graph
 
         /// Returns true if search is found within the node subgraph, false otherwise
         bool find(const std::shared_ptr<ControlNode> &search) const;
+        /// Returns the edges whose sink node is within the virtual node subgraph and whose source node is not
         std::vector<std::shared_ptr<UnconditionalEdge>> getEntrances() const;
-        std::set<uint32_t> getEntranceBlocks(uint32_t markovOrder) const;
+        /// Returns the edges whose source node is within the virtual node subgraph and whose sink node is not
         std::vector<std::shared_ptr<UnconditionalEdge>> getExits() const;
-        std::set<uint32_t> getExitBlocks(uint32_t markovOrder) const;
         /// Returns the "anchor" block, or block with the highest number of iterations in the MLCycle
         uint64_t getAnchor();
 

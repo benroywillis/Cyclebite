@@ -192,12 +192,12 @@ void Cyclebite::Graph::SumToOne(const std::set<std::shared_ptr<GraphNode>, p_GNC
 /// 5. For a given node, all outgoing edge probabilities sum to one
 void Cyclebite::Graph::Checks(const ControlGraph &transformed, string step, bool segmentation)
 {
-    // 1.
+    // 1. The graph cannot be empty
     if (transformed.empty())
     {
         throw CyclebiteException(step + ": Transformed graph is empty!");
     }
-    // 2.
+    // 2. All edges that exist within objects must exist in the graph
     for (const auto &node : transformed.nodes())
     {
         for (const auto &pred : node->getPredecessors())
@@ -239,7 +239,7 @@ void Cyclebite::Graph::Checks(const ControlGraph &transformed, string step, bool
             }
         }
     }
-    // 3.
+    // 3. All nodes in the graph must be reachable
     set<shared_ptr<GraphNode>, p_GNCompare> covered;
     deque<shared_ptr<GraphNode>> Q;
     Q.push_front(transformed.getFirstNode());
@@ -263,7 +263,7 @@ void Cyclebite::Graph::Checks(const ControlGraph &transformed, string step, bool
             throw CyclebiteException("Node is unreachable!");
         }
     }
-    // 4.
+    // 4. All nodes in the graph must be reverse-reachable from at least one terminator
     // for this check we need to get the imaginary node that succeeds the terminator
     // this node will lead back to all nodes in the graph, but the terminator may miss thread terminator blocks
     covered.clear();
@@ -291,7 +291,7 @@ void Cyclebite::Graph::Checks(const ControlGraph &transformed, string step, bool
             throw CyclebiteException("Node cannot reach program terminator!");
         }
     }
-    // 5.
+    // 5. All outgoing edge weights must sum to 1
     if( !segmentation )
     {
         for (const auto &node : transformed.nodes())
@@ -1481,12 +1481,6 @@ ControlGraph Cyclebite::Graph::BranchToSelectTransforms(const ControlGraph &grap
     return subgraph;
 }
 
-/// @brief Evaluates a subgraph for its entrances and exits, and returns true if the entrance and exit are the bottlenecks of the subgraph
-///
-/// @param subgraph Input subgraph to evaluate. This subgraph cannot contain any cycles, and there must be a path between source and sink. This parameter is passed by reference and may be manipulated if the function returns true
-/// @param source   The intended source node of the subgraph. A source node of the subgraph should have all its predecessors outside the subgraph and all its successors within the subgraph
-/// @param sink     The intended sink node of the subgraph. A sink node of the subgraph should have all its predecessors within the subgraph and all its successors outside
-/// @retval         True if the input subgraph can only be entered into through source and only exited through sink
 bool Cyclebite::Graph::FanInFanOutTransform(ControlGraph &subgraph, const std::shared_ptr<ControlNode> &source, const std::shared_ptr<ControlNode> &sink)
 {
     // Checks
@@ -1575,6 +1569,20 @@ bool Cyclebite::Graph::FanInFanOutTransform(ControlGraph &subgraph, const std::s
     return true;
 }
 
+/// Returns true if this function has direct recursion and false otherwise. If the input function is indirect and direct recursive, the return value will be true
+bool Cyclebite::Graph::hasDirectRecursion(const Cyclebite::Graph::CallGraph &graph, const shared_ptr<Cyclebite::Graph::CallGraphNode> &src)
+{
+    auto cycle = Dijkstras(graph, src->ID(), src->ID());
+    if (cycle.size() == 1)
+    {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 /// Detects recursion, either direct or indirect
 bool Cyclebite::Graph::hasDirectRecursion(const llvm::CallGraphNode *node)
 {
@@ -1586,20 +1594,6 @@ bool Cyclebite::Graph::hasDirectRecursion(const llvm::CallGraphNode *node)
         }
     }
     return false;
-}
-
-bool hasDirectRecursion(const std::shared_ptr<ControlNode> &node, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock, const llvm::CallGraph &CG)
-{
-    auto block = NodeToBlock(node, IDToBlock);
-    if (block->getParent())
-    {
-        auto CGentry = CG[block->getParent()];
-        return hasDirectRecursion(CGentry);
-    }
-    else
-    {
-        throw CyclebiteException("Could not map a function block to a node during simple recursion evaluation!");
-    }
 }
 
 bool Cyclebite::Graph::hasIndirectRecursion(const Cyclebite::Graph::CallGraph &graph, const shared_ptr<Cyclebite::Graph::CallGraphNode> &node)
@@ -1626,20 +1620,6 @@ bool Cyclebite::Graph::hasIndirectRecursion(const Cyclebite::Graph::CallGraph &g
         {
             return false;
         }
-    }
-    else
-    {
-        return false;
-    }
-}
-
-/// Returns true if this function has direct recursion and false otherwise. If the input function is indirect and direct recursive, the return value will be true
-bool Cyclebite::Graph::hasDirectRecursion(const Cyclebite::Graph::CallGraph &graph, const shared_ptr<Cyclebite::Graph::CallGraphNode> &src)
-{
-    auto cycle = Dijkstras(graph, src->ID(), src->ID());
-    if (cycle.size() == 1)
-    {
-        return true;
     }
     else
     {
@@ -3475,175 +3455,3 @@ void Cyclebite::Graph::FindAllRecursiveFunctions(const Cyclebite::Graph::CallGra
     spdlog::info("INDIRECT RECURSION FUNCTIONS: " + to_string(IDR));
     spdlog::info("DIRECT RECURSION FUNCTIONS: " + to_string(DR));
 }
-
-// John: we have been moving from SCCs to cycles.. Are we actually doing that?
-// Is a cycle strictly a cycle even though it is composed of virtual nodes, or is it a strongly connected component?
-
-// Ben: I believe we are just finding cycles... transforms are just simplifying cycle subgraphs, we don't include any tails or heads to the cycles... so there shouldn't be any noise to the cycles
-// Ben: it is possible that we are eating dangles but it is not intentional
-// John: the entrance block and exit block to and from main need to have preds/succs called "root"/"tail", and these nodes are explicitly non-transformable
-
-// John: how many unexpected dangles do we end up with? (evaluation of profiler)
-
-// John: does my dynamic call graph significantly disagree with the static one? Is it possible to call into a function from a BB that cannot actually do that according to the static code?
-
-// John: one of the positions of Rick's work was that... do we actually have to find SCCs or do we just find cycles? we don't know...
-// But now we are saying... no, cycles are good enough. we can write down the possible structures within a C program, and finding the cycles is good enough to structure
-
-/* Moving this function to the new edge classes is hard because it is destroying edges... the work to be done is to build new edges as the algorithm progresses
-std::set<std::shared_ptr<ControlNode> , p_GNCompare> Cyclebite::Graph::ReduceMO(Graph& graph, int inputOrder, int desiredOrder)
-{
-    // first step, transform the input nodes into markov order 1 nodes
-    // Markov Order Reduction Algorithm:
-    // for (inputMarkovOrder - desiredMarkovOrder) iterations
-    //   for each node in the prior graph
-    //    if this node is not in the skip list
-    //      find all nodes that have the same state (markovOrder-1) states ago (eg if 0|-1 is the current node, then 0|-2 and 0|-3 need to be grouped with it; if 0|-1,-2 is the current node, then 0|-1,-3 should be grouped, but not 0|-2,-3)
-    //      combine all preds and successors together to form the node at markovOrder-1
-    //      add all grouped nodes together into the skip set
-    set<std::shared_ptr<ControlNode> , p_GNCompare> previousGraph = graph.nodes;
-    // holds new nodes for the markovOrder-1 graph
-    set<std::shared_ptr<ControlNode> , p_GNCompare> newGraph;
-    if (inputOrder == desiredOrder)
-    {
-        // copy all nodes into the return graph
-        for (const auto node : graph.nodes)
-        {
-            auto newNode = new ControlNode(*node);
-            newGraph.insert(newNode);
-        }
-        return newGraph;
-    }
-    int currentOrder = inputOrder;
-    while (currentOrder > desiredOrder)
-    {
-        newGraph.clear();
-        // maps an NID from the old graph into the new one
-        map<uint64_t, uint64_t> IDMap;
-        // nodes that have already been covered
-        set<std::shared_ptr<ControlNode> , p_GNCompare> done;
-        // sum along the columns of the nodes until we have transformed the transition table one to (markovOrder - 1)
-        for (const auto &n : previousGraph)
-        {
-            if (done.find(n) == done.end())
-            {
-                // find all that have the same markovOrder-1 state
-                vector<std::shared_ptr<ControlNode> > likeNodes;
-                for (const auto &otherNode : previousGraph)
-                {
-                    if (*next(otherNode->originalBlocks.begin()) == *next(n->originalBlocks.begin()))
-                    {
-                        likeNodes.push_back(otherNode);
-                    }
-                }
-                // make a new node if necessary, else graph the existing replacement (if this node is a neighbor of a node that has already been evaluated, a replacement node already exists for it)
-                std::shared_ptr<ControlNode> newNode;
-                if (IDMap.find(n->ID()) == IDMap.end())
-                {
-                    newNode = new ControlNode();
-                }
-                else
-                {
-                    newNode = *newGraph.find(IDMap[n->ID()]);
-                }
-                for (auto og = next(n->originalBlocks.begin()); og != n->originalBlocks.end(); og++)
-                {
-                    newNode->originalBlocks.push_back(*og);
-                    newNode->blocks.insert(*og);
-                }
-                newGraph.insert(newNode);
-                IDMap[n->ID()] = newNode->ID();
-                done.insert(n);
-
-                for (const auto &oldNode : likeNodes)
-                {
-                    // each node gets merged into the new node
-                    IDMap[oldNode->ID()] = newNode->ID();
-                    done.insert(oldNode);
-                    for (const auto &nei : oldNode->getSuccessors())
-                    {
-                        // make the neighbor node if it doesn't exist yet
-                        if (IDMap.find(nei->getWeightedSnk()->ID()) == IDMap.end())
-                        {
-                            // we have to find out if there is a like node for this neighbor
-                            auto oldNeighbor = *previousGraph.find(nei->getWeightedSnk()->ID());
-                            bool match = false;
-                            for (const auto &likeNeighbor : previousGraph)
-                            {
-                                if (*next(likeNeighbor->originalBlocks.begin()) == *next(oldNeighbor->originalBlocks.begin()))
-                                {
-                                    if (IDMap.find(likeNeighbor->ID()) != IDMap.end())
-                                    {
-                                        IDMap[nei->getWeightedSnk()->ID()] = IDMap[likeNeighbor->ID()];
-                                        //done.insert(oldNeighbor);
-                                        match = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (!match)
-                            {
-                                auto newNeighbor = new ControlNode();
-                                newGraph.insert(newNeighbor);
-                                IDMap[nei->getWeightedSnk()->ID()] = newNeighbor->ID();
-                            }
-                        }
-                        // if this neighbor is already in the neighbor map, add its frequency counts together
-                        if (newNode->getSuccessors().find(IDMap[nei->getWeightedSnk()->ID()]) == newNode->getSuccessors().end())
-                        {
-                            newNode->getSuccessors()[IDMap[nei->getWeightedSnk()->ID()]] = nei.second;
-                        }
-                        // else add the neighbor
-                        else
-                        {
-                            newNode->getSuccessors()[IDMap[nei->getWeightedSnk()->ID()]].first += nei->getFreq();
-                        }
-                    }
-                    for (const auto &pred : oldNode->getPredecessors())
-                    {
-                        // do the same thing for the predecessors now
-                        if (IDMap.find(pred->getWeightedSrc()->ID()) == IDMap.end())
-                        {
-                            // we have to find out if there is a like node for this predecessor
-                            auto oldPredecessor = *previousGraph.find(pred);
-                            bool match = false;
-                            for (const auto &likePredecessor : previousGraph)
-                            {
-                                if (*next(likePredecessor->originalBlocks.begin()) == *next(oldPredecessor->originalBlocks.begin()))
-                                {
-                                    if (IDMap.find(likePredecessor->ID()) != IDMap.end())
-                                    {
-                                        IDMap[pred->getWeightedSrc()->ID()] = IDMap[likePredecessor->ID()];
-                                        match = true;
-                                        //done.insert(oldPredecessor);
-                                        break;
-                                    }
-                                }
-                            }
-                            if (!match)
-                            {
-                                auto newPred = new ControlNode();
-                                newGraph.insert(newPred);
-                                IDMap[pred->getWeightedSrc()->ID()] = newPred->ID();
-                            }
-                        }
-                        newNode->getPredecessors().insert(IDMap[pred->getWeightedSrc()->ID()]);
-                    }
-                }
-            }
-        }
-        // don't free the input graph, but free any intermediate graphs
-        if (currentOrder < inputOrder)
-        {
-            // we aren't on the first iteration, so free the previous iteration (because it was intermediate)
-            for (const auto &node : previousGraph)
-            {
-                delete node;
-            }
-        }
-        previousGraph = newGraph;
-        currentOrder--;
-    }
-    return newGraph;
-}
-*/
