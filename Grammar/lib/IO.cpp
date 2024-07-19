@@ -131,7 +131,7 @@ void Cyclebite::Grammar::BuildMemoryInstructionMappings( const nlohmann::json& i
         {
             for( const auto& other : map.value().get<vector<uint64_t>>() )
             {
-                bp2bp[stol(map.key())].insert(other);
+                bp2bp[(uint64_t)stol(map.key())].insert(other);
             }
         }
     }
