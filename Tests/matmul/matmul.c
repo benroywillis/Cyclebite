@@ -2,7 +2,7 @@
 // Copyright 2023 Benjamin Willis
 // SPDX-License-Identifier: Apache-2.0
 //==------------------------------==//
-#include "Trace.h"
+#include "Markov.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -29,32 +29,32 @@ int main()
     }
 
 #if TRACING
-    KernelEnter("MatrixMultiply,Outer");
+    CyclebiteMarkovKernelEnter("MatrixMultiply,Outer");
 #endif
     for (int i = 0; i < SIZE; i++)
     {
 #if TRACING
-        KernelEnter("MatrixMultiply,Inner");
+        CyclebiteMarkovKernelEnter("MatrixMultiply,Inner");
 #endif
         for (int j = 0; j < SIZE; j++)
         {
 #if TRACING
-            KernelEnter("MatrixMultiply,Mul");
+            CyclebiteMarkovKernelEnter("MatrixMultiply,Mul");
 #endif
             for (int k = 0; k < SIZE; k++)
             {
                 out[i][j] += in0[i][k] * in1[k][j];
             }
 #if TRACING
-            KernelExit("MatrixMultiply,Mul");
+            CyclebiteMarkovKernelExit("MatrixMultiply,Mul");
 #endif
         }
 #if TRACING
-        KernelExit("MatrixMultiply,Inner");
+        CyclebiteMarkovKernelExit("MatrixMultiply,Inner");
 #endif
     }
 #if TRACING
-    KernelExit("MatrixMultiply,Outer");
+    CyclebiteMarkovKernelExit("MatrixMultiply,Outer");
 #endif
 
     printf("Success.\n");

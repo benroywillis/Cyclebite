@@ -120,6 +120,25 @@ function(InjectMemory tar)
     target_link_libraries(${tar}.memory.native PRIVATE AtlasBackend)
 endfunction()
 
+function(CyclebiteTest tar)
+    add_executable(${tar} ${tar})
+    target_include_directories(${tar} PRIVATE ${CMAKE_SOURCE_DIR}/Profile/Backend/Markov/inc)
+    InjectMarkov(${tar})
+    InjectMemory(${tar})
+
+    add_test(NAME ${tar}_Markov_Profile COMMAND  ${tar}.markov.native)
+    set_tests_properties(${tar}_Markov_Profile PROPERTIES ENVIRONMENT LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/../../lib/:${LLVM_INSTALL_PREFIX}/lib)
+
+    add_test(NAME ${tar}_cartographer COMMAND newCartographer -i ${CMAKE_CURRENT_BINARY_DIR}/markov.bin -b $<TARGET_FILE:${tar}> -bi ${CMAKE_CURRENT_BINARY_DIR}/BlockInfo.json -d dot.dot -o ${CMAKE_CURRENT_BINARY_DIR}/kernel.json)
+    set_tests_properties(${tar}_cartographer PROPERTIES DEPENDS ${tar}_Markov_Profile ENVIRONMENT LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/../../lib/:${LLVM_INSTALL_PREFIX}/lib)
+
+    add_test(NAME ${tar}_Memory_Profile COMMAND ${tar}.memory.native)
+    set_tests_properties(${tar}_Memory_Profile PROPERTIES DEPENDS ${tar}_cartographer ENVIRONMENT LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/../../lib/:${LLVM_INSTALL_PREFIX}/lib)
+
+    add_test(NAME ${tar}_Grammar COMMAND KernelGrammar -i ${CMAKE_CURRENT_BINARY_DIR}/instance.json -k ${CMAKE_CURRENT_BINARY_DIR}/kernel.json -b $<TARGET_FILE:${tar}> -bi ${CMAKE_CURRENT_BINARY_DIR}/BlockInfo.json -p ${CMAKE_CURRENT_BINARY_DIR}/markov.bin -o ${CMAKE_CURRENT_BINARY_DIR}/KernelGrammar.json ) 
+    set_tests_properties(${tar}_Grammar PROPERTIES DEPENDS ${tar}_Memory_Profile ENVIRONMENT LD_LIBRARY_PATH=${CMAKE_CURRENT_BINARY_DIR}/../../lib/::${LLVM_INSTALL_PREFIX}/lib)
+endfunction()
+
 # our unit tests
 option(ENABLE_TESTING "Build tests" ON)
 if(${ENABLE_TESTING})
