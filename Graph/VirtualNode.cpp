@@ -76,24 +76,6 @@ std::vector<std::shared_ptr<UnconditionalEdge>> VirtualNode::getEntrances() cons
     return entrances;
 }
 
-/// @brief Returns the IDs of the blocks from the original bitcode that are entrances of the kernel (they have a predecessor that is outside the kernel)
-std::set<uint32_t> VirtualNode::getEntranceBlocks(uint32_t markovOrder) const
-{
-    std::set<uint32_t> entBlockIDs;
-    if (markovOrder == 0)
-    {
-        return entBlockIDs;
-    }
-    for (const auto &ent : getEntrances())
-    {
-        if (ent->getWeightedSnk())
-        {
-            entBlockIDs.insert(ent->getWeightedSnk()->originalBlocks.back());
-        }
-    }
-    return entBlockIDs;
-}
-
 /// @brief Returns the IDs of the kernel exits
 ///
 /// @param[in] allNodes Set of all nodes in the control flow graph. Used to copy the nodes that are the destinations of edges that leave the kernel
@@ -113,24 +95,6 @@ std::vector<std::shared_ptr<UnconditionalEdge>> VirtualNode::getExits() const
         }
     }
     return exitNodes;
-}
-
-/// @brief Returns the IDs of the blocks from the original bitcode that are exits of the kernel (they have a successor that is outside the kernel)
-std::set<uint32_t> VirtualNode::getExitBlocks(uint32_t markovOrder) const
-{
-    std::set<uint32_t> exitBlockIDs;
-    if (markovOrder == 0)
-    {
-        return exitBlockIDs;
-    }
-    for (const auto &exit : getExits())
-    {
-        if (exit->getWeightedSrc())
-        {
-            exitBlockIDs.insert(exit->getWeightedSrc()->originalBlocks.back());
-        }
-    }
-    return exitBlockIDs;
 }
 
 uint64_t VirtualNode::getAnchor()

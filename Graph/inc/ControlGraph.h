@@ -8,6 +8,10 @@
 
 namespace Cyclebite::Graph
 {
+    /// Holds Markov Control Graphs
+    /// Each node in the graph is a state in the program (a basic block)
+    /// Each edge in the graph is a state transition with a frequency count from the state transition table
+    /// The state transition table is converted into a markov chain in IO.cpp:Cyclebite::Graph::BuildCFG()
     class ControlGraph : public Graph
     {
     public:

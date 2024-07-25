@@ -13,14 +13,18 @@ namespace Cyclebite::Graph
     {
     public:
         CallGraphNode(const llvm::Function *F);
-        /// Meant to be constructed from a new block description in the input binary file
         ~CallGraphNode() = default;
+        /// @brief Returns the llvm::Function this node maps to
         const llvm::Function *getFunction() const;
+        /// @brief Returns the edge(s) that lead to callees of this caller
+        /// Thus the sink nodes of the returned edges are the callees of this caller
         const std::set<std::shared_ptr<CallGraphEdge>, GECompare> getChildren() const;
+        /// @brief Returns the edge(s) that lead to the callers of this callee
+        /// Thus, the source nodes of the returned edges are the callers of this callee
         const std::set<std::shared_ptr<CallGraphEdge>, GECompare> getParents() const;
 
     private:
-        /// This function is guaranteed to be non-empty if it is defined
+        /// May be an empty function
         const llvm::Function *f;
     };
 

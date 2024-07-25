@@ -90,7 +90,6 @@ void Cyclebite::Graph::ReadBlockInfo(const std::string &BlockInfo)
         }
     }
 
-    std::set<int64_t> threadStarts;
     if( j.find("ThreadEntrances") != j.end() )
     {
         for( const auto& id : j["ThreadEntrances"].get<std::vector<int64_t>>() )
@@ -1366,7 +1365,15 @@ void RemoveTailHeadCalls( Cyclebite::Graph::ControlGraph& cg, const Cyclebite::G
     }
 }
 
-void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg, Cyclebite::Graph::CallGraph& dynamicCG, const std::string& filePath, const unique_ptr<llvm::Module>& SourceBitcode, const llvm::CallGraph& staticCG, const map<int64_t, vector<int64_t>>& blockCallers, const set<int64_t>& threadStarts, const map<int64_t, const BasicBlock*>& IDToBlock, bool HotCodeDetection)
+void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg, 
+                                             Cyclebite::Graph::CallGraph& dynamicCG, 
+                                             const std::string& filePath, 
+                                             const unique_ptr<llvm::Module>& SourceBitcode, 
+                                             const llvm::CallGraph& staticCG, 
+                                             const map<int64_t, vector<int64_t>>& blockCallers, 
+                                             const set<int64_t>& threadStarts, 
+                                             const map<int64_t, const BasicBlock*>& IDToBlock, 
+                                             bool HotCodeDetection)
 {
     Graph graph;
     // node that was observed to exit the program
@@ -1416,7 +1423,10 @@ void Cyclebite::Graph::getDynamicInformation(Cyclebite::Graph::ControlGraph& cg,
 #endif
 }
 
-const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph(llvm::Module *mod, const Graph &graph, const std::map<int64_t, std::vector<int64_t>> &blockCallers, const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
+const Cyclebite::Graph::CallGraph Cyclebite::Graph::getDynamicCallGraph( llvm::Module *mod, 
+                                                                         const Graph &graph, 
+                                                                         const std::map<int64_t, std::vector<int64_t>> &blockCallers, 
+                                                                         const std::map<int64_t, const llvm::BasicBlock *> &IDToBlock)
 {
     Cyclebite::Graph::CallGraph dynamicCG;
     for (auto f = mod->begin(); f != mod->end(); f++)
@@ -2751,50 +2761,6 @@ set<pair<int64_t, int64_t>> Cyclebite::Graph::findOriginalBlockIDs(const shared_
     return eEdges;
 }
 
-set<int64_t> findOriginalBlockIDs(const shared_ptr<ControlNode>& ent)
-{
-    set<int64_t> originalBlocks;
-    deque<shared_ptr<ControlNode>> Q;
-    set<shared_ptr<ControlNode>> covered;
-    Q.push_front(ent);
-    covered.insert(ent);
-    try
-    {
-        while( !Q.empty() )
-        {
-            if( auto vn = dynamic_pointer_cast<VirtualNode>(Q.front()) )
-            {
-                for( const auto& sn : vn->getSubgraph() )
-                {
-                    if( covered.find(sn) == covered.end() )
-                    {
-                        Q.push_back(sn);
-                        covered.insert(sn);
-                    }
-                }
-            }
-            else
-            {
-                if (!Q.front()->originalBlocks.empty())
-                {
-                    originalBlocks.insert(Q.front()->originalBlocks.back());
-                }
-                else
-                {
-                    throw CyclebiteException("Rock bottom node did not contain original blocks!");
-                }
-            }
-            Q.pop_front();
-        }
-    }
-    catch( CyclebiteException& e )
-    {
-        spdlog::critical(e.what());
-        return originalBlocks;
-    }
-    return originalBlocks;
-}
-
 void Cyclebite::Graph::WriteKernelFile(const ControlGraph &graph, const set<std::shared_ptr<MLCycle>, KCompare> &kernels, const map<int64_t, const llvm::BasicBlock *> &IDToBlock, const map<int64_t, std::vector<int64_t>> &blockCallers, const EntropyInfo &info, const string &OutputFileName, bool hotCode)
 {
     // write kernel file
@@ -2980,138 +2946,6 @@ void Cyclebite::Graph::WriteKernelFile(const ControlGraph &graph, const set<std:
             }
             outputJson["Kernels"][to_string(SIDMap.at(kern.first->KID))]["Dominators"] = doms;
         }
-        /*
-        // for each kernel, find its dominating kernels
-        // a dominating kernel is a kernel that must execute before the target kernel
-        for( const auto& kern : kernels )
-        {
-            for( const auto& domKern : kernels )
-            {
-                if( kern == domKern )
-                {
-                    continue;
-                }
-                // look at the exit block of this kernel and figure out if it dominates the entrance block of this kernel
-                for( const auto& ex : domKern->getExits() )
-                {
-                    auto exitBlock = NodeToBlock(ex->getWeightedSnk(), IDToBlock);
-                    for( const auto& ent : kern->getEntrances() )
-                    {
-                        auto entBlock = NodeToBlock(ent->getWeightedSnk(), IDToBlock);
-                        // now we have to see if the exitblock of the dominator kernel dominates the entrance block of the current kernel in question
-                        // first find their closest common ancestor in the callgraph of the program
-                        // second, find the basic blocks in which their function calls exist
-                        // third, run the dominator thing on them
-                    }
-                }
-            }
-            // this set contains all blocks that are not part of kernels and predicate this kernel
-            set<int64_t> predicateBlocks;
-            // now walk back from this parent kernel until we find a block that is not a non-kernel block
-            deque<shared_ptr<ControlNode>> Q;
-            set<shared_ptr<ControlNode>, p_GNCompare> covered;
-            covered.insert(kern->getSubgraph().begin(), kern->getSubgraph().end());
-            for( const auto& ent : kern->getEntrances() )
-            {
-                if( dynamic_pointer_cast<MLCycle>(ent->getWeightedSrc()) == nullptr )
-                {
-                    if( covered.find(ent->getWeightedSrc()) == covered.end() )
-                    {
-                        Q.push_back(ent->getWeightedSrc());
-                        covered.insert(ent->getWeightedSrc());
-                    }
-                }
-                while( !Q.empty() )
-                {
-                    auto blocks = findOriginalBlockIDs(Q.front());
-                    predicateBlocks.insert(blocks.begin(), blocks.end());
-                    for( const auto& pred : Q.front()->getPredecessors() )
-                    {
-                        if( dynamic_pointer_cast<MLCycle>(pred->getSrc()) == nullptr )
-                        {
-                            if( covered.find(pred->getWeightedSrc()) == covered.end() )
-                            {
-                                Q.push_back(pred->getWeightedSrc());
-                                covered.insert(pred->getWeightedSrc());
-                            }
-                        }
-                    }
-                    for( const auto& succ : Q.front()->getSuccessors() )
-                    {
-                        if( dynamic_pointer_cast<MLCycle>(succ->getSnk()) == nullptr )
-                        {
-                            if( covered.find(succ->getWeightedSnk()) == covered.end() )
-                            {
-                                Q.push_back(succ->getWeightedSnk());
-                                covered.insert(succ->getWeightedSnk());
-                            }
-                        }
-                    }
-                    Q.pop_front();
-                }
-            }
-            outputJson["Kernels"][to_string(SIDMap.at(kern->KID))]["PredicateBlocks"] = predicateBlocks;
-            // now find successorBlocks
-            // a successor block is a block that cannot reach back to this kernel ie when it has executed we know this kernel cannot possibly be live
-            set<int64_t> successorBlocks;
-            Q.clear();
-            covered.clear();
-            covered.insert(kern->getSubgraph().begin(), kern->getSubgraph().end());
-            for( const auto& ex : kern->getExits() )
-            {
-                if( dynamic_pointer_cast<MLCycle>(ex->getWeightedSnk()) == nullptr )
-                {
-                    if( covered.find(ex->getWeightedSnk()) == covered.end() )
-                    {
-                        Q.push_back(ex->getWeightedSnk());
-                        covered.insert(ex->getWeightedSnk());
-                    }
-                }
-                while( !Q.empty() )
-                {
-                    // do dijkstras between the current node and each entrance
-                    bool cycleFound = false;
-                    for( auto ent : kern->getEntrances() )
-                    {
-                        auto cycle = Cyclebite::Graph::Dijkstras(graph, Q.front()->ID(), ent->getSnk()->ID());
-                        if( !cycle.empty() )
-                        {
-                            cycleFound = true;
-                            break;
-                        }
-                    }
-                    if( !cycleFound )
-                    {
-                        auto blocks = findOriginalBlockIDs(Q.front());
-                        successorBlocks.insert(blocks.begin(), blocks.end());
-                    }
-                    for( const auto& pred : Q.front()->getPredecessors() )
-                    {
-                        if( dynamic_pointer_cast<MLCycle>(pred->getSrc()) == nullptr )
-                        {
-                            if( covered.find(pred->getWeightedSrc()) == covered.end() )
-                            {
-                                Q.push_back(pred->getWeightedSrc());
-                                covered.insert(pred->getWeightedSrc());
-                            }
-                        }
-                    }
-                    for( const auto& succ : Q.front()->getSuccessors() )
-                    {
-                        if( dynamic_pointer_cast<MLCycle>(succ->getSnk()) == nullptr )
-                        {
-                            if( covered.find(succ->getWeightedSnk()) == covered.end() )
-                            {
-                                Q.push_back(succ->getWeightedSnk());
-                                covered.insert(succ->getWeightedSnk());
-                            }
-                        }
-                    }
-                    Q.pop_front();
-                }
-            }
-            outputJson["Kernels"][to_string(SIDMap.at(kern->KID))]["SuccessorBlocks"] = successorBlocks;
-        }*/
     }
 
     if (!kernels.empty())
@@ -3579,127 +3413,3 @@ string Cyclebite::Graph::GenerateFunctionSubgraph(const Graph &funcGraph, const 
     dotString += "}";
     return dotString;
 }
-
-/*
-    // write kernel file
-    json outputJson;
-    // valid blocks and block callers sections provide tik with necessary info about the CFG
-    outputJson["ValidBlocks"] = std::vector<int64_t>();
-    for (const auto &id : IDToBlock)
-    {
-        outputJson["ValidBlocks"].push_back(id.first);
-    }
-    for (const auto &bid : blockCallers)
-    {
-        outputJson["BlockCallers"][to_string(bid.first)] = bid.second;
-    }
-    // Entropy information
-    outputJson["Entropy"] = map<string, map<string, uint64_t>>();
-    outputJson["Entropy"]["Start"]["Entropy Rate"] = startEntropy;
-    outputJson["Entropy"]["Start"]["Total Entropy"] = startTotalEntropy;
-    outputJson["Entropy"]["Start"]["Nodes"] = startNodes;
-    outputJson["Entropy"]["Start"]["Edges"] = startEdges;
-    outputJson["Entropy"]["End"]["Entropy Rate"] = endEntropy;
-    outputJson["Entropy"]["End"]["Total Entropy"] = endTotalEntropy;
-    outputJson["Entropy"]["End"]["Nodes"] = endNodes;
-    outputJson["Entropy"]["End"]["Edges"] = endEdges;
-
-    // sequential ID for each kernel and a map from KID to sequential ID
-    uint32_t id = 0;
-    map<uint32_t, uint32_t> SIDMap;
-    // average nodes per kernel
-    float totalNodes = 0.0;
-    // average blocks per kernel
-    float totalBlocks = 0.0;
-    for (const auto &kernel : kernels)
-    {
-        totalNodes += (float)kernel->nodes.size();
-        totalBlocks += (float)kernel->getBlocks().size();
-        for (const auto &n : kernel->nodes)
-        {
-            outputJson["Kernels"][to_string(id)]["Nodes"].push_back(n.NID);
-        }
-        for (const auto &k : kernel->getBlocks())
-        {
-            outputJson["Kernels"][to_string(id)]["Blocks"].push_back(k);
-        }
-        outputJson["Kernels"][to_string(id)]["Labels"] = std::vector<string>();
-        outputJson["Kernels"][to_string(id)]["Labels"].push_back(kernel->Label);
-        SIDMap[kernel->KID] = id;
-        id++;
-    }
-    // now assign hierarchy to each kernel
-    for (const auto &kern : kernels)
-    {
-        //auto entIDs = vector<uint32_t>();
-        //auto exIDs  = vector<uint32_t>();
-        // The entrances IDs we export have to refer to a block in the original bitcode explicitly, not an NID in our constructed graph here
-        // Every ID up to the last in originalBlocks is past history
-        // The last block represents the current block
-        // The block that is outside the kernel is a neighbor of this node, 
-        // The node that is still within the kernel that has an edge leading out of the kernel has its current block within the kernel and the next block outside the kernel
-        // Thus we choose the last block in originalBlocks as the exit block
-        // The same logic is applied to the entrance blocks, except the entrance block is the sink node of an edge that enters the kernel
-        // This doesn't change what the logic is because the last node in the originalBlocks struct is still the current block
-        //if( !kern->getExitBlocks(nodes, markovOrder).empty() )
-        //{
-        //    for( const auto& ex : kern->getExitBlocks(nodes, markovOrder) )
-        //    {
-        //        exIDs.push_back(ex);
-        //    }
-        //}
-        //if( !kern->getEntranceBlocks(nodes, markovOrder).empty())
-        //{
-        //    for( const auto& en : kern->getEntranceBlocks(nodes, markovOrder) )
-        //    {
-        //        entIDs.push_back(en);
-        //    }
-        //}
-        //outputJson["Kernels"][to_string(SIDMap[kern->KID])]["Entrances"] = vector<uint32_t>(entIDs);
-        //outputJson["Kernels"][to_string(SIDMap[kern->KID])]["Exits"] = vector<uint32_t>(exIDs);
-        outputJson["Kernels"][to_string(SIDMap[kern->KID])]["Children"] = vector<uint32_t>();
-        outputJson["Kernels"][to_string(SIDMap[kern->KID])]["Parents"] = vector<uint32_t>();
-    }
-    for (const auto &kern : kernels)
-    {
-        // fill in parent category for children while we're filling in the children
-        for (const auto &child : kern->getParentKernels())
-        {
-            outputJson["Kernels"][to_string(SIDMap[kern->KID])]["Children"].push_back(SIDMap[child]);
-            outputJson["Kernels"][to_string(SIDMap[child])]["Parents"].push_back(SIDMap[kern->KID]);
-        }
-    }
-    if (!kernels.empty())
-    {
-        outputJson["Average Kernel Size (Nodes)"] = float(totalNodes / (float)kernels.size());
-        outputJson["Average Kernel Size (Blocks)"] = float(totalBlocks / (float)kernels.size());
-    }
-    else
-    {
-        outputJson["Average Kernel Size (Nodes)"] = 0.0;
-        outputJson["Average Kernel Size (Blocks)"] = 0.0;
-    }
-
-    // performance intrinsics
-    map<string, set<int64_t>> kernelBlockSets;
-    for (const auto &kernel : outputJson["Kernels"].items())
-    {
-        if (outputJson["Kernels"].find(kernel.key()) != outputJson["Kernels"].end())
-        {
-            if (outputJson["Kernels"][kernel.key()].find("Blocks") != outputJson["Kernels"][kernel.key()].end())
-            {
-                auto blockSet = outputJson["Kernels"][kernel.key()]["Blocks"].get<set<int64_t>>();
-                kernelBlockSets[kernel.key()] = blockSet;
-            }
-        }
-    }
-
-    auto prof = ProfileKernels(kernelBlockSets, SourceBitcode.get(), blockFrequencies);
-    for (const auto &kernelID : prof)
-    {
-        outputJson["Kernels"][kernelID.first]["Performance Intrinsics"] = kernelID.second;
-    }
-    ofstream oStream(OutputFilename);
-    oStream << setw(4) << outputJson;
-    oStream.close();
-}*/

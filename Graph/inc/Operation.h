@@ -22,7 +22,7 @@ namespace Cyclebite::Graph
             return *this;
         }
     };
-
+    /// Method that initializes the map between Cyclebite::Graph::Operation and its string
     template <typename T>
     map_init_helper<T> map_init(T &item)
     {

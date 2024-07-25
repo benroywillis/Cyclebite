@@ -20,7 +20,7 @@ using namespace std;
 int main(int argc, char **argv)
 {
     // length of the vector
-    int LENGTH = std::stoi(argv[1]);
+    int LENGTH = 1000;
     vector<PRECISION> vec0;
     vector<PRECISION> vec1;
     vector<PRECISION> vec2;

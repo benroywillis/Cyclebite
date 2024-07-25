@@ -19,6 +19,7 @@ namespace Cyclebite::Graph
         const std::shared_ptr<ControlNode> &getWeightedSrc() const;
         const std::shared_ptr<ControlNode> &getWeightedSnk() const;
         uint64_t getFreq() const;
+        /// Unconditional edges always have a probability (weight) of 1.0
         virtual float getWeight() const;
 
     protected:

@@ -22,6 +22,7 @@ namespace Cyclebite::Graph
         const std::shared_ptr<CallEdge> &getCallEdge() const;
 
     private:
+        /// The call edge whose context switch is undone by this return instruction
         std::shared_ptr<CallEdge> call;
     };
 } // namespace Cyclebite::Graph

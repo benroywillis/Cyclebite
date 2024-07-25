@@ -26,7 +26,7 @@ inline void Split(llvm::Module& M)
                     // skip debug info
                     if (!llvm::isa<llvm::DbgInfoIntrinsic>(ii))
                     {
-                        // this splits the function from the instructions that come prior to it in the basic block
+                        // this splits the function call from the instructions that come prior to it in the basic block
                         auto newNext = bi->splitBasicBlock(cb);
                         // invoke instruction are already the terminators in their blocks so they don't need to be split from the latter part of the basic block
                         if (!llvm::isa<llvm::InvokeInst>(cb))
@@ -36,14 +36,24 @@ inline void Split(llvm::Module& M)
                             auto newCB = llvm::cast<llvm::CallBase>(newNext->begin());
                             auto nxt = newCB->getNextNode();
                             newNext = newNext->splitBasicBlock(nxt);
+                            bi = newNext->getIterator();
+                            ii = bi->begin();
                         }
-                        bi = newNext->getIterator();
-                        break;
+                        else
+                        {
+                            // in the case of an invoke, we want to start the instruction iterator after the invoke instruction
+                            bi = newNext->getNextNode()->getIterator();
+                            ii = bi->begin();
+                        }
+                        continue;
                     }
                 }
                 ii++;
             }
-            bi++;
+            if( ii == bi->end() )
+            {
+                bi++;
+            }
         }
     }
 }

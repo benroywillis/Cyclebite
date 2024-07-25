@@ -8,6 +8,7 @@
 
 namespace Cyclebite::Graph
 {
+    /// Sits on top of llvm::Value*s from the static program 
     class DataValue : public GraphNode
     {
     public:

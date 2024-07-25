@@ -27,21 +27,35 @@ namespace Cyclebite::Graph
         std::set<std::shared_ptr<ControlNode>, p_GNCompare> Compare(const MLCycle &compare) const;
         /// Returns true if any node in the kernel can reach every other node in the kernel. False otherwise
         bool FullyConnected() const;
-        /// Returns the probability that this kernel keeps recurring vs. exiting
+        /// Returns the "path probability" of the Cycle, which is just the permutation of edge weights in the cycle
         float PathProbability() const;
+        /// Returns the sum of entrances and exits of this cycle
         int EnExScore() const;
+        /// Add a node to the subgraph of this cycle
         bool addNode(const std::shared_ptr<ControlNode> &newNode) override;
+        /// Add nodes to the subgraph of this cycle
         void addNodes(const std::set<std::shared_ptr<ControlNode>, p_GNCompare> &newNodes) override;
+        /// @brief Returns the child cycles of this cycle
+        ///
+        /// Child cycles are the cycles whose entrances (but not necessarily exits) are completely encapsulated by the body of this cycle
         const std::set<std::shared_ptr<MLCycle>, p_GNCompare> &getChildKernels() const;
+        /// @brief Returns the parent cycles of this cycle
+        ///
+        /// Parent cycles are the cycles that completely encapsulate the entrances (but not necessarily the exits) of this cycle
         const std::set<std::shared_ptr<MLCycle>, p_GNCompare> &getParentKernels() const;
+        /// Compares the subgraphs of two cycles - returns true if the KID of each cycle is identical
         inline bool operator==(const MLCycle &rhs) const;
+        /// Removes a parent cycle from the current cycle by comparing NID of the input argument to an existing node in the parentKernels container
         void removeParentKernel(const std::shared_ptr<MLCycle>& parent);
 
     private:
-        /// set of KIDs that point to child kernels of this kernel
+        /// The children of this cycle, sorted by NID
         std::set<std::shared_ptr<MLCycle>, p_GNCompare> childKernels;
+        /// The parents of this cycle, sorted by NID
         std::set<std::shared_ptr<MLCycle>, p_GNCompare> parentKernels;
+        /// Class-wide counter to uniquely identify each kernel
         static uint32_t nextKID;
+        /// Class-wide counter method called each time a new cycle is constructed
         static uint32_t getNextKID();
         void addParentKernel(std::shared_ptr<MLCycle> parent);
     };

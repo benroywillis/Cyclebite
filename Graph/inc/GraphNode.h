@@ -33,7 +33,9 @@ namespace Cyclebite::Graph
         GraphNode();
         std::set<std::shared_ptr<GraphEdge>, GECompare> successors;
         std::set<std::shared_ptr<GraphEdge>, GECompare> predecessors;
+        /// Class-wide counter for uniquely identifying each GraphNode
         static uint64_t nextNID;
+        /// Called whenever the GraphNode constructor is called
         static uint64_t getNextNID();
     };
 
